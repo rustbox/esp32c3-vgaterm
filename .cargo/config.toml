@@ -1,0 +1,13 @@
+[build]
+target = "riscv32imc-unknown-none-elf"
+
+[target.riscv32imc-unknown-none-elf]
+rustflags = [
+  "-C", "link-arg=-Tsrc/lds/db-riscv-memory.x",
+  "-C", "link-arg=-Tsrc/lds/db-esp32c3-link.x",
+  "-C", "link-arg=-Tsrc/lds/db-riscv-link.x",
+  "-C", "link-arg=-Tsrc/lds/hal-defaults.x",
+]
+
+[unstable]
+build-std = ["core"]
