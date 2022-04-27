@@ -8,6 +8,14 @@ repository = "https://github.com/rustbox/vgaterm"
 license = "MIT"
 readme = "README.md"
 
+[lib]
+name = "vgaterm"
+path = "src/lib.rs"
+
+[[bin]]
+name = "vgaterm"
+path = "src/main.rs"
+
 [profile.release]
 opt-level = "s"
 
