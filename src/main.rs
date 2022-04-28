@@ -7,6 +7,9 @@ use riscv_rt::entry;
 
 use core::fmt::Write;
 
+use vgaterm;
+use vgaterm::sprintln;
+
 #[entry]
 fn main() -> ! {
     let peripherals = Peripherals::take().unwrap();
@@ -16,7 +19,9 @@ fn main() -> ! {
     let mut rtc_cntl = RtcCntl::new(peripherals.RTC_CNTL);
     let mut timer0 = Timer::new(peripherals.TIMG0);
     let mut timer1 = Timer::new(peripherals.TIMG1);
-    let mut serial0 = Serial::new(peripherals.UART0).unwrap();
+    // let mut serial0 = Serial::new(peripherals.UART0).unwrap();
+
+    vgaterm::configure(peripherals.UART0);
 
     rtc_cntl.set_super_wdt_enable(false);
     rtc_cntl.set_wdt_enable(false);
@@ -33,7 +38,8 @@ fn main() -> ! {
     // loop.
     let mut delay = Delay::new(peripherals.SYSTIMER);
 
-    writeln!(serial0, "Hello world!").unwrap();
+    sprintln!("Hello, World!");
+    sprintln!("Say hello: \"{}\"", vgaterm::hello());
 
     loop {
         led.toggle().unwrap();
