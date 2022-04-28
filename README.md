@@ -40,3 +40,5 @@ Also it's important to note the `--format direct-boot` in order to properly flas
 * We use "direct boot": https://github.com/esp-rs/espflash/issues/53
     * https://github.com/espressif/esp32c3-direct-boot-example
 * ESP32 setup: https://esp-rs.github.io/book/tooling/espflash.html
+* ESP32-C3 HAL docs: https://docs.rs/esp32c3/latest/esp32c3/
+
