@@ -26,7 +26,9 @@ opt-level = "z"
 [dependencies]
 panic-halt = "0.2"
 embedded-hal = "0.2"
-esp32c3-hal = { git =  "https://github.com/esp-rs/esp-hal", features = ["direct-boot"] }
+esp-hal-common = { git = "https://github.com/esp-rs/esp-hal", features = ["esp32c3"] }
+esp32c3-hal = { git = "https://github.com/esp-rs/esp-hal", features = ["direct-boot"] }
 riscv = "0.8.0"
 riscv-rt = "0.8.1"
 nb = "1.0"
+bare-metal = "1.0.0"
