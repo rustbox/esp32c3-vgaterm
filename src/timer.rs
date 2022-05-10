@@ -25,6 +25,8 @@ use core::cell::RefCell;
 
 static TIMER0: Mutex<RefCell<Option<Timer<TIMG0>>>> = Mutex::new(RefCell::new(None));
 
+
+/// Initialize and disable Timer Group 0
 pub fn configure_timer0(timg0: TIMG0) {
     let mut timer0 = Timer::new(timg0);
     timer0.disable();

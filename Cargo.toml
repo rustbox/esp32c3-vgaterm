@@ -24,7 +24,7 @@ debug = true # Symbols are nice and they don't increase the size on Flash
 opt-level = "z"
 
 [dependencies]
-panic-halt = "0.2"
+# panic-halt = "0.2"
 embedded-hal = "0.2"
 esp-hal-common = { git = "https://github.com/esp-rs/esp-hal", features = ["esp32c3"] }
 esp32c3-hal = { git = "https://github.com/esp-rs/esp-hal", features = ["direct-boot"] }
