@@ -1,9 +1,15 @@
 // hello
 
-use embedded_hal::spi::Mode;
-use esp32c3_hal::gpio::{Gpio7, Gpio10, Gpio6, Gpio2, Gpio5, Gpio4};
-use esp_hal_common::{pac::{spi2::RegisterBlock, SYSTEM}, types::OutputSignal, Unknown, spi::Instance, OutputPin};
-use crate::sprintln;
+
+
+use esp32c3_hal::gpio::{Gpio10, Gpio2, Gpio4, Gpio5, Gpio6, Gpio7};
+use esp_hal_common::{
+    pac::{spi2::RegisterBlock, SYSTEM},
+    spi::Instance,
+    types::OutputSignal,
+    OutputPin, Unknown,
+};
+
 
 type System = SYSTEM;
 
@@ -26,27 +32,47 @@ pub trait QuadInstance {
 
     fn init(&mut self, full_duplex: bool, allow_read: bool) {
         let block = self.register_block();
-        block.user.modify(|_, w| {
+        block.user.write(|w| {
             w
                 // Use all the buffer
-                .usr_miso_highpart().clear_bit()
-                .usr_mosi_highpart().clear_bit()
-                .doutdin().bit(full_duplex)
-                .usr_mosi().set_bit()
-                .usr_miso().bit(allow_read)
-                .cs_hold().set_bit()
-                .usr_dummy().clear_bit()
-                .usr_addr().clear_bit()
-                .usr_command().clear_bit()
-                .fwrite_quad().set_bit()
+                .usr_miso_highpart()
+                .clear_bit()
+                .usr_mosi_highpart()
+                .clear_bit()
+                .doutdin()
+                .bit(full_duplex)
+                .usr_mosi()
+                .set_bit()
+                .usr_miso()
+                .bit(allow_read)
+                .cs_hold()
+                .set_bit()
+                .usr_dummy()
+                .clear_bit()
+                .usr_addr()
+                .clear_bit()
+                .usr_command()
+                .clear_bit()
+                .fwrite_quad()
+                .set_bit()
         });
+        // sprintln!("user: {:x}", block.user.read().bits());
 
         block.clk_gate.modify(|_, w| {
-            w
-                .clk_en().set_bit()
-                .mst_clk_active().set_bit()
-                .mst_clk_sel().set_bit()
+            w.clk_en()
+                .set_bit()
+                .mst_clk_active()
+                .set_bit()
+                .mst_clk_sel()
+                .set_bit()
         });
+
+        // sprintln!("dma_conf: {:x}", block.dma_conf.read().bits());
+        // sprintln!("dma_int_raw: {:x}", block.dma_int_raw.read().bits());
+        // block.dma_conf.reset();
+        // block.dma_int_raw.reset();
+        // block.dma_int_.reset();
+        // block.dma_int.reset();
 
         block.ctrl.write(|w| unsafe { w.bits(0) });
         block.misc.write(|w| unsafe { w.bits(0) });
@@ -56,7 +82,9 @@ pub trait QuadInstance {
 
     fn setup(&mut self) {
         // Use system clock as SPI clock
-        self.register_block().clock.write(|w| unsafe { w.bits(1 << 31) })
+        self.register_block()
+            .clock
+            .write(|w| unsafe { w.bits(1 << 31) })
     }
 
     fn set_data_mode(&mut self, data_mode: embedded_hal::spi::Mode) -> &mut Self {
@@ -83,6 +111,7 @@ pub trait QuadInstance {
         self
     }
 
+    #[inline]
     fn update(&self) {
         let block = self.register_block();
         block.cmd.modify(|_, w| w.update().set_bit());
@@ -91,10 +120,13 @@ pub trait QuadInstance {
         }
     }
 
+    #[inline]
     fn configure_datalen(&self, len: u32) {
         let block = self.register_block();
 
-        block.ms_dlen.write(|w| unsafe { w.ms_data_bitlen().bits(len - 1) });
+        block
+            .ms_dlen
+            .write(|w| unsafe { w.ms_data_bitlen().bits(len - 1) });
     }
 
     fn write_byte(&mut self, data: u8) {
@@ -116,39 +148,57 @@ pub trait QuadInstance {
     fn write_word(&mut self, word: u32) {
         let block = self.register_block();
 
-        sprintln!("Begin wait");
+        block.dma_int_raw.reset(); // https://github.com/espressif/esp-idf/blob/7fb3e06c69ef150bbe6209b856be887cdb6cd5e9/components/hal/spi_hal_iram.c#L58
+                                   // sprintln!("W");
+                                   // sprintln!("{:x}", block.dma_int_st.read().bits());
+                                   // sprintln!("dma_int_raw: {:x}", block.dma_int_raw.read().bits());
+                                   // sprintln!("dma_int_ena: {:x}", block.dma_int_ena.read().bits());
+                                   // sprintln!("dma_int_st: {:x}", block.dma_int_st.read().bits());
+                                   // block.dma_int_clr
+                                   // block.dma_
         while block.cmd.read().usr().bit_is_set() {
             // wait
+            // sprintln!("{:x}", block.dma_int_raw.read().bits());
+            // // sprintln!("{:?}", block.dma;
+            // unsafe {
+            //     delay(160211074);
+            // }
         }
-        sprintln!("Previous operation complete");
+        // sprintln!("op complete");
 
         self.configure_datalen(32);
 
-        sprintln!("datalen configured");
+        // sprintln!("datalen configured");
 
         block.w0.write(|w| unsafe { w.bits(word) });
 
-        sprintln!("store word");
+        // sprintln!("store word");
 
         self.update();
 
-        sprintln!("update clock");
+        // sprintln!("update clock");
 
-        block.cmd.modify(| _, w | w.usr().set_bit());
-        sprintln!("Done");
+        block.cmd.modify(|_, w| w.usr().set_bit());
+        // sprintln!("Done");
     }
 
     fn transfer(&mut self, data: &[u8]) {
         let block = self.register_block();
 
-        let words_pointer: *const &[u32] = data.as_ptr().cast();
-        let words: &[u32] = unsafe { words_pointer.as_ref().unwrap() };
+        let words: &[u32] =
+            unsafe { core::slice::from_raw_parts(data.as_ptr().cast(), data.len() / 4) };
         for chunk in words.chunks(16) {
+            // wait if currently in a write
+            while block.cmd.read().usr().bit_is_set() {
+                // sprintln!("wait");
+            }
+
             // Save words 16 at a time (64 bytes)
             // let buffer = unsafe { core::slice::from_raw_parts_mut(block.w0.as_ptr(), 16) };
             // for i in 0..chunk.len() {
             //     buffer[i] = chunk[i];
             // }
+
             block.w0.write(|w| unsafe { w.bits(chunk[0]) });
             block.w1.write(|w| unsafe { w.bits(chunk[1]) });
             block.w2.write(|w| unsafe { w.bits(chunk[2]) });
@@ -165,10 +215,6 @@ pub trait QuadInstance {
             block.w13.write(|w| unsafe { w.bits(chunk[13]) });
             block.w14.write(|w| unsafe { w.bits(chunk[14]) });
             block.w15.write(|w| unsafe { w.bits(chunk[15]) });
-            // wait if currently in a write
-            while block.cmd.read().usr().bit_is_set() {
-                sprintln!("wait");
-             }
 
             self.configure_datalen(chunk.len() as u32 * 32);
             self.update();
@@ -193,18 +239,21 @@ impl<I: QuadInstance> QSpi<I> {
         mut clk: Gpio6<Unknown>,
         system: &mut System,
     ) -> QSpi<I> {
+        sio0.set_to_push_pull_output()
+            .connect_peripheral_to_output(spi.sio0());
+        sio1.set_to_push_pull_output()
+            .connect_peripheral_to_output(spi.sio1());
+        sio2.set_to_push_pull_output()
+            .connect_peripheral_to_output(spi.sio2());
+        sio3.set_to_push_pull_output()
+            .connect_peripheral_to_output(spi.sio3());
+        cs.set_to_push_pull_output()
+            .connect_peripheral_to_output(spi.cs());
+        clk.set_to_push_pull_output()
+            .connect_peripheral_to_output(spi.sclk_signal());
 
-        sio0.set_to_push_pull_output().connect_peripheral_to_output(spi.sio0());
-        sio1.set_to_push_pull_output().connect_peripheral_to_output(spi.sio1());
-        sio2.set_to_push_pull_output().connect_peripheral_to_output(spi.sio2());
-        sio3.set_to_push_pull_output().connect_peripheral_to_output(spi.sio3());
-        cs.set_to_push_pull_output().connect_peripheral_to_output(spi.cs());
-        clk.set_to_push_pull_output().connect_peripheral_to_output(spi.sclk_signal());
+        let mut qspi = QSpi { spi_instance: spi };
 
-        let mut qspi = QSpi {
-            spi_instance: spi
-        };
-        
         qspi.spi_instance.enable_peripheral(system);
         qspi.spi_instance.setup();
         qspi.spi_instance.init(false, false);
@@ -227,6 +276,7 @@ impl<I: QuadInstance> QSpi<I> {
 }
 
 impl QuadInstance for esp32c3_hal::pac::SPI2 {
+    #[inline]
     fn register_block(&self) -> &RegisterBlock {
         self
     }
@@ -256,7 +306,9 @@ impl QuadInstance for esp32c3_hal::pac::SPI2 {
     }
 
     fn enable_peripheral(&self, system: &mut System) {
-        system.perip_clk_en0.modify(|_, w| w.spi2_clk_en().set_bit());
+        system
+            .perip_clk_en0
+            .modify(|_, w| w.spi2_clk_en().set_bit());
         system.perip_rst_en0.modify(|_, w| w.spi2_rst().clear_bit());
     }
 }

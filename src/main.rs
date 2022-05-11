@@ -1,62 +1,47 @@
 #![no_std]
 #![no_main]
-
 #![feature(panic_info_message)]
 
 use esp32c3_hal::gpio::Gpio10;
-use esp32c3_hal::{gpio::IO, 
-    gpio::Gpio9, 
-    pac::Peripherals, 
-    prelude::*, 
-    Delay, 
-    RtcCntl, 
-    Timer, 
-    spi::Spi,};
+use esp32c3_hal::{gpio::Gpio9, gpio::IO, pac::Peripherals, prelude::*, Delay, RtcCntl, Timer};
 use esp_hal_common::interrupt;
-use esp_hal_common::spi::Instance;
-use esp_hal_common::{Event,
-    Input,
-    Pin,
-    PullDown,
-};
+use esp_hal_common::{Input, Pin, PullDown};
 
 // use esp_hal_common::clock_control::ClockControl;
 // use panic_halt as _;
 use riscv_rt::entry;
 
 use vgaterm;
-use vgaterm::{sprintln, sprint};
-use vgaterm::spi::QuadInstance;
+use vgaterm::video::BUFFER;
+use vgaterm::{sprint, sprintln};
 
 use bare_metal::Mutex;
 
-use core::cell::RefCell;
 use core::arch::asm;
-use core::slice::from_raw_parts;
+use core::cell::RefCell;
 
 static mut BUTTON: Mutex<RefCell<Option<Gpio9<Input<PullDown>>>>> = Mutex::new(RefCell::new(None));
-static mut BUTTON2: Mutex<RefCell<Option<Gpio10<Input<PullDown>>>>> = Mutex::new(RefCell::new(None));
+static mut BUTTON2: Mutex<RefCell<Option<Gpio10<Input<PullDown>>>>> =
+    Mutex::new(RefCell::new(None));
 
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
     sprint!("Aborting: ");
     if let Some(p) = info.location() {
         sprintln!(
-                 "line {}, file {}: {}",
-                 p.line(),
-                 p.file(),
-                 info.message().unwrap()
+            "line {}, file {}: {}",
+            p.line(),
+            p.file(),
+            info.message().unwrap()
         );
-    }
-    else {
+    } else {
         sprintln!("no information available.");
     }
     stop();
 }
 
 #[no_mangle]
-extern "C"
-fn stop() -> ! {
+extern "C" fn stop() -> ! {
     loop {
         unsafe {
             riscv::asm::wfi();
@@ -67,7 +52,6 @@ fn stop() -> ! {
 #[entry]
 fn main() -> ! {
     let mut peripherals = Peripherals::take().unwrap();
-   
 
     // Disable the watchdog timers. For the ESP32-C3, this includes the Super WDT,
     // the RTC WDT, and the TIMG WDTs.
@@ -75,11 +59,10 @@ fn main() -> ! {
     let mut timer1 = Timer::new(peripherals.TIMG1);
 
     vgaterm::configure_timer0(peripherals.TIMG0);
-    
+
     rtc_cntl.set_super_wdt_enable(false);
     rtc_cntl.set_wdt_enable(false);
     timer1.disable();
-
 
     peripherals.SYSTEM.cpu_per_conf.write(|w| unsafe {
         // Set true for 480 MHz stepped down to 160
@@ -87,16 +70,17 @@ fn main() -> ! {
         w.cpuperiod_sel().bits(0b01)
     });
 
-    peripherals.SYSTEM.sysclk_conf.write(|w| unsafe {
-        w.soc_clk_sel().bits(1)
-    });
-    
+    peripherals
+        .SYSTEM
+        .sysclk_conf
+        .write(|w| unsafe { w.soc_clk_sel().bits(1) });
+
     vgaterm::configure(peripherals.UART0);
 
     // vgaterm::configure_timer0(peripherals.TIMG0);
 
     // vgaterm::enable_timer0_interrupt(
-    //     &interrupt::CpuInterrupt::Interrupt1, 
+    //     &interrupt::CpuInterrupt::Interrupt1,
     //     interrupt::Priority::Priority1
     // );
 
@@ -105,10 +89,10 @@ fn main() -> ! {
     unsafe {
         riscv::interrupt::enable();
     }
-    
+
     // Set GPIO5 as an output, and set its state high initially.
     let io = IO::new(peripherals.GPIO, peripherals.IO_MUX);
-    
+
     // Set GPIO9 as an input
     // let mut button = io.pins.gpio9.into_pull_down_input();
     // let mut button2 = io.pins.gpio10.into_pull_down_input();
@@ -121,8 +105,8 @@ fn main() -> ! {
     // });
 
     // vgaterm::gpio::interrupt_enable(
-    //     &interrupt::CpuInterrupt::Interrupt3, 
-    //     interrupt::Priority::Priority1, 
+    //     &interrupt::CpuInterrupt::Interrupt3,
+    //     interrupt::Priority::Priority1,
     //     interrupt::InterruptKind::Level
     // );
 
@@ -132,13 +116,9 @@ fn main() -> ! {
     // loop.
     let mut delay = Delay::new(peripherals.SYSTIMER);
 
-    sprintln!("Hello, World!");
-    sprintln!("Say hello: \"{}\"", vgaterm::hello());
-
     configure_count_cycles();
     let cnt = measure_clock(&mut delay);
     sprintln!("We counted {} cycles in 1 second", cnt);
-
 
     // let _ = vgaterm::video::ShortPixelGpios::new(
     //     io.pins.gpio0,
@@ -158,64 +138,51 @@ fn main() -> ! {
     let mut cs = io.pins.gpio10;
     let mut clk = io.pins.gpio6;
 
-
     let mut qspi = vgaterm::spi::QSpi::new(
-        peripherals.SPI2, 
-        sio0, sio1, sio2, sio3, cs, clk, &mut peripherals.SYSTEM);
-    
+        peripherals.SPI2,
+        sio0,
+        sio1,
+        sio2,
+        sio3,
+        cs,
+        clk,
+        &mut peripherals.SYSTEM,
+    );
+
+    // let mut spi = Spi::new(
+    //     unsafe { Peripherals::steal().SPI2 },
+    //     clk,
+    //     sio0,
+    //     sio1,
+    //     cs,
+    //     80_000_000,
+    //     embedded_hal::spi::MODE_0,
+    //     &mut peripherals.SYSTEM,
+    // );
 
     // peripherals.SPI2.user.write(|w| {
     //     w.fwrite_quad().set_bit()
     // });
-    
-    // let mut spi = Spi::new(
-    //     peripherals.SPI2,
-    //     clk,
-    //     d0,
-    //     d1,
-    //     cs,
-    //     80_000_000,
-    //     embedded_hal::spi::MODE_0,
-    //     &mut peripherals.SYSTEM);
 
     vgaterm::video::load_test_pattern(0x00, 0xFF);
+    riscv::interrupt::free(|_| unsafe {
+        for i in 0..0xff {
+            BUFFER[i] = i as u8
+        }
+    });
 
     let mut frames = 0;
     loop {
-        // riscv::interrupt::free(|_| unsafe {
-        //     // let _ = spi.transfer(&mut vgaterm::video::BUFFER);
-        //     // for i in 0..vgaterm::video::BUFFER_SIZE {
-        //     //     let b = vgaterm::video::BUFFER[i] as u32;
-        //     //     vgaterm::gpio::write_byte(b);
-        //     // }
-        // });
         // vgaterm::start_cycle_count();
         // let cycles = vgaterm::video::display_frame();
         // let cycles = vgaterm::measure_cycle_count();
         // sprintln!("Cycles ({}) per pixel ({}) = {}", cycles, vgaterm::video::BUFFER_SIZE, cycles as f32 / (vgaterm::video::BUFFER_SIZE) as f32);
         frames += 1;
-        // sprintln!("Written {}", frames);
-        // delay.delay_ms(500u32);
-        // sprintln!("hi");
-        // unsafe {
-        //     qspi.transfer(&vgaterm::video::BUFFER);
-        // }
+
         unsafe {
-            let buf32: *const &[u32] = vgaterm::video::BUFFER.as_ptr().cast();
-            let buffer: &[u32] = buf32.as_ref().unwrap();
-            for w in buffer {
-                qspi.write_word(*w);
-                delay.delay_us(1 as u32);
-            }
+            qspi.transfer(&vgaterm::video::BUFFER);
         }
-        sprintln!("Wrote frame {}", frames);
-        
-        // peripherals.SPI2.configure_datalen(32);
-        // peripherals.SPI2.cmd.modify(|_, w| {
-        //     w.usr().set_bit()
-        // });
-        // while peripherals.SPI2.cmd.read().usr().bit() { }
-        // delay.delay_ms(1 as u32);
+        delay.delay_ms(10 as u32);
     }
 }
 
@@ -224,9 +191,7 @@ struct Mems<'a>(usize, &'a [usize]);
 fn show_registers<'a>(addr_start: usize, end_offset: usize) -> Mems<'a> {
     let raw = addr_start as *const usize;
     sprintln!("Made raw pointer");
-    let slice = unsafe {
-        core::slice::from_raw_parts(raw, end_offset / 4)
-    };
+    let slice = unsafe { core::slice::from_raw_parts(raw, end_offset / 4) };
     sprintln!("Made slice");
     Mems(addr_start, slice)
 }
@@ -234,7 +199,7 @@ fn show_registers<'a>(addr_start: usize, end_offset: usize) -> Mems<'a> {
 impl<'a> core::fmt::Display for Mems<'a> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         for (i, reg) in self.1.iter().enumerate() {
-            let _ = write!(f, "{:#04x}: {:#032b}", self.0 + 4*i, reg);
+            let _ = write!(f, "{:#04x}: {:#032b}", self.0 + 4 * i, reg);
         }
         Ok(())
     }
@@ -245,10 +210,7 @@ fn configure_count_cycles() {
     unsafe {
         // Set count event to clock cycles
         // Enable counting events and set overflow to rollover
-        asm!(
-            "csrwi 0x7E0, 0x1",
-            "csrwi 0x7E1, 0x1"
-        );
+        asm!("csrwi 0x7E0, 0x1", "csrwi 0x7E1, 0x1");
     }
 }
 
@@ -256,9 +218,7 @@ fn configure_count_cycles() {
 fn measure_clock(delay: &mut Delay) -> u32 {
     unsafe {
         // Set event counter to 0
-        asm!(
-            "csrwi 0x7E2, 0x00",
-        )
+        asm!("csrwi 0x7E2, 0x00",)
     }
     let d: u32;
     delay.delay_ms(1000 as u32);
@@ -271,14 +231,12 @@ fn measure_clock(delay: &mut Delay) -> u32 {
     d
 }
 
-
-
 #[no_mangle]
 pub fn interrupt1() {
     riscv::interrupt::free(|_| {
         vgaterm::clear_timer0(interrupt::CpuInterrupt::Interrupt1);
         // sprintln!("Interrupt 1");
-        
+
         vgaterm::start_timer0(10_000_000);
     });
 }
@@ -287,7 +245,7 @@ pub fn interrupt1() {
 pub fn interrupt3() {
     riscv::interrupt::free(|cs| unsafe {
         sprintln!("Some GPIO interrupt!");
-        
+
         let mut button = BUTTON.borrow(*cs).borrow_mut();
         let button = button.as_mut().unwrap();
 
@@ -298,9 +256,8 @@ pub fn interrupt3() {
         sprintln!("GPIO Pin: {}", vgaterm::check_gpio_source());
 
         vgaterm::interrupt::clear(interrupt::CpuInterrupt::Interrupt3);
-        
+
         button.clear_interrupt();
         button2.clear_interrupt();
     });
 }
-
