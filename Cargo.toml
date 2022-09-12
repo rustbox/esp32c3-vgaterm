@@ -26,9 +26,9 @@ opt-level = "z"
 [dependencies]
 # panic-halt = "0.2"
 embedded-hal = "0.2"
-esp-hal-common = { git = "https://github.com/esp-rs/esp-hal", features = ["esp32c3"] }
-esp32c3-hal = { git = "https://github.com/esp-rs/esp-hal", features = ["direct-boot"] }
+esp-hal-common = { git = "https://github.com/rustbox/esp-hal", features = ["esp32c3"], tag = "2022-09-11" }
+esp32c3-hal = { git = "https://github.com/rustbox/esp-hal", features = ["direct-boot"], tag = "2022-09-11" }
 riscv = "0.8.0"
-riscv-rt = "0.8.1"
+riscv-rt = "0.9.0"
 nb = "1.0"
 bare-metal = "1.0.0"

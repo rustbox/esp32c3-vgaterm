@@ -18,6 +18,8 @@ port (through usb) to the esp32 chip:
 
 `cargo install espflash`
 
+> You may need `libudev-dev` as a dependency on linux: `sudo apt install libudev-dev`
+
 At this point you are ready to build and upload
 
 # Building

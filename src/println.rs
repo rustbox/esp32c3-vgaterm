@@ -18,16 +18,9 @@ struct SerialWrapper(Serial<UART0>);
 /// Constructs a Serial type from UART0 which initializes the Serial instance
 pub fn configure(uart: UART0) {
     let sr = Serial::new(uart);
-    match sr {
-        Err(e) => {
-            panic!("Could not initialize uart0 {:?}", e);
-        },
-        Ok(s) => {
-            interrupt::free(|_| unsafe {
-                SERIAL.replace(SerialWrapper(s))
-            })
-        }
-    };
+    interrupt::free(|_| unsafe {
+        SERIAL.replace(SerialWrapper(sr))
+    });
 }
 
 impl core::fmt::Write for SerialWrapper {

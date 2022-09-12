@@ -7,7 +7,7 @@ use esp_hal_common::{
     pac::{spi2::RegisterBlock, SYSTEM},
     spi::Instance,
     types::OutputSignal,
-    OutputPin, Unknown,
+    OutputPin, Unknown, system::{PeripheralClockControl, Peripheral},
 };
 
 
@@ -28,7 +28,7 @@ pub trait QuadInstance {
 
     fn cs(&self) -> OutputSignal;
 
-    fn enable_peripheral(&self, system: &mut System);
+    fn enable_peripheral(&self, system: &mut PeripheralClockControl);
 
     fn init(&mut self, full_duplex: bool, allow_read: bool) {
         let block = self.register_block();
@@ -237,7 +237,7 @@ impl<I: QuadInstance> QSpi<I> {
         mut sio3: Gpio4<Unknown>,
         mut cs: Gpio10<Unknown>,
         mut clk: Gpio6<Unknown>,
-        system: &mut System,
+        system: &mut PeripheralClockControl,
     ) -> QSpi<I> {
         sio0.set_to_push_pull_output()
             .connect_peripheral_to_output(spi.sio0());
@@ -305,10 +305,7 @@ impl QuadInstance for esp32c3_hal::pac::SPI2 {
         OutputSignal::FSPICS0
     }
 
-    fn enable_peripheral(&self, system: &mut System) {
-        system
-            .perip_clk_en0
-            .modify(|_, w| w.spi2_clk_en().set_bit());
-        system.perip_rst_en0.modify(|_, w| w.spi2_rst().clear_bit());
+    fn enable_peripheral(&self, system: &mut PeripheralClockControl) {
+        system.enable(Peripheral::Spi2);
     }
 }

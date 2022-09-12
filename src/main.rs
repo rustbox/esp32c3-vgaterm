@@ -3,8 +3,10 @@
 #![feature(panic_info_message)]
 
 use esp32c3_hal::gpio::Gpio10;
-use esp32c3_hal::{gpio::Gpio9, gpio::IO, pac::Peripherals, prelude::*, Delay, RtcCntl, Timer};
+use esp32c3_hal::{gpio::Gpio9, gpio::IO, pac::Peripherals, prelude::*, Delay, Rtc};
+use esp_hal_common::clock::{ClockControl, CpuClock};
 use esp_hal_common::interrupt;
+use esp_hal_common::timer::TimerGroup;
 use esp_hal_common::{Input, Pin, PullDown};
 
 // use esp_hal_common::clock_control::ClockControl;
@@ -51,29 +53,31 @@ extern "C" fn stop() -> ! {
 
 #[entry]
 fn main() -> ! {
-    let mut peripherals = Peripherals::take().unwrap();
+    let peripherals = Peripherals::take().unwrap();
+    let mut system = peripherals.SYSTEM.split();
+    let clocks = ClockControl::configure(system.clock_control, CpuClock::Clock160MHz).freeze();
 
     // Disable the watchdog timers. For the ESP32-C3, this includes the Super WDT,
     // the RTC WDT, and the TIMG WDTs.
-    let mut rtc_cntl = RtcCntl::new(peripherals.RTC_CNTL);
-    let mut timer1 = Timer::new(peripherals.TIMG1);
+    let mut rtc = Rtc::new(peripherals.RTC_CNTL);
+    let timer_group1 = TimerGroup::new(peripherals.TIMG1, &clocks);
+    let mut wdt1 = timer_group1.wdt;
+    rtc.swd.disable();
+    rtc.rwdt.disable();
+    wdt1.disable();
 
-    vgaterm::configure_timer0(peripherals.TIMG0);
+    vgaterm::configure_timer0(peripherals.TIMG0, &clocks);
 
-    rtc_cntl.set_super_wdt_enable(false);
-    rtc_cntl.set_wdt_enable(false);
-    timer1.disable();
+    // peripherals.SYSTEM.cpu_per_conf.write(|w| unsafe {
+    //     // Set true for 480 MHz stepped down to 160
+    //     w.pll_freq_sel().set_bit();
+    //     w.cpuperiod_sel().bits(0b01)
+    // });
 
-    peripherals.SYSTEM.cpu_per_conf.write(|w| unsafe {
-        // Set true for 480 MHz stepped down to 160
-        w.pll_freq_sel().set_bit();
-        w.cpuperiod_sel().bits(0b01)
-    });
-
-    peripherals
-        .SYSTEM
-        .sysclk_conf
-        .write(|w| unsafe { w.soc_clk_sel().bits(1) });
+    // peripherals
+    //     .SYSTEM
+    //     .sysclk_conf
+    //     .write(|w| unsafe { w.soc_clk_sel().bits(1) });
 
     vgaterm::configure(peripherals.UART0);
 
@@ -114,7 +118,7 @@ fn main() -> ! {
 
     // Initialize the Delay peripheral, and use it to toggle the LED state in a
     // loop.
-    let mut delay = Delay::new(peripherals.SYSTIMER);
+    let mut delay = Delay::new(&clocks);
 
     configure_count_cycles();
     let cnt = measure_clock(&mut delay);
@@ -146,7 +150,7 @@ fn main() -> ! {
         sio3,
         cs,
         clk,
-        &mut peripherals.SYSTEM,
+        &mut system.peripheral_clock_control,
     );
 
     // let mut spi = Spi::new(
@@ -231,33 +235,33 @@ fn measure_clock(delay: &mut Delay) -> u32 {
     d
 }
 
-#[no_mangle]
-pub fn interrupt1() {
-    riscv::interrupt::free(|_| {
-        vgaterm::clear_timer0(interrupt::CpuInterrupt::Interrupt1);
-        // sprintln!("Interrupt 1");
+// #[interrupt]
+// pub unsafe fn TG0_T0_LEVEL() {
+//     riscv::interrupt::free(|_| {
+//         vgaterm::clear_timer0(interrupt::CpuInterrupt::Interrupt1);
+//         // sprintln!("Interrupt 1");
 
-        vgaterm::start_timer0(10_000_000);
-    });
-}
+//         vgaterm::start_timer0(10_000_000);
+//     });
+// }
 
-#[no_mangle]
-pub fn interrupt3() {
-    riscv::interrupt::free(|cs| unsafe {
-        sprintln!("Some GPIO interrupt!");
+// #[interrupt]
+// pub fn interrupt3() {
+//     riscv::interrupt::free(|cs| unsafe {
+//         sprintln!("Some GPIO interrupt!");
 
-        let mut button = BUTTON.borrow(*cs).borrow_mut();
-        let button = button.as_mut().unwrap();
+//         let mut button = BUTTON.borrow(*cs).borrow_mut();
+//         let button = button.as_mut().unwrap();
 
-        let mut button2 = BUTTON2.borrow(*cs).borrow_mut();
-        let button2 = button2.as_mut().unwrap();
+//         let mut button2 = BUTTON2.borrow(*cs).borrow_mut();
+//         let button2 = button2.as_mut().unwrap();
 
-        sprintln!("Interrupt source: {:?}", vgaterm::interrupt::source());
-        sprintln!("GPIO Pin: {}", vgaterm::check_gpio_source());
+//         sprintln!("Interrupt source: {:?}", vgaterm::interrupt::source());
+//         sprintln!("GPIO Pin: {}", vgaterm::check_gpio_source());
 
-        vgaterm::interrupt::clear(interrupt::CpuInterrupt::Interrupt3);
+//         vgaterm::interrupt::clear(interrupt::CpuInterrupt::Interrupt3);
 
-        button.clear_interrupt();
-        button2.clear_interrupt();
-    });
-}
+//         button.clear_interrupt();
+//         button2.clear_interrupt();
+//     });
+// }
