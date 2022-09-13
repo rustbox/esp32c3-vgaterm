@@ -42,26 +42,20 @@ fn which_interrupt(interrupt: &CpuInterrupt) -> CpuInterrupt {
     }
 }
 
+
+
 pub fn enable(
         source: Interrupt, 
         handler: &CpuInterrupt, 
         kind: InterruptKind, 
         priority: Priority) {
 
-    interrupt::enable(
-        Cpu::ProCpu,
-        source,
-        which_interrupt(handler),
-    );
+    interrupt::enable(source, priority).unwrap();
+
     interrupt::set_kind(
         Cpu::ProCpu,
         which_interrupt(handler),
         kind,
-    );
-    interrupt::set_priority(
-        Cpu::ProCpu,
-        which_interrupt(handler),
-        priority,
     );
 }
 

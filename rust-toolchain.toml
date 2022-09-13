@@ -1,0 +1,8 @@
+
+[toolchain]
+# The default profile includes rustc, rust-std, cargo, rust-docs, rustfmt and clippy.
+# https://rust-lang.github.io/rustup/concepts/profiles.html
+profile = "default"
+channel = "nightly"
+components = [ "rust-src" ]
+targets = [ "riscv32imac-unknown-none-elf" ]

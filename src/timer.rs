@@ -15,22 +15,25 @@
 
 
 use bare_metal::Mutex;
+use esp_hal_common::clock::{Clocks};
 use esp_hal_common::pac::TIMG0;
+use esp_hal_common::timer::{Timer0, TimerGroup};
 use esp_hal_common::{interrupt, interrupt::CpuInterrupt, interrupt::Priority, Cpu, pac};
-use esp32c3_hal::{Timer, prelude::*};
+use esp32c3_hal::{timer::Timer, prelude::*};
 use riscv;
 
 use core::cell::RefCell;
 
 
-static TIMER0: Mutex<RefCell<Option<Timer<TIMG0>>>> = Mutex::new(RefCell::new(None));
+static TIMER0: Mutex<RefCell<Option<Timer<Timer0<TIMG0>>>>> = Mutex::new(RefCell::new(None));
 
 
 /// Initialize and disable Timer Group 0
-pub fn configure_timer0(timg0: TIMG0) {
-    let mut timer0 = Timer::new(timg0);
-    timer0.disable();
+pub fn configure_timer0(timg0: TIMG0, clocks: &Clocks) {
+    let mut group0 = TimerGroup::new(timg0, clocks);
+    let timer0 = group0.timer0;
 
+    group0.wdt.disable();
 
     riscv::interrupt::free(|cs| {
         TIMER0.borrow(*cs).replace(Some(timer0));
@@ -79,19 +82,14 @@ fn which_interrupt(interrupt: &CpuInterrupt) -> CpuInterrupt {
 
 pub fn enable_timer0_interrupt(interrupt: &CpuInterrupt, priority: Priority) {
     interrupt::enable(
-        Cpu::ProCpu,
         pac::Interrupt::TG0_T0_LEVEL,
-        which_interrupt(interrupt),
-    );
+        priority,
+    ).unwrap();
+
     interrupt::set_kind(
         Cpu::ProCpu,
         which_interrupt(interrupt),
         interrupt::InterruptKind::Level,
-    );
-    interrupt::set_priority(
-        Cpu::ProCpu,
-        which_interrupt(interrupt),
-        priority,
     );
 
     riscv::interrupt::free(|cs| {
@@ -104,11 +102,12 @@ pub fn enable_timer0_interrupt(interrupt: &CpuInterrupt, priority: Priority) {
     })
 }
 
+/// Start timer zero set for t microseconds
 pub fn start_timer0(t: u64) {
     riscv::interrupt::free(|cs| {
         match TIMER0.borrow(*cs).borrow_mut().as_mut() {
             Some(timer) => {
-                timer.start(t)
+                timer.start(t.micros())
             },
             None => {}
         }
