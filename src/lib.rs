@@ -1,18 +1,19 @@
 #![no_std]
 
+extern crate alloc;
+
 pub mod println;
 mod timer;
 pub mod gpio;
 pub mod interrupt;
 pub mod video;
 pub mod spi;
+pub mod kernel;
 
 pub use println::configure;
-pub use timer::{configure_timer0, enable_timer0_interrupt, clear_timer0, start_timer0};
-pub use gpio::check_gpio_source;
+pub use timer::{configure_timer0, enable_timer0_interrupt, clear_timer0, start_timer0, start_timer0_callback, Delay};
 
 use core::arch::asm;
-
 
 pub fn hello() -> &'static str {
     "hello"

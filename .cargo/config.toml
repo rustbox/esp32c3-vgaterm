@@ -9,4 +9,4 @@ rustflags = [
 ]
 
 [unstable]
-build-std = ["core"]
+build-std = ["alloc", "core"]

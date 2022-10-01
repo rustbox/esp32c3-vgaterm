@@ -12,20 +12,75 @@
 //! 
 //! As a reminder, interrupts (Machine interrupts: the `mie` bit of the `mstatus` register) will need
 //! to be enabled for any interrupt to occur generally.
-
+extern crate alloc;
 
 use bare_metal::Mutex;
-use esp_hal_common::clock::{Clocks};
+use esp_hal_common::clock::Clocks;
 use esp_hal_common::pac::TIMG0;
+use esp_hal_common::systimer::SystemTimer;
 use esp_hal_common::timer::{Timer0, TimerGroup};
 use esp_hal_common::{interrupt, interrupt::CpuInterrupt, interrupt::Priority, Cpu, pac};
 use esp32c3_hal::{timer::Timer, prelude::*};
+use fugit::HertzU64;
+
 use riscv;
 
+use core::borrow::BorrowMut;
 use core::cell::RefCell;
+use alloc::boxed::Box;
 
+use crate::sprintln;
 
 static TIMER0: Mutex<RefCell<Option<Timer<Timer0<TIMG0>>>>> = Mutex::new(RefCell::new(None));
+static mut TIMER0_CALLBACK: Option<Box<dyn FnMut() -> ()>> = None;
+
+/// Uses the `SYSTIMER` peripheral for counting clock cycles, as
+/// unfortunately the ESP32-C3 does NOT implement the `mcycle` CSR, which is
+/// how we would normally do this.
+#[derive(Copy, Clone)]
+pub struct Delay {
+    pub freq: HertzU64
+}
+
+impl Delay {
+    /// Create a new Delay instance
+    pub fn new(clocks: &Clocks) -> Self {
+        // The counters and comparators are driven using `XTAL_CLK`. The average clock
+        // frequency is fXTAL_CLK/2.5, which is 16 MHz. The timer counting is
+        // incremented by 1/16 μs on each `CNT_CLK` cycle.
+
+        Self {
+            freq: HertzU64::MHz((clocks.xtal_clock.to_MHz() * 10 / 25) as u64),
+        }
+    }
+
+    /// Delay for the specified number of microseconds
+    pub fn delay(&self, us: u64) {
+        let t0 = SystemTimer::now();
+        let clocks = (us * self.freq.raw()) / HertzU64::MHz(1).raw();
+
+        while SystemTimer::now().wrapping_sub(t0) <= clocks {}
+    }
+
+    pub fn delay_ms(&self, ms: u64) {
+        let us = 1000 * ms;
+        let t0 = SystemTimer::now();
+        let clocks = (us * self.freq.raw()) / HertzU64::MHz(1).raw();
+
+        while SystemTimer::now().wrapping_sub(t0) <= clocks {}
+    }
+
+    pub fn deadline(&self, us: u64) -> u64 {
+        let clocks = (us * self.freq.raw()) / HertzU64::MHz(1).raw();
+        return SystemTimer::now().wrapping_add(clocks);
+    }
+
+    pub fn wait_until(&self, deadline: u64) {
+        while SystemTimer::now() <= deadline {}
+    }
+}
+
+
 
 
 /// Initialize and disable Timer Group 0
@@ -40,57 +95,11 @@ pub fn configure_timer0(timg0: TIMG0, clocks: &Clocks) {
     });
 }
 
-/// Grab the Interrupt enum value from a reference.
-/// 
-/// This is needed because Interrupt is not Copy nor Clone
-fn which_interrupt(interrupt: &CpuInterrupt) -> CpuInterrupt {
-    use CpuInterrupt::*;
-    match interrupt {
-        Interrupt1 => Interrupt1,
-        Interrupt2 => Interrupt2,
-        Interrupt3 => Interrupt3,
-        Interrupt4 => Interrupt4,
-        Interrupt5 => Interrupt5,
-        Interrupt6 => Interrupt6,
-        Interrupt7 => Interrupt7,
-        Interrupt8 => Interrupt8,
-        Interrupt9 => Interrupt9,
-        Interrupt10 => Interrupt10,
-        Interrupt11 => Interrupt11,
-        Interrupt12 => Interrupt12,
-        Interrupt13 => Interrupt13,
-        Interrupt14 => Interrupt14,
-        Interrupt15 => Interrupt15,
-        Interrupt16 => Interrupt16,
-        Interrupt17 => Interrupt17,
-        Interrupt18 => Interrupt18,
-        Interrupt19 => Interrupt19,
-        Interrupt20 => Interrupt20,
-        Interrupt21 => Interrupt21,
-        Interrupt22 => Interrupt22,
-        Interrupt23 => Interrupt23,
-        Interrupt24 => Interrupt24,
-        Interrupt25 => Interrupt25,
-        Interrupt26 => Interrupt26,
-        Interrupt27 => Interrupt27,
-        Interrupt28 => Interrupt28,
-        Interrupt29 => Interrupt29,
-        Interrupt30 => Interrupt30,
-        Interrupt31 => Interrupt31,
-    }
-}
-
-pub fn enable_timer0_interrupt(interrupt: &CpuInterrupt, priority: Priority) {
+pub fn enable_timer0_interrupt(priority: Priority) {
     interrupt::enable(
         pac::Interrupt::TG0_T0_LEVEL,
         priority,
     ).unwrap();
-
-    interrupt::set_kind(
-        Cpu::ProCpu,
-        which_interrupt(interrupt),
-        interrupt::InterruptKind::Level,
-    );
 
     riscv::interrupt::free(|cs| {
         match TIMER0.borrow(*cs).borrow_mut().as_mut() {
@@ -103,6 +112,21 @@ pub fn enable_timer0_interrupt(interrupt: &CpuInterrupt, priority: Priority) {
 }
 
 /// Start timer zero set for t microseconds
+pub fn start_timer0_callback(t: u64, callback: impl FnMut() -> () + 'static) {
+    riscv::interrupt::free(|cs| {
+        match TIMER0.borrow(*cs).borrow_mut().as_mut() {
+            Some(timer) => {
+                timer.start(t.micros())
+            },
+            None => {}
+        }
+
+        unsafe {
+            TIMER0_CALLBACK = Some(Box::new(callback));
+        }
+    })
+}
+
 pub fn start_timer0(t: u64) {
     riscv::interrupt::free(|cs| {
         match TIMER0.borrow(*cs).borrow_mut().as_mut() {
@@ -114,8 +138,7 @@ pub fn start_timer0(t: u64) {
     })
 }
 
-pub fn clear_timer0(interrupt: CpuInterrupt) {
-    interrupt::clear(Cpu::ProCpu, interrupt);
+pub fn clear_timer0() {
     riscv::interrupt::free(|cs| {
         match TIMER0.borrow(*cs).borrow_mut().as_mut() {
             Some(timer) => {
@@ -124,4 +147,18 @@ pub fn clear_timer0(interrupt: CpuInterrupt) {
             None => {}
         }
     })
+}
+
+#[interrupt]
+fn TG0_T0_LEVEL() {
+    sprintln!("timer 0 interrupt!");
+    clear_timer0();
+    
+    riscv::interrupt::free(|_| unsafe {
+        if let Some(callback) = &mut TIMER0_CALLBACK {
+            callback();
+        }
+
+        TIMER0_CALLBACK = None;
+    });
 }

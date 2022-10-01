@@ -1,10 +1,8 @@
 use esp32c3_hal::gpio::*;
 use esp_hal_common::{Output, PushPull, Unknown};
 
-
-
 pub const WIDTH: usize = 640;
-pub const HEIGHT: usize = 480;
+pub const HEIGHT: usize = 400;
 pub const BUFFER_SIZE: usize = WIDTH * HEIGHT;
 pub static mut BUFFER: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];
 

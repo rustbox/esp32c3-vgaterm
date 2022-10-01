@@ -1,17 +1,141 @@
 // hello
 
-
-
+use esp32c3_hal::IO;
 use esp32c3_hal::gpio::{Gpio10, Gpio2, Gpio4, Gpio5, Gpio6, Gpio7};
+use esp32c3_hal::clock::Clocks;
+use esp_hal_common::pac::SPI2;
 use esp_hal_common::{
     pac::{spi2::RegisterBlock, SYSTEM},
     spi::Instance,
     types::OutputSignal,
     OutputPin, Unknown, system::{PeripheralClockControl, Peripheral},
 };
+use riscv::interrupt;
+
+use crate::{sprintln, sprint};
 
 
-type System = SYSTEM;
+static mut QSPI: Option<QSpi<SPI2>> = None;
+
+pub fn configure(
+    spi2: SPI2,
+    sio0: Gpio7<Unknown>,
+    sio1: Gpio2<Unknown>,
+    sio2: Gpio5<Unknown>,
+    sio3: Gpio4<Unknown>,
+    cs: Gpio10<Unknown>,
+    clk: Gpio6<Unknown>,
+    peripheral_clock: &mut PeripheralClockControl,
+    clocks: &Clocks,
+    freq: u32) {
+
+    let qspi = QSpi::new(
+        spi2,
+        sio0,
+        sio1,
+        sio2,
+        sio3,
+        cs,
+        clk,
+        peripheral_clock,
+        clocks,
+        freq
+    );
+
+    interrupt::free(|_| unsafe {
+        QSPI.replace(qspi);
+    });
+}
+
+pub fn transmit(data: &[u8]) {
+    sprint!("+");
+    unsafe {
+        if let Some(qspi) = QSPI.as_mut() {
+            qspi.transfer(data);
+        }
+    }
+}
+
+fn clock_register_value(frequency: u32, clocks: &Clocks) -> u32 {
+    // FIXME: this might not be always true
+    let apb_clk_freq: u32 = clocks.apb_clock.to_Hz();
+
+    let reg_val: u32;
+    let duty_cycle = 128;
+
+    // In HW, n, h and l fields range from 1 to 64, pre ranges from 1 to 8K.
+    // The value written to register is one lower than the used value.
+
+    if frequency > ((apb_clk_freq / 4) * 3) {
+        // Using APB frequency directly will give us the best result here.
+        reg_val = 1 << 31;
+    } else {
+        /* For best duty cycle resolution, we want n to be as close to 32 as
+         * possible, but we also need a pre/n combo that gets us as close as
+         * possible to the intended frequency. To do this, we bruteforce n and
+         * calculate the best pre to go along with that. If there's a choice
+         * between pre/n combos that give the same result, use the one with the
+         * higher n.
+         */
+
+        let mut pre: i32;
+        let mut bestn: i32 = -1;
+        let mut bestpre: i32 = -1;
+        let mut besterr: i32 = 0;
+        let mut errval: i32;
+
+        /* Start at n = 2. We need to be able to set h/l so we have at least
+         * one high and one low pulse.
+         */
+
+        for n in 2..64 {
+            /* Effectively, this does:
+             *   pre = round((APB_CLK_FREQ / n) / frequency)
+             */
+
+            pre = ((apb_clk_freq as i32 / n) + (frequency as i32 / 2))
+                / frequency as i32;
+
+            if pre <= 0 {
+                pre = 1;
+            }
+
+            if pre > 16 {
+                pre = 16;
+            }
+
+            errval = (apb_clk_freq as i32 / (pre as i32 * n as i32)
+                - frequency as i32)
+                .abs();
+            if bestn == -1 || errval <= besterr {
+                besterr = errval;
+                bestn = n as i32;
+                bestpre = pre as i32;
+            }
+        }
+
+        let n: i32 = bestn;
+        pre = bestpre as i32;
+        let l: i32 = n;
+
+        /* Effectively, this does:
+         *   h = round((duty_cycle * n) / 256)
+         */
+
+        let mut h: i32 = (duty_cycle * n + 127) / 256;
+        if h <= 0 {
+            h = 1;
+        }
+
+        reg_val = (l as u32 - 1)
+            | ((h as u32 - 1) << 6)
+            | ((n as u32 - 1) << 12)
+            | ((pre as u32 - 1) << 18);
+    }
+
+    reg_val
+}
+
 
 pub trait QuadInstance {
     fn register_block(&self) -> &RegisterBlock;
@@ -55,6 +179,7 @@ pub trait QuadInstance {
                 .clear_bit()
                 .fwrite_quad()
                 .set_bit()
+                
         });
         // sprintln!("user: {:x}", block.user.read().bits());
 
@@ -74,17 +199,17 @@ pub trait QuadInstance {
         // block.dma_int_.reset();
         // block.dma_int.reset();
 
-        block.ctrl.write(|w| unsafe { w.bits(0) });
+        block.ctrl.write(|w|  w.wr_bit_order().set_bit() );
         block.misc.write(|w| unsafe { w.bits(0) });
         // Master mode
         block.slave.write(|w| unsafe { w.bits(0) });
     }
 
-    fn setup(&mut self) {
-        // Use system clock as SPI clock
+    fn setup(&mut self, target_frequency: u32, clocks: &Clocks) {
+        let reg_value = clock_register_value(target_frequency, clocks);
         self.register_block()
             .clock
-            .write(|w| unsafe { w.bits(1 << 31) })
+            .write(|w| unsafe { w.bits(reg_value) } );
     }
 
     fn set_data_mode(&mut self, data_mode: embedded_hal::spi::Mode) -> &mut Self {
@@ -238,6 +363,8 @@ impl<I: QuadInstance> QSpi<I> {
         mut cs: Gpio10<Unknown>,
         mut clk: Gpio6<Unknown>,
         system: &mut PeripheralClockControl,
+        clocks: &Clocks,
+        freq: u32
     ) -> QSpi<I> {
         sio0.set_to_push_pull_output()
             .connect_peripheral_to_output(spi.sio0());
@@ -254,8 +381,8 @@ impl<I: QuadInstance> QSpi<I> {
 
         let mut qspi = QSpi { spi_instance: spi };
 
+        qspi.spi_instance.setup(freq, clocks);
         qspi.spi_instance.enable_peripheral(system);
-        qspi.spi_instance.setup();
         qspi.spi_instance.init(false, false);
         qspi.spi_instance.set_data_mode(embedded_hal::spi::MODE_0);
 
