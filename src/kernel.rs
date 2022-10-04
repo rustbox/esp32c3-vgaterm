@@ -15,36 +15,127 @@
 //!
 
 use crate::{sprint, sprintln};
-use crate::timer::Delay;
 
-use esp32c3_hal::gpio::Gpio3;
+use alloc::format;
+
+use esp32c3_hal::gpio::{Gpio3, Gpio8};
 use esp32c3_hal::gpio_types::{Unknown, Event};
 use riscv::asm::wfi;
 
 // const BLANKING_WAIT_TIMER: u64 = 3000; // us
 // const DRAIN_WAIT_TIMER: u64 = 70; // us
 // const FILL_AMOUNT: u32 = 3200; // bytes
-const BLANKING_WAIT_TIME: u64 = 3972; // us
+pub const BLANKING_WAIT_TIME: u64 = 3960; // us
 
-pub fn start(vis: Gpio3<Unknown>, delay: Delay) {
+pub fn start(vis: Gpio3<Unknown>) {
     sprintln!("start!");
     let _ = crate::gpio::pin_interrupt(
         vis.into_pull_down_input(),
         Event::FallingEdge,
-        move |_| {
-            sprint!(".");
+        |_| {
+            // sprint!(".");
             crate::start_timer0_callback(BLANKING_WAIT_TIME, move|| {
                 // sprintln!("*");
-                frame(delay);
+                frame();
+                
             })
         }
     );
 
     loop {
         unsafe {
-            sprintln!("loop?");
+            // sprintln!("loop?");
             wfi();
         }
+    }
+}
+
+enum ControllerState {
+    FirstChunk,
+    Frame(usize),
+}
+
+impl ControllerState {
+    fn update(&self, transition: Transition) -> ControllerState{
+        use ControllerState::*;
+        use Transition::*;
+        let size = 5 * crate::video::WIDTH;
+        match (self, transition) {
+            (FirstChunk, VisLow) => FirstChunk,
+            (FirstChunk, FifoEmpty) => Frame(size),
+            (Frame(p), FifoEmpty) => Frame(p + size),
+            (Frame(_), VisLow) => FirstChunk
+        }
+    }
+}
+
+enum Transition {
+    FifoEmpty,
+    VisLow
+}
+
+const CHUNK_79: usize = 79 * 5 * crate::video::WIDTH;
+
+static mut CONTROLLER_STATE: ControllerState = ControllerState::FirstChunk;
+
+pub fn start2(vis: Gpio3<Unknown>, fifo_empty: Gpio8<Unknown>) {
+    let _ = crate::gpio::pin_interrupt(
+        vis.into_pull_down_input(),
+        Event::FallingEdge,
+        |_| unsafe {
+            // Reset state back to first chunk
+            // Turn on fifo_empty interrupt
+            CONTROLLER_STATE = CONTROLLER_STATE.update(Transition::VisLow);
+            
+        }
+    );
+
+    let mut chunk_ready = crate::gpio::pin_interrupt(
+        fifo_empty.into_pull_down_input(), 
+        Event::FallingEdge, 
+        |p| unsafe {
+            CONTROLLER_STATE = CONTROLLER_STATE.update(Transition::FifoEmpty);
+            // if we're chunk 79, pause 
+            match CONTROLLER_STATE {
+                ControllerState::Frame(px) => {
+                    if px == CHUNK_79 {
+                        p.unlisten();
+                    }
+                },
+                _ => {}
+            };
+        }
+    );
+
+    loop {
+        unsafe {
+            match CONTROLLER_STATE {
+                ControllerState::FirstChunk => {
+                    chunk_ready = crate::gpio::pin_resume(chunk_ready, Event::FallingEdge);
+                    first_chunk();
+                    wfi();
+                },
+                ControllerState::Frame(p) => {
+                    chunk(p);
+                    wfi();
+                }
+            };
+            wfi();
+        }
+    }
+}
+
+pub fn chunk(start: usize) {
+    let size = 5 * crate::video::WIDTH;
+    unsafe {
+        crate::spi::transmit(&crate::video::BUFFER[start..start+size]);
+    }
+}
+
+pub fn first_chunk() {
+    let size = 5 * crate::video::WIDTH;
+    unsafe {
+        crate::spi::transmit(&crate::video::BUFFER[0..size]);
     }
 }
 
@@ -58,23 +149,24 @@ pub fn start(vis: Gpio3<Unknown>, delay: Delay) {
 /// 
 /// Do we use a timer to calculate the vertical blank??
 /// Vertical blank time total is 1430.36 us, so set an interrupt timer for maybe 1400 us?
-fn frame(delay: Delay) {
+#[inline]
+pub fn frame() {
     let mut length = 6 * crate::video::WIDTH;
     let mut px = 0;
     unsafe {
         // First 6 lines
-        let deadline = delay.deadline(159);
+        let deadline = crate::deadline(170);
         crate::spi::transmit(&crate::video::BUFFER[px..px+length]);
         px += length;
         length = 5 * crate::video::WIDTH;
-        delay.wait_until(deadline);
+        crate::wait_until(deadline);
 
         // The next 390 lines
         for _ in 1..79 {
-            let deadline = delay.deadline(159);
+            let deadline = crate::deadline(170);
             crate::spi::transmit(&crate::video::BUFFER[px..px+length]);
             px += length;
-            delay.wait_until(deadline);
+            crate::wait_until(deadline);
         }
 
         // The last 4 lines

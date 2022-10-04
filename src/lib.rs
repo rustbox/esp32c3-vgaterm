@@ -1,4 +1,5 @@
 #![no_std]
+#![feature(array_chunks)]
 
 extern crate alloc;
 
@@ -11,7 +12,18 @@ pub mod spi;
 pub mod kernel;
 
 pub use println::configure;
-pub use timer::{configure_timer0, enable_timer0_interrupt, clear_timer0, start_timer0, start_timer0_callback, Delay};
+pub use timer::{
+    configure_timer0,
+    enable_timer0_interrupt,
+    clear_timer0,
+    start_timer0,
+    start_timer0_callback,
+    Delay,
+    delay,
+    deadline,
+    wait_until,
+};
+use unroll::unroll_for_loops;
 
 use core::arch::asm;
 
@@ -42,3 +54,13 @@ pub fn measure_cycle_count() -> u32{
     }
     d
 }
+
+#[unroll_for_loops]
+pub fn noops(n: u32) {
+    for _ in 0..n {
+        unsafe {
+            asm!("nop");
+        }
+    }
+}
+

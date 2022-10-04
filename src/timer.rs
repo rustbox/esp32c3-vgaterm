@@ -33,6 +33,7 @@ use crate::sprintln;
 
 static TIMER0: Mutex<RefCell<Option<Timer<Timer0<TIMG0>>>>> = Mutex::new(RefCell::new(None));
 static mut TIMER0_CALLBACK: Option<Box<dyn FnMut() -> ()>> = None;
+static mut DELAY: Option<Delay> = None;
 
 /// Uses the `SYSTIMER` peripheral for counting clock cycles, as
 /// unfortunately the ESP32-C3 does NOT implement the `mcycle` CSR, which is
@@ -51,6 +52,13 @@ impl Delay {
 
         Self {
             freq: HertzU64::MHz((clocks.xtal_clock.to_MHz() * 10 / 25) as u64),
+        }
+    }
+
+    /// Builds a Delay struct directly 
+    pub fn from_freq(freq_mhz: u64) -> Self {
+        Self {
+            freq: HertzU64::MHz(freq_mhz)
         }
     }
 
@@ -80,8 +88,36 @@ impl Delay {
     }
 }
 
+pub fn delay(us: u64) {
+    unsafe {
+        if let Some(delay) = DELAY {
+            delay.delay(us);
+        }
+    }
+}
 
+/// 16MHz timer clock
+/// (16,000,000 cycles / sec) * (1 sec / 1,000,000 us) => 16 cycles / us
+pub fn deadline(us: u64) -> u64 {
+    unsafe {
+        match DELAY {
+            Some(delay) => delay.deadline(us),
+            // Assume 16MHz for the clock if we haven't made one I guess
+            None => SystemTimer::now().wrapping_add(us * 16)
+        }
+    }
+}
 
+pub fn wait_until(deadline: u64) {
+    unsafe {
+        match DELAY {
+            Some(delay) => delay.wait_until(deadline),
+            None => { 
+                while SystemTimer::now() <= deadline {} 
+            }
+        }
+    }
+}
 
 /// Initialize and disable Timer Group 0
 pub fn configure_timer0(timg0: TIMG0, clocks: &Clocks) {
@@ -90,8 +126,9 @@ pub fn configure_timer0(timg0: TIMG0, clocks: &Clocks) {
 
     group0.wdt.disable();
 
-    riscv::interrupt::free(|cs| {
+    riscv::interrupt::free(|cs| unsafe {
         TIMER0.borrow(*cs).replace(Some(timer0));
+        DELAY.replace(Delay::new(clocks));
     });
 }
 
@@ -146,12 +183,12 @@ pub fn clear_timer0() {
             },
             None => {}
         }
-    })
+    })// sprintln!("+")
 }
 
 #[interrupt]
 fn TG0_T0_LEVEL() {
-    sprintln!("timer 0 interrupt!");
+    // sprintln!("timer 0 interrupt!");
     clear_timer0();
     
     riscv::interrupt::free(|_| unsafe {

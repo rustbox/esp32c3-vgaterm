@@ -4,6 +4,9 @@
 
 extern crate alloc;
 
+use alloc::vec;
+use alloc::format;
+
 use esp32c3_hal::prelude::*;
 use esp32c3_hal::{gpio::IO, pac::Peripherals, Rtc};
 use esp32c3_hal::clock::{ClockControl, CpuClock};
@@ -13,6 +16,7 @@ use esp_hal_common::{Priority, Event};
 use riscv_rt::entry;
 
 use vgaterm;
+use vgaterm::video::BUFFER;
 use vgaterm::{sprint, sprintln, Delay};
 
 use core::arch::asm;
@@ -79,7 +83,7 @@ fn main() -> ! {
     wdt1.disable();
 
     let io = IO::new(peripherals.GPIO, peripherals.IO_MUX);    
-
+    configure_count_cycles();
     vgaterm::configure_timer0(peripherals.TIMG0, &clocks);
     vgaterm::enable_timer0_interrupt(Priority::Priority1);
     vgaterm::configure(peripherals.UART0);
@@ -120,31 +124,69 @@ fn main() -> ! {
         clk,
         &mut system.peripheral_clock_control,
         &clocks,
-        50_000_000
+        80_000_000
     );
     // White: 0xFF
     // Red: 0x03
     // Green: 0x1C
     // Blue: 0x60, 0xE0
-    vgaterm::video::load_test_pattern(0x03, 0x03);
-    // riscv::interrupt::free(|_| unsafe {
-    //     for i in 0..0xff {
-    //         BUFFER[i] = i as u8
-    //     }
+    // vgaterm::video::load_test_pattern(0x1C, 0x1C);
+    riscv::interrupt::free(|_| unsafe {
+        for l in 0..vgaterm::video::HEIGHT {
+            for p in 0..vgaterm::video::WIDTH {
+                let i = vgaterm::video::WIDTH * l + p;
+                // if l <= 6  {
+                //     BUFFER[i] = 0xFF;
+                // } else if (l - 2) % 10 < 5  {
+                //     // Yellow
+                //     BUFFER[i] = 0x1F;
+                // } else {
+                //     BUFFER[i] = 0x00;
+                // }
+                // if p < 20 {
+                //     BUFFER[i] = 0x03;
+                // }
+                if p == 320 {
+                    BUFFER[i] = 0xFF;
+                } else {
+                    BUFFER[i] = 0x00;
+                }
+            }
+        }
+    });
+    // vgaterm::gpio::pin_interrupt(io.pins.gpio3.into_floating_input(), Event::FallingEdge, |_| {
+    //     sprint!(".");
+    //     vgaterm::start_timer0_callback(1000, || {
+    //         sprintln!("*");
+    //         // let d = Delay::new(&clocks);
+    //         vgaterm::kernel::frame();
+    //     })
     // });
-    vgaterm::gpio::pin_interrupt(io.pins.gpio3.into_floating_input(), Event::FallingEdge, |_| {
-        sprint!(".");
-    });
 
-    vgaterm::start_timer0_callback(1_000_000, || {
-        sprintln!("one second!")
-    });
-    // vgaterm::kernel::start(io.pins.gpio3, delay);
-
+    // vgaterm::start_timer0_callback(1_000_000, || {
+    //     sprintln!("one second!")
+    // });
+    // vgaterm::kernel::start(io.pins.gpio3);
+    // let mut hi = io.pins.gpio3.into_push_pull_output();
+    // let mut count = 0;
+    // vgaterm::kernel::start(io.pins.gpio3);
+    
     loop {
         unsafe {
-            sprintln!("Waiting");
-            riscv::asm::wfi();
+            sprintln!("hello");
+
+            // vgaterm::start_cycle_count();
+            vgaterm::kernel::frame();
+            // let m = vgaterm::measure_cycle_count();
+
+            // sprintln!("Frame took {} cycles", m);
+            // let _ = hi.set_high();
+            // vgaterm::spi::transmit(&[0xff; 64]);
+            // let _ = hi.set_low();
+            // count += 1;
+            // sprintln!("Waiting {}", count);
+            delay.delay_ms(1000);
+            // riscv::asm::wfi();
         }
     }
 }

@@ -1,19 +1,16 @@
 // hello
 
-use esp32c3_hal::IO;
 use esp32c3_hal::gpio::{Gpio10, Gpio2, Gpio4, Gpio5, Gpio6, Gpio7};
 use esp32c3_hal::clock::Clocks;
 use esp_hal_common::pac::SPI2;
 use esp_hal_common::{
-    pac::{spi2::RegisterBlock, SYSTEM},
-    spi::Instance,
+    pac::spi2::RegisterBlock,
     types::OutputSignal,
     OutputPin, Unknown, system::{PeripheralClockControl, Peripheral},
 };
 use riscv::interrupt;
 
 use crate::{sprintln, sprint};
-
 
 static mut QSPI: Option<QSpi<SPI2>> = None;
 
@@ -48,7 +45,6 @@ pub fn configure(
 }
 
 pub fn transmit(data: &[u8]) {
-    sprint!("+");
     unsafe {
         if let Some(qspi) = QSPI.as_mut() {
             qspi.transfer(data);
@@ -59,6 +55,7 @@ pub fn transmit(data: &[u8]) {
 fn clock_register_value(frequency: u32, clocks: &Clocks) -> u32 {
     // FIXME: this might not be always true
     let apb_clk_freq: u32 = clocks.apb_clock.to_Hz();
+    sprintln!("apb clock freq is {} MHz", apb_clk_freq / 1_000_000);
 
     let reg_val: u32;
     let duty_cycle = 128;
@@ -69,6 +66,7 @@ fn clock_register_value(frequency: u32, clocks: &Clocks) -> u32 {
     if frequency > ((apb_clk_freq / 4) * 3) {
         // Using APB frequency directly will give us the best result here.
         reg_val = 1 << 31;
+        sprintln!("Using apb clock");
     } else {
         /* For best duty cycle resolution, we want n to be as close to 32 as
          * possible, but we also need a pre/n combo that gets us as close as
@@ -131,6 +129,10 @@ fn clock_register_value(frequency: u32, clocks: &Clocks) -> u32 {
             | ((h as u32 - 1) << 6)
             | ((n as u32 - 1) << 12)
             | ((pre as u32 - 1) << 18);
+        
+        // f is system/(spi_clkdiv_pre+1)/(spi_clkcnt_N+1)
+        let f = apb_clk_freq / ((pre + 1) as u32 * (n + 1) as u32);
+        sprintln!("using spi clock at {} MHz", f / 1_000_000);
     }
 
     reg_val
@@ -308,45 +310,99 @@ pub trait QuadInstance {
     }
 
     fn transfer(&mut self, data: &[u8]) {
+        self.configure_datalen(data.len() as u32 * 32);
+        
         let block = self.register_block();
-
+        // Wait until we know SPI is ready to proceed
+        while block.cmd.read().usr().bit_is_set() { }
+        
         let words: &[u32] =
             unsafe { core::slice::from_raw_parts(data.as_ptr().cast(), data.len() / 4) };
-        for chunk in words.chunks(16) {
-            // wait if currently in a write
-            while block.cmd.read().usr().bit_is_set() {
-                // sprintln!("wait");
-            }
+        
+        // Before we take off, load the upper and lower parts of the buffer
+        
+        load_first_half(self.register_block(), &words[0..=7]);
+        load_second_half(self.register_block(), &words[8..=15]);
+        
+        // Start!
+        self.update();
+        block.cmd.modify(|_, w| w.usr().set_bit());
+        // crate::start_cycle_count();
 
-            // Save words 16 at a time (64 bytes)
-            // let buffer = unsafe { core::slice::from_raw_parts_mut(block.w0.as_ptr(), 16) };
-            // for i in 0..chunk.len() {
-            //     buffer[i] = chunk[i];
-            // }
+        let waits = 42;
+        let rest_words = &words[16..];
+        for chunk in rest_words.array_chunks::<16>() {
+            // sprint!("*");
+            let first = &chunk[0..=7];
+            let second = &chunk[8..=15];
 
-            block.w0.write(|w| unsafe { w.bits(chunk[0]) });
-            block.w1.write(|w| unsafe { w.bits(chunk[1]) });
-            block.w2.write(|w| unsafe { w.bits(chunk[2]) });
-            block.w3.write(|w| unsafe { w.bits(chunk[3]) });
-            block.w4.write(|w| unsafe { w.bits(chunk[4]) });
-            block.w5.write(|w| unsafe { w.bits(chunk[5]) });
-            block.w6.write(|w| unsafe { w.bits(chunk[6]) });
-            block.w7.write(|w| unsafe { w.bits(chunk[7]) });
-            block.w8.write(|w| unsafe { w.bits(chunk[8]) });
-            block.w9.write(|w| unsafe { w.bits(chunk[9]) });
-            block.w10.write(|w| unsafe { w.bits(chunk[10]) });
-            block.w11.write(|w| unsafe { w.bits(chunk[11]) });
-            block.w12.write(|w| unsafe { w.bits(chunk[12]) });
-            block.w13.write(|w| unsafe { w.bits(chunk[13]) });
-            block.w14.write(|w| unsafe { w.bits(chunk[14]) });
-            block.w15.write(|w| unsafe { w.bits(chunk[15]) });
-
-            self.configure_datalen(chunk.len() as u32 * 32);
-            self.update();
-
-            block.cmd.modify(|_, w| w.usr().set_bit());
+            // Wait half the time it takes for SPI to consume the buffer
+            // (8 words ) * 4 bytes in 1 cpu cycle per 1 byte in 1 spi cycle * ratio of Fcpu to Fspi
+            // cpu is 160, spi is 40, so x4
+            // SPI actually only puts half a byte at a time
+            crate::noops(waits);
+            // we've passed the first half, so load that chunk now
+            load_first_half(self.register_block(), first);
+            // Wait for the second half to be done emitted from SPI
+            crate::noops(waits);
+            // Load the second half
+            load_second_half(self.register_block(), second);
         }
+        
+        while block.cmd.read().usr().bit_is_set() { }
+        // let m = crate::measure_cycle_count();
+        // sprintln!("SPI took {} cycles for {}", m, data.len());
+        // for chunk in words.chunks(16) {
+        //     // wait if currently in a write
+            
+
+        //     block.w0.write(|w| unsafe { w.bits(chunk[0]) });
+        //     block.w1.write(|w| unsafe { w.bits(chunk[1]) });
+        //     block.w2.write(|w| unsafe { w.bits(chunk[2]) });
+        //     block.w3.write(|w| unsafe { w.bits(chunk[3]) });
+        //     block.w4.write(|w| unsafe { w.bits(chunk[4]) });
+        //     block.w5.write(|w| unsafe { w.bits(chunk[5]) });
+        //     block.w6.write(|w| unsafe { w.bits(chunk[6]) });
+        //     block.w7.write(|w| unsafe { w.bits(chunk[7]) });
+        //     block.w8.write(|w| unsafe { w.bits(chunk[8]) });
+        //     block.w9.write(|w| unsafe { w.bits(chunk[9]) });
+        //     block.w10.write(|w| unsafe { w.bits(chunk[10]) });
+        //     block.w11.write(|w| unsafe { w.bits(chunk[11]) });
+        //     block.w12.write(|w| unsafe { w.bits(chunk[12]) });
+        //     block.w13.write(|w| unsafe { w.bits(chunk[13]) });
+        //     block.w14.write(|w| unsafe { w.bits(chunk[14]) });
+        //     block.w15.write(|w| unsafe { w.bits(chunk[15]) });
+
+        //     self.configure_datalen(chunk.len() as u32 * 32);
+        //     self.update();
+
+        //     block.cmd.modify(|_, w| w.usr().set_bit());
+        // }
     }
+}
+
+#[inline]
+fn load_first_half(block: &RegisterBlock, data: &[u32]) {
+    block.w0.write(|w| unsafe { w.bits(data[0]) });
+    block.w1.write(|w| unsafe { w.bits(data[1]) });
+    block.w2.write(|w| unsafe { w.bits(data[2]) });
+    block.w3.write(|w| unsafe { w.bits(data[3]) });
+    block.w4.write(|w| unsafe { w.bits(data[4]) });
+    block.w5.write(|w| unsafe { w.bits(data[5]) });
+    block.w6.write(|w| unsafe { w.bits(data[6]) });
+    block.w7.write(|w| unsafe { w.bits(data[7]) });
+}
+
+#[inline]
+fn load_second_half(block: &RegisterBlock, data: &[u32]) {
+    block.w8.write(|w| unsafe { w.bits(data[0]) });
+    block.w9.write(|w| unsafe { w.bits(data[1]) });
+    block.w10.write(|w| unsafe { w.bits(data[2]) });
+    block.w11.write(|w| unsafe { w.bits(data[3]) });
+    block.w12.write(|w| unsafe { w.bits(data[4]) });
+    block.w13.write(|w| unsafe { w.bits(data[5]) });
+    block.w14.write(|w| unsafe { w.bits(data[6]) });
+    block.w15.write(|w| unsafe { w.bits(data[7]) });
 }
 
 pub struct QSpi<I: QuadInstance> {

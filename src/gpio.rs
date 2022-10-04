@@ -115,6 +115,26 @@ pub fn pin_reenable(pin: PinRef, event: Event, callback: impl FnMut(&mut Box<dyn
     pin
 }
 
+pub fn pin_pause(pin: PinRef) -> PinRef {
+    let n = pin.0;
+    riscv::interrupt::free(|_| unsafe {
+        if let Some(ref mut p) = PINS[n] {
+            p.unlisten();
+        }
+    });
+    pin
+}
+
+pub fn pin_resume(pin: PinRef, event: Event) -> PinRef {
+    let n = pin.0;
+    riscv::interrupt::free(|_| unsafe {
+        if let Some(ref mut p) = PINS[n] {
+            p.listen(event);
+        }
+    });
+    pin
+}
+
 fn check_gpio_source() -> u32 {
     riscv::interrupt::free(|_| unsafe {
         let periphs = pac::Peripherals::steal();
@@ -142,7 +162,7 @@ pub fn write_byte_w1(d: u32) {
 
 #[interrupt]
 fn GPIO() {
-    sprint!("-");
+    // sprint!("-");
     riscv::interrupt::free(|_| {
         let source = check_gpio_source() as usize;
         callback_pin(source);
