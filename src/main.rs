@@ -4,15 +4,15 @@
 
 extern crate alloc;
 
-use alloc::vec;
 use alloc::format;
+use alloc::vec;
 
-use esp32c3_hal::prelude::*;
-use esp32c3_hal::{gpio::IO, pac::Peripherals, Rtc};
 use esp32c3_hal::clock::{ClockControl, CpuClock};
+use esp32c3_hal::prelude::*;
 use esp32c3_hal::timer::TimerGroup;
+use esp32c3_hal::{gpio::IO, pac::Peripherals, Rtc};
 
-use esp_hal_common::{Priority, Event};
+use esp_hal_common::{Event, Priority};
 use riscv_rt::entry;
 
 use vgaterm;
@@ -82,17 +82,16 @@ fn main() -> ! {
     rtc.rwdt.disable();
     wdt1.disable();
 
-    let io = IO::new(peripherals.GPIO, peripherals.IO_MUX);    
+    let io = IO::new(peripherals.GPIO, peripherals.IO_MUX);
     configure_count_cycles();
     vgaterm::configure_timer0(peripherals.TIMG0, &clocks);
     vgaterm::enable_timer0_interrupt(Priority::Priority1);
     vgaterm::configure(peripherals.UART0);
     vgaterm::gpio::interrupt_enable(Priority::Priority2);
- 
+
     unsafe {
         riscv::interrupt::enable();
     }
-
 
     // vgaterm::gpio::interrupt_disable(enabled);
 
@@ -105,7 +104,6 @@ fn main() -> ! {
     // sprintln!("Starting timer");
     // vgaterm::start_timer0(1_000);
 
-
     let sio0 = io.pins.gpio7;
     let sio1 = io.pins.gpio2;
     let sio2 = io.pins.gpio5;
@@ -113,7 +111,6 @@ fn main() -> ! {
     let cs = io.pins.gpio10;
     let clk = io.pins.gpio6;
 
-    
     vgaterm::spi::configure(
         peripherals.SPI2,
         sio0,
@@ -124,7 +121,7 @@ fn main() -> ! {
         clk,
         &mut system.peripheral_clock_control,
         &clocks,
-        80_000_000
+        80_000_000,
     );
     // White: 0xFF
     // Red: 0x03
@@ -170,16 +167,16 @@ fn main() -> ! {
     // let mut hi = io.pins.gpio3.into_push_pull_output();
     // let mut count = 0;
     // vgaterm::kernel::start(io.pins.gpio3);
-    
+
     loop {
         unsafe {
             sprintln!("hello");
 
-            // vgaterm::start_cycle_count();
+            vgaterm::start_cycle_count();
             vgaterm::kernel::frame();
-            // let m = vgaterm::measure_cycle_count();
+            let m = vgaterm::measure_cycle_count();
 
-            // sprintln!("Frame took {} cycles", m);
+            sprintln!("Frame took {} cycles", m);
             // let _ = hi.set_high();
             // vgaterm::spi::transmit(&[0xff; 64]);
             // let _ = hi.set_low();

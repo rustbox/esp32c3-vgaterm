@@ -1,16 +1,17 @@
 // hello
 
-use esp32c3_hal::gpio::{Gpio10, Gpio2, Gpio4, Gpio5, Gpio6, Gpio7};
 use esp32c3_hal::clock::Clocks;
+use esp32c3_hal::gpio::{Gpio10, Gpio2, Gpio4, Gpio5, Gpio6, Gpio7};
 use esp_hal_common::pac::SPI2;
 use esp_hal_common::{
     pac::spi2::RegisterBlock,
+    system::{Peripheral, PeripheralClockControl},
     types::OutputSignal,
-    OutputPin, Unknown, system::{PeripheralClockControl, Peripheral},
+    OutputPin, Unknown,
 };
 use riscv::interrupt;
 
-use crate::{sprintln, sprint};
+use crate::{sprint, sprintln};
 
 static mut QSPI: Option<QSpi<SPI2>> = None;
 
@@ -24,8 +25,8 @@ pub fn configure(
     clk: Gpio6<Unknown>,
     peripheral_clock: &mut PeripheralClockControl,
     clocks: &Clocks,
-    freq: u32) {
-
+    freq: u32,
+) {
     let qspi = QSpi::new(
         spi2,
         sio0,
@@ -36,7 +37,7 @@ pub fn configure(
         clk,
         peripheral_clock,
         clocks,
-        freq
+        freq,
     );
 
     interrupt::free(|_| unsafe {
@@ -91,8 +92,7 @@ fn clock_register_value(frequency: u32, clocks: &Clocks) -> u32 {
              *   pre = round((APB_CLK_FREQ / n) / frequency)
              */
 
-            pre = ((apb_clk_freq as i32 / n) + (frequency as i32 / 2))
-                / frequency as i32;
+            pre = ((apb_clk_freq as i32 / n) + (frequency as i32 / 2)) / frequency as i32;
 
             if pre <= 0 {
                 pre = 1;
@@ -102,9 +102,7 @@ fn clock_register_value(frequency: u32, clocks: &Clocks) -> u32 {
                 pre = 16;
             }
 
-            errval = (apb_clk_freq as i32 / (pre as i32 * n as i32)
-                - frequency as i32)
-                .abs();
+            errval = (apb_clk_freq as i32 / (pre as i32 * n as i32) - frequency as i32).abs();
             if bestn == -1 || errval <= besterr {
                 besterr = errval;
                 bestn = n as i32;
@@ -129,7 +127,7 @@ fn clock_register_value(frequency: u32, clocks: &Clocks) -> u32 {
             | ((h as u32 - 1) << 6)
             | ((n as u32 - 1) << 12)
             | ((pre as u32 - 1) << 18);
-        
+
         // f is system/(spi_clkdiv_pre+1)/(spi_clkcnt_N+1)
         let f = apb_clk_freq / ((pre + 1) as u32 * (n + 1) as u32);
         sprintln!("using spi clock at {} MHz", f / 1_000_000);
@@ -137,7 +135,6 @@ fn clock_register_value(frequency: u32, clocks: &Clocks) -> u32 {
 
     reg_val
 }
-
 
 pub trait QuadInstance {
     fn register_block(&self) -> &RegisterBlock;
@@ -181,7 +178,6 @@ pub trait QuadInstance {
                 .clear_bit()
                 .fwrite_quad()
                 .set_bit()
-                
         });
         // sprintln!("user: {:x}", block.user.read().bits());
 
@@ -201,7 +197,7 @@ pub trait QuadInstance {
         // block.dma_int_.reset();
         // block.dma_int.reset();
 
-        block.ctrl.write(|w|  w.wr_bit_order().set_bit() );
+        block.ctrl.write(|w| w.wr_bit_order().set_bit());
         block.misc.write(|w| unsafe { w.bits(0) });
         // Master mode
         block.slave.write(|w| unsafe { w.bits(0) });
@@ -211,7 +207,7 @@ pub trait QuadInstance {
         let reg_value = clock_register_value(target_frequency, clocks);
         self.register_block()
             .clock
-            .write(|w| unsafe { w.bits(reg_value) } );
+            .write(|w| unsafe { w.bits(reg_value) });
     }
 
     fn set_data_mode(&mut self, data_mode: embedded_hal::spi::Mode) -> &mut Self {
@@ -310,20 +306,20 @@ pub trait QuadInstance {
     }
 
     fn transfer(&mut self, data: &[u8]) {
-        self.configure_datalen(data.len() as u32 * 32);
-        
+        self.configure_datalen(data.len() as u32 * 8);
+
         let block = self.register_block();
         // Wait until we know SPI is ready to proceed
-        while block.cmd.read().usr().bit_is_set() { }
-        
+        while block.cmd.read().usr().bit_is_set() {}
+
         let words: &[u32] =
             unsafe { core::slice::from_raw_parts(data.as_ptr().cast(), data.len() / 4) };
-        
+
         // Before we take off, load the upper and lower parts of the buffer
-        
+
         load_first_half(self.register_block(), &words[0..=7]);
         load_second_half(self.register_block(), &words[8..=15]);
-        
+
         // Start!
         self.update();
         block.cmd.modify(|_, w| w.usr().set_bit());
@@ -348,13 +344,12 @@ pub trait QuadInstance {
             // Load the second half
             load_second_half(self.register_block(), second);
         }
-        
-        while block.cmd.read().usr().bit_is_set() { }
+
+        while block.cmd.read().usr().bit_is_set() {}
         // let m = crate::measure_cycle_count();
         // sprintln!("SPI took {} cycles for {}", m, data.len());
         // for chunk in words.chunks(16) {
         //     // wait if currently in a write
-            
 
         //     block.w0.write(|w| unsafe { w.bits(chunk[0]) });
         //     block.w1.write(|w| unsafe { w.bits(chunk[1]) });
@@ -420,7 +415,7 @@ impl<I: QuadInstance> QSpi<I> {
         mut clk: Gpio6<Unknown>,
         system: &mut PeripheralClockControl,
         clocks: &Clocks,
-        freq: u32
+        freq: u32,
     ) -> QSpi<I> {
         sio0.set_to_push_pull_output()
             .connect_peripheral_to_output(spi.sio0());
