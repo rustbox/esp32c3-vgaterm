@@ -325,7 +325,7 @@ pub trait QuadInstance {
         block.cmd.modify(|_, w| w.usr().set_bit());
         // crate::start_cycle_count();
 
-        let waits = 42;
+        const WAITS: u8 = 64;
         let rest_words = &words[16..];
         for chunk in rest_words.array_chunks::<16>() {
             // sprint!("*");
@@ -336,11 +336,11 @@ pub trait QuadInstance {
             // (8 words ) * 4 bytes in 1 cpu cycle per 1 byte in 1 spi cycle * ratio of Fcpu to Fspi
             // cpu is 160, spi is 40, so x4
             // SPI actually only puts half a byte at a time
-            crate::noops(waits);
+            crate::noops::<WAITS>();
             // we've passed the first half, so load that chunk now
             load_first_half(self.register_block(), first);
             // Wait for the second half to be done emitted from SPI
-            crate::noops(waits);
+            crate::noops::<WAITS>();
             // Load the second half
             load_second_half(self.register_block(), second);
         }
