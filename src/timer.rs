@@ -88,6 +88,7 @@ impl Delay {
     }
 }
 
+#[inline]
 pub fn delay(us: u64) {
     unsafe {
         if let Some(delay) = DELAY {

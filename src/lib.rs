@@ -16,7 +16,6 @@ pub use timer::{
     clear_timer0, configure_timer0, deadline, delay, enable_timer0_interrupt, start_timer0,
     start_timer0_callback, wait_until, Delay,
 };
-use unroll::unroll_for_loops;
 
 use core::arch::asm;
 

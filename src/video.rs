@@ -1,10 +1,42 @@
 use esp32c3_hal::gpio::*;
 use esp_hal_common::{Output, PushPull, Unknown};
 
+use crate::spi;
+
 pub const WIDTH: usize = 640;
 pub const HEIGHT: usize = 400;
 pub const BUFFER_SIZE: usize = WIDTH * HEIGHT;
 pub static mut BUFFER: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];
+
+///
+/// Transmit the contents of the buffer via SPI to the monitor
+/// control hardware.
+/// 
+/// The SPI can only transmit up to 32,768 bytes at a time, so
+/// here we break apart the frame buffer into eight parts, each to
+/// be sent one by one in order.
+/// 
+pub fn transmit_frame() {
+    riscv::interrupt::free(|_| unsafe {
+        let a = &BUFFER[0..32000];
+        let b = &BUFFER[32000..64000];
+        let c = &BUFFER[64000..96000];
+        let d = &BUFFER[96000..128000];
+        let e = &BUFFER[128000..160000];
+        let f = &BUFFER[160000..192000];
+        let g = &BUFFER[192000..224000];
+        let h = &BUFFER[224000..256000];
+
+        spi::transmit(a);
+        spi::transmit(b);
+        spi::transmit(c);
+        spi::transmit(d);
+        spi::transmit(e);
+        spi::transmit(f);
+        spi::transmit(g);
+        spi::transmit(h);
+    });
+}
 
 pub struct LongPixelGpios {
     gpio0: Gpio0<Output<PushPull>>,

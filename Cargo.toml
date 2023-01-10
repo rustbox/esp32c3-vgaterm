@@ -17,7 +17,7 @@ name = "vgaterm"
 path = "src/main.rs"
 
 [profile.release]
-opt-level = "s"
+opt-level = 2
 
 [profile.dev]
 debug = true # Symbols are nice and they don't increase the size on Flash

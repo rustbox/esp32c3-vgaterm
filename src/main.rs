@@ -4,19 +4,16 @@
 
 extern crate alloc;
 
-use alloc::format;
-use alloc::vec;
-
 use esp32c3_hal::clock::{ClockControl, CpuClock};
 use esp32c3_hal::prelude::*;
 use esp32c3_hal::timer::TimerGroup;
 use esp32c3_hal::{gpio::IO, pac::Peripherals, Rtc};
 
-use esp_hal_common::{Event, Priority};
+use esp_hal_common::Priority;
 use riscv_rt::entry;
 
 use vgaterm;
-use vgaterm::video::BUFFER;
+use vgaterm::video;
 use vgaterm::{sprint, sprintln, Delay};
 
 use core::arch::asm;
@@ -70,7 +67,7 @@ fn main() -> ! {
     let peripherals = Peripherals::take().unwrap();
     let mut system = peripherals.SYSTEM.split();
     let clocks = ClockControl::configure(system.clock_control, CpuClock::Clock160MHz).freeze();
-
+    
     // Disable the watchdog timers. For the ESP32-C3, this includes the Super WDT,
     // the RTC WDT, and the TIMG WDTs.
     let mut rtc = Rtc::new(peripherals.RTC_CNTL);
@@ -83,19 +80,19 @@ fn main() -> ! {
     wdt1.disable();
 
     let io = IO::new(peripherals.GPIO, peripherals.IO_MUX);
-    configure_count_cycles();
+
+    configure_counter_for_cpu_cycles();
+
+    vgaterm::configure(peripherals.UART0);
     vgaterm::configure_timer0(peripherals.TIMG0, &clocks);
     vgaterm::enable_timer0_interrupt(Priority::Priority1);
-    vgaterm::configure(peripherals.UART0);
     vgaterm::gpio::interrupt_enable(Priority::Priority2);
 
     unsafe {
         riscv::interrupt::enable();
     }
 
-    // vgaterm::gpio::interrupt_disable(enabled);
 
-    // led.set_high().unwrap();
 
     // Initialize the Delay peripheral, and use it to toggle the LED state in a
     // loop.
@@ -111,6 +108,11 @@ fn main() -> ! {
     let cs = io.pins.gpio10;
     let clk = io.pins.gpio6;
 
+    // This is a debugging signal that goes high during the portion
+    // of the visible frame, according to what the CPU believes
+    let mut frame_signal = io.pins.gpio8.into_push_pull_output();
+    let _ = frame_signal.set_low();
+
     vgaterm::spi::configure(
         peripherals.SPI2,
         sio0,
@@ -121,36 +123,47 @@ fn main() -> ! {
         clk,
         &mut system.peripheral_clock_control,
         &clocks,
-        80_000_000,
+        40_000_000,
     );
     // White: 0xFF
     // Red: 0x03
     // Green: 0x1C
     // Blue: 0x60, 0xE0
-    // vgaterm::video::load_test_pattern(0x1C, 0x1C);
+    let mut pattern: [u8; 128] = [0; 128];
+    for h in 0..8 {
+        for l in 0..8 {
+            for p in 0..2 {
+                let value: u8 = h << 5 | p << 4 | l << 1 | p;
+                let i: usize = (p + 2*l + 16*h).into();
+                pattern[i] = value;
+            }
+        }
+    }
+
     riscv::interrupt::free(|_| unsafe {
-        for l in 0..vgaterm::video::HEIGHT {
-            for p in 0..vgaterm::video::WIDTH {
-                let i = vgaterm::video::WIDTH * l + p;
-                // if l <= 6  {
-                //     BUFFER[i] = 0xFF;
-                // } else if (l - 2) % 10 < 5  {
-                //     // Yellow
-                //     BUFFER[i] = 0x1F;
-                // } else {
-                //     BUFFER[i] = 0x00;
-                // }
-                // if p < 20 {
-                //     BUFFER[i] = 0x03;
-                // }
-                if p == 320 {
-                    BUFFER[i] = 0xFF;
-                } else {
-                    BUFFER[i] = 0x00;
+        for line in 0..video::HEIGHT {
+            for p in 0..video::WIDTH {
+                let i = line * video::WIDTH + p;
+                
+                if p < 160 {
+                    video::BUFFER[i] = 255;
+                }
+
+                if p >= 160 && p < 320 {
+                    video::BUFFER[i] = 0b0110_0110;
+                }
+
+                if p >= 320 && p < 480 {
+                    video::BUFFER[i] = 0b0111_0111;
+                }
+
+                if p >= 480 && p < 640 {
+                    video::BUFFER[i] = 0b0001_0001;
                 }
             }
         }
     });
+    // vgaterm::video::load_test_pattern(224, 224);
     // vgaterm::gpio::pin_interrupt(io.pins.gpio3.into_floating_input(), Event::FallingEdge, |_| {
     //     sprint!(".");
     //     vgaterm::start_timer0_callback(1000, || {
@@ -166,49 +179,30 @@ fn main() -> ! {
     // vgaterm::kernel::start(io.pins.gpio3);
     // let mut hi = io.pins.gpio3.into_push_pull_output();
     // let mut count = 0;
-    // vgaterm::kernel::start(io.pins.gpio3);
+    sprintln!("Clock speed: {} Hz", measure_clock(delay));
+
+    sprintln!("Transmitting pattern");
+    vgaterm::kernel::start(io.pins.gpio3);
+
 
     loop {
+
         unsafe {
-            sprintln!("hello");
+            riscv::asm::wfi();
 
-            vgaterm::start_cycle_count();
-            vgaterm::kernel::frame();
-            let m = vgaterm::measure_cycle_count();
-
-            sprintln!("Frame took {} cycles", m);
-            // let _ = hi.set_high();
-            // vgaterm::spi::transmit(&[0xff; 64]);
-            // let _ = hi.set_low();
-            // count += 1;
-            // sprintln!("Waiting {}", count);
-            delay.delay_ms(1000);
-            // riscv::asm::wfi();
         }
     }
+
 }
 
-struct Mems<'a>(usize, &'a [usize]);
 
-fn show_registers<'a>(addr_start: usize, end_offset: usize) -> Mems<'a> {
-    let raw = addr_start as *const usize;
-    sprintln!("Made raw pointer");
-    let slice = unsafe { core::slice::from_raw_parts(raw, end_offset / 4) };
-    sprintln!("Made slice");
-    Mems(addr_start, slice)
-}
-
-impl<'a> core::fmt::Display for Mems<'a> {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        for (i, reg) in self.1.iter().enumerate() {
-            let _ = write!(f, "{:#04x}: {:#032b}", self.0 + 4 * i, reg);
-        }
-        Ok(())
-    }
-}
-
+///
+/// Configure the esp32c2 custom Control and Status register
+/// `mpcer` to count only CPU clock cycles.
+/// 
+/// Page 28, https://www.espressif.com/sites/default/files/documentation/esp32-c3_technical_reference_manual_en.pdf
 #[no_mangle]
-fn configure_count_cycles() {
+fn configure_counter_for_cpu_cycles() {
     unsafe {
         // Set count event to clock cycles
         // Enable counting events and set overflow to rollover
@@ -233,33 +227,3 @@ fn measure_clock(delay: Delay) -> u32 {
     d
 }
 
-// #[interrupt]
-// pub unsafe fn TG0_T0_LEVEL() {
-//     riscv::interrupt::free(|_| {
-//         vgaterm::clear_timer0(interrupt::CpuInterrupt::Interrupt1);
-//         // sprintln!("Interrupt 1");
-
-//         vgaterm::start_timer0(10_000_000);
-//     });
-// }
-
-// #[interrupt]
-// pub fn interrupt3() {
-//     riscv::interrupt::free(|cs| unsafe {
-//         sprintln!("Some GPIO interrupt!");
-
-//         let mut button = BUTTON.borrow(*cs).borrow_mut();
-//         let button = button.as_mut().unwrap();
-
-//         let mut button2 = BUTTON2.borrow(*cs).borrow_mut();
-//         let button2 = button2.as_mut().unwrap();
-
-//         sprintln!("Interrupt source: {:?}", vgaterm::interrupt::source());
-//         sprintln!("GPIO Pin: {}", vgaterm::check_gpio_source());
-
-//         vgaterm::interrupt::clear(interrupt::CpuInterrupt::Interrupt3);
-
-//         button.clear_interrupt();
-//         button2.clear_interrupt();
-//     });
-// }
