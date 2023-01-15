@@ -1,4 +1,3 @@
-// hello
 
 use esp32c3_hal::clock::Clocks;
 use esp32c3_hal::gpio::{Gpio10, Gpio2, Gpio4, Gpio5, Gpio6, Gpio7};
@@ -11,10 +10,14 @@ use esp_hal_common::{
 };
 use riscv::interrupt;
 
-use crate::{sprint, sprintln};
+use crate::sprintln;
 
 static mut QSPI: Option<QSpi<SPI2>> = None;
 
+///
+/// Configure and initialize the Quad SPI instance. Once configured
+/// data may be transmitted with the `transmit()` function.
+/// 
 pub fn configure(
     spi2: SPI2,
     sio0: Gpio7<Unknown>,
@@ -56,6 +59,10 @@ pub fn free() -> (SPI2, Gpio7<Unknown>, Gpio2<Unknown>, Gpio5<Unknown>, Gpio4<Un
     q.free()
 }
 
+///
+/// Transmit data, a slice of u8, if the qspi instance has been configured.
+/// The buffer should be a length divisible by 4, and no longer than 32,768.
+/// 
 pub fn transmit(data: &[u8]) {
     unsafe {
         if let Some(qspi) = QSPI.as_mut() {
@@ -64,15 +71,24 @@ pub fn transmit(data: &[u8]) {
     }
 }
 
+///
+/// Compute the closest available SPI clock frequency and corresponding register value
+/// given the requested frequency. The clock speed equation is specified in chapter 26.7 of 
+/// https://www.espressif.com/sites/default/files/documentation/esp32-c3_technical_reference_manual_en.pdf
+/// 
+/// The SPI clock frequency is  given by:
+/// 
+/// Input Clock / ((Pre + 1) * (N + 1))
+/// 
+/// Where `Pre` and `N` are register values, and the Input Clock is the 
+/// APB_CLOCK, at 80 MHz. 
+/// 
 fn clock_register_value(frequency: u32, clocks: &Clocks) -> u32 {
     // FIXME: this might not be always true
     let apb_clk_freq: u32 = clocks.apb_clock.to_Hz();
     sprintln!("apb clock freq is {} MHz", apb_clk_freq / 1_000_000);
 
     let reg_val: u32;
-
-    // In HW, n, h and l fields range from 1 to 64, pre ranges from 1 to 8K.
-    // The value written to register is one lower than the used value.
 
     if frequency > (apb_clk_freq / 2) {
         // Using APB frequency directly will give us the best result here.
@@ -100,6 +116,10 @@ fn clock_register_value(frequency: u32, clocks: &Clocks) -> u32 {
     reg_val
 }
 
+/// 
+/// Generates the SPI Clock register value given the PRE and N
+/// input values
+/// 
 fn clock_register(pre: u32, n: u32) -> u32 {
 
     let l = n;
@@ -316,7 +336,8 @@ pub trait QuadInstance {
             // Each half of the SPI buffer will take
             // (Fcpu / Fspi) * 8 spi cycles / 32 bit register * 8 registers in each half
             // So at 40 MHz, that's 256 cpu cycles
-            while crate::measure_cycle_count() < 256 { }
+            const WAIT: u32 = 256;
+            while crate::measure_cycle_count() < WAIT { }
             // Once we're done waiting for the first half to complete
             // Reset the CPU counter to 0
             crate::start_cycle_count();
@@ -325,7 +346,7 @@ pub trait QuadInstance {
             load_first_half(self.register_block(), first);
 
             // Wait for the second half to be done emitted from SPI
-            while crate::measure_cycle_count() < 256 { }
+            while crate::measure_cycle_count() < WAIT { }
             crate::start_cycle_count();
             // Load the second half
             load_second_half(self.register_block(), second);

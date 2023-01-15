@@ -11,11 +11,11 @@ pub static mut BUFFER: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];
 ///
 /// Transmit the contents of the buffer via SPI to the monitor
 /// control hardware.
-/// 
+///
 /// The SPI can only transmit up to 32,768 bytes at a time, so
 /// here we break apart the frame buffer into eight parts, each to
 /// be sent one by one in order.
-/// 
+///
 pub fn transmit_frame() {
     riscv::interrupt::free(|_| unsafe {
         let a = &BUFFER[0..32000];
@@ -128,6 +128,37 @@ pub fn load_test_pattern(val1: u8, val2: u8) {
             }
         }
     })
+}
+
+pub fn rgb_from_byte(color: u16) -> (u8, u8, u8) {
+    let lower8 = color & 0xFF;
+    let shifted = lower8 << 1;
+    let highest = shifted >> 7;
+    let rgb = shifted + highest;
+
+    let red3 = (rgb & 0b000_000_111) as u8;
+    let green3 = ((rgb >> 3) & 0b000_000_111) as u8;
+    let blue3 = ((rgb >> 6) & 0b000_000_111) as u8;
+
+    let red = if red3 >> 2 == 1 {
+        32 * red3 + 0b11111
+    } else {
+        32 * red3
+    };
+
+    let green = if green3 >> 2 == 1 {
+        32 * green3 + 0b11111
+    } else {
+        32 * green3
+    };
+
+    let blue = if blue3 >> 2 == 1 {
+        32 * blue3 + 0b11111
+    } else {
+        32 * blue3
+    };
+
+    (red, green, blue)
 }
 
 #[no_mangle]
@@ -400,9 +431,9 @@ pub fn display_frame() -> u32 {
 pub fn write_pixel(i: usize) {
     unsafe {
         let p = *BUFFER.get_unchecked(i);
-        crate::gpio::write_byte(p as u32);
+        crate::gpio::write_word(p as u32);
         // unsafe { core::arch::asm!("nop") }
-        crate::gpio::write_byte(0);
+        crate::gpio::write_word(0);
     }
 }
 

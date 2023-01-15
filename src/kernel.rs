@@ -14,12 +14,11 @@
 //! software should reset all frame logic back to the beginning of the frame.
 //!
 
-use crate::sprintln;
+use crate::{sprintln, video};
 
 use esp32c3_hal::gpio::Gpio3;
 use esp32c3_hal::gpio_types::{Unknown, Event};
 use riscv::asm::wfi;
-
 
 pub const BLANKING_WAIT_TIME: u64 = 3960; // us
 
@@ -33,9 +32,18 @@ pub fn start(start: Gpio3<Unknown>) {
         }
     );
 
+    let mut color: u8 = 0;
+    let mut frames = 0;
     loop {
         unsafe {
-            // sprintln!("loop?");
+            // if frames == 60 {
+            //     frames = 0;
+            //     color += 1;
+            //     let (r, g, b) = video::rgb_from_byte(color.into());
+            //     sprintln!("Color: {}, {}, {}", r, g, b);
+            //     crate::video::load_test_pattern(color, color);
+            // }
+            frames += 1;
             wfi();
         }
     }

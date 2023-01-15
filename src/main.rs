@@ -145,23 +145,41 @@ fn main() -> ! {
             for p in 0..video::WIDTH {
                 let i = line * video::WIDTH + p;
                 
-                if p < 160 {
+                if line < 100 {
                     video::BUFFER[i] = 255;
                 }
 
-                if p >= 160 && p < 320 {
+                if line >= 100 && line < 200 {
                     video::BUFFER[i] = 0b0110_0110;
                 }
 
-                if p >= 320 && p < 480 {
+                if line >= 200 && line < 300 {
                     video::BUFFER[i] = 0b0111_0111;
                 }
 
-                if p >= 480 && p < 640 {
+                if line >= 300 && line < 400 {
                     video::BUFFER[i] = 0b0001_0001;
                 }
+
+                for px in 576..639 {
+                    if line == 23 && p == px {
+                        video::BUFFER[i] = 0b0000_0000;
+                    }
+                }
+
+                if p == 575 {
+                    video::BUFFER[i] = 0xE0//(0xE0 as u8).wrapping_add(line as u8);
+                }
+                if p == 639 {
+                    video::BUFFER[i] = 3 //(3 as u8).wrapping_add(line as u8);
+                }
+                // if p == 0 {
+                //     video::BUFFER[i] = 0x60;
+                // }
             }
         }
+
+        sprintln!("")
     });
     // vgaterm::video::load_test_pattern(224, 224);
     // vgaterm::gpio::pin_interrupt(io.pins.gpio3.into_floating_input(), Event::FallingEdge, |_| {

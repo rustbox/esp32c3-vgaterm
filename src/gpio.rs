@@ -1,9 +1,9 @@
 use alloc::boxed::Box;
-use esp32c3_hal::{interrupt, 
-    pac, 
-    gpio_types::{Event, InputPin}, 
-};
 use esp32c3_hal::prelude::*;
+use esp32c3_hal::{
+    gpio_types::{Event, InputPin},
+    interrupt, pac,
+};
 use esp_hal_common::CpuInterrupt;
 use riscv;
 
@@ -75,10 +75,10 @@ pub fn interrupt_enable(priority: interrupt::Priority) {
 pub fn pin_interrupt(
     mut input: impl InterruptPin + 'static,
     event: Event,
-    callback: impl FnMut(&mut Box<dyn InterruptPin>) -> () + 'static ) -> PinRef {
-
+    callback: impl FnMut(&mut Box<dyn InterruptPin>) -> () + 'static,
+) -> PinRef {
     let n = input.number() as usize;
-    
+
     riscv::interrupt::free(|_| unsafe {
         input.listen(event);
 
@@ -106,7 +106,11 @@ pub fn interrupt_disable(pin: PinRef) -> PinRef {
     pin
 }
 
-pub fn pin_reenable(pin: PinRef, event: Event, callback: impl FnMut(&mut Box<dyn InterruptPin>) -> () + 'static) -> PinRef {
+pub fn pin_reenable(
+    pin: PinRef,
+    event: Event,
+    callback: impl FnMut(&mut Box<dyn InterruptPin>) -> () + 'static,
+) -> PinRef {
     riscv::interrupt::free(|_| unsafe {
         let n = pin.0;
         if let Some(ref mut p) = PINS[n] {
@@ -140,57 +144,60 @@ pub fn pin_resume(pin: PinRef, event: Event) -> PinRef {
 fn check_gpio_source() -> u32 {
     riscv::interrupt::free(|_| unsafe {
         let periphs = pac::Peripherals::steal();
-        
+
         let gpio_status = periphs.GPIO.status.read().bits();
         31 - gpio_status.leading_zeros()
-    })   
+    })
 }
 
+///
+/// Write 32 bit word to the GPIO MMIO register. Each bit in the word
+/// corresponds to the GPIO number. So the Nth bit in the word being
+/// a 1 or 0 will correspond to GPIO N going high or low respectively.
+///
 #[inline]
-pub fn write_byte(d: u32) {
+pub fn write_word(d: u32) {
+    // Writing to a raw memory address is unsafe. This is a write to
+    // a MMIO, going out ot the GPIO pins. This memory address won't
+    // be read from. Reading GPIOs is accessed using a different MMIO
+    // register.
     unsafe {
         let gpio_out = GPIO_OUT as *mut u32;
         gpio_out.write_volatile(d)
     }
 }
 
+///
+///
+/// Write 32 bit word to the GPIO MMIO register. Each bit in the word
+/// corresponds to the GPIO number. So the Nth bit in the word being
+/// a 1 or 0 will correspond to GPIO N going high or low respectively.
+///
 #[inline]
-pub fn write_byte_w1(d: u32) {
+pub fn write_word_w1(d: u32) {
+    // Writing to a raw memory address is unsafe. This is a write to
+    // a MMIO, going out ot the GPIO pins. This memory address won't
+    // be read from. Reading GPIOs is accessed using a different MMIO
+    // register.
     unsafe {
         let gpio_out = GPIO_OUT_W1TS as *mut u32;
         *gpio_out = d;
     }
 }
 
+///
+/// Set a single GPIO pin to high or low. True for high, False for low.
+/// This sets the corresponding bit of the GPIO output register to a
+/// 1 or 0 to set the value of the GPIO pin high or low.
+/// 
+/// So for pin value of 3, we set bit 3 of GPIO_OUT register to the
+/// given value. All other bit values will be 0.
+///
 #[inline]
-pub fn gpio_pin_out(pin: u32, value: bool) {
+pub fn gpio_pin_out(pin: u8, value: bool) {
     let v: u32 = value.into();
     let gpio_value = v << pin;
-    write_byte(gpio_value);
-}
-
-struct GpioMask {
-    a: u8,
-    b: u8,
-    c: u8,
-    d: u8,
-    e: u8,
-    f: u8,
-    g: u8,
-    h: u8
-}
-
-impl GpioMask {
-    fn mask(&self) -> u32 {
-        (1 as u32) << self.a |
-        (1 as u32) << self.b |
-        (1 as u32) << self.c |
-        (1 as u32) << self.d |
-        (1 as u32) << self.e |
-        (1 as u32) << self.f |
-        (1 as u32) << self.g |
-        (1 as u32) << self.h
-    }
+    write_word(gpio_value);
 }
 
 pub fn read_byte_mask(mask: u32) -> u8 {
@@ -220,6 +227,7 @@ pub fn read_byte_mask(mask: u32) -> u8 {
 
 ///
 /// Read from GPIO 0-7 as a single byte
+/// 
 pub fn read_low() -> u8 {
     unsafe {
         let gpio_in = GPIO_IN as *mut u32;
@@ -235,5 +243,4 @@ fn GPIO() {
         let source = check_gpio_source() as usize;
         callback_pin(source);
     });
-
 }
