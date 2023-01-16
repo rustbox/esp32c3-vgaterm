@@ -1,17 +1,137 @@
-// hello
 
-
-
+use esp32c3_hal::clock::Clocks;
 use esp32c3_hal::gpio::{Gpio10, Gpio2, Gpio4, Gpio5, Gpio6, Gpio7};
+use esp_hal_common::pac::SPI2;
 use esp_hal_common::{
-    pac::{spi2::RegisterBlock, SYSTEM},
-    spi::Instance,
+    pac::spi2::RegisterBlock,
+    system::{Peripheral, PeripheralClockControl},
     types::OutputSignal,
-    OutputPin, Unknown, system::{PeripheralClockControl, Peripheral},
+    OutputPin, Unknown,
 };
+use riscv::interrupt;
 
+use crate::sprintln;
 
-type System = SYSTEM;
+static mut QSPI: Option<QSpi<SPI2>> = None;
+
+///
+/// Configure and initialize the Quad SPI instance. Once configured
+/// data may be transmitted with the `transmit()` function.
+/// 
+pub fn configure(
+    spi2: SPI2,
+    sio0: Gpio7<Unknown>,
+    sio1: Gpio2<Unknown>,
+    sio2: Gpio5<Unknown>,
+    sio3: Gpio4<Unknown>,
+    cs: Gpio10<Unknown>,
+    clk: Gpio6<Unknown>,
+    peripheral_clock: &mut PeripheralClockControl,
+    clocks: &Clocks,
+    freq: u32,
+) {
+    let qspi = QSpi::new(
+        spi2,
+        sio0,
+        sio1,
+        sio2,
+        sio3,
+        cs,
+        clk,
+        peripheral_clock,
+        clocks,
+        freq,
+    );
+
+    interrupt::free(|_| unsafe {
+        QSPI.replace(qspi);
+    });
+}
+
+///
+/// PANIC: if free is called before configure
+/// 
+pub fn free() -> (SPI2, Gpio7<Unknown>, Gpio2<Unknown>, Gpio5<Unknown>, Gpio4<Unknown>, Gpio10<Unknown>, Gpio6<Unknown>) {
+    let qspi = interrupt::free(|_| unsafe {
+        QSPI.take()
+    });
+    let q = qspi.expect("QSPI must be configured before freed");
+    q.free()
+}
+
+///
+/// Transmit data, a slice of u8, if the qspi instance has been configured.
+/// The buffer should be a length divisible by 4, and no longer than 32,768.
+/// 
+pub fn transmit(data: &[u8]) {
+    unsafe {
+        if let Some(qspi) = QSPI.as_mut() {
+            qspi.transfer(data);
+        }
+    }
+}
+
+///
+/// Compute the closest available SPI clock frequency and corresponding register value
+/// given the requested frequency. The clock speed equation is specified in chapter 26.7 of 
+/// https://www.espressif.com/sites/default/files/documentation/esp32-c3_technical_reference_manual_en.pdf
+/// 
+/// The SPI clock frequency is  given by:
+/// 
+/// Input Clock / ((Pre + 1) * (N + 1))
+/// 
+/// Where `Pre` and `N` are register values, and the Input Clock is the 
+/// APB_CLOCK, at 80 MHz. 
+/// 
+fn clock_register_value(frequency: u32, clocks: &Clocks) -> u32 {
+    // FIXME: this might not be always true
+    let apb_clk_freq: u32 = clocks.apb_clock.to_Hz();
+    sprintln!("apb clock freq is {} MHz", apb_clk_freq / 1_000_000);
+
+    let reg_val: u32;
+
+    if frequency > (apb_clk_freq / 2) {
+        // Using APB frequency directly will give us the best result here.
+        reg_val = 1 << 31;
+        sprintln!("Using apb clock");
+    } else {
+        let mut best_n = 1;
+        let mut best_pre = 0;
+        for n in 1..64 {
+            best_n = n;
+            // This is at least 2, frequency must be less than apb_clock_freq
+            let f_ratio = apb_clk_freq / frequency;
+            best_pre = f_ratio / (n + 1) - 1;
+            
+            // pre is 4 bits
+            if best_pre < 16 {
+                break;
+            }
+        }
+        let f = apb_clk_freq / ((best_pre + 1) * (best_n + 1));
+        sprintln!("using spi clock at {} MHz", f / 1_000_000);
+        reg_val = clock_register(best_pre, best_n)
+    }
+
+    reg_val
+}
+
+/// 
+/// Generates the SPI Clock register value given the PRE and N
+/// input values
+/// 
+fn clock_register(pre: u32, n: u32) -> u32 {
+
+    let l = n;
+    let h = ((n + 1)/2).saturating_sub(1);
+    
+    let reg_value = l
+        | h << 6
+        | n << 12
+        | pre << 18;
+    
+    return reg_value;
+}
 
 pub trait QuadInstance {
     fn register_block(&self) -> &RegisterBlock;
@@ -74,17 +194,17 @@ pub trait QuadInstance {
         // block.dma_int_.reset();
         // block.dma_int.reset();
 
-        block.ctrl.write(|w| unsafe { w.bits(0) });
+        block.ctrl.write(|w| w.wr_bit_order().set_bit());
         block.misc.write(|w| unsafe { w.bits(0) });
         // Master mode
         block.slave.write(|w| unsafe { w.bits(0) });
     }
 
-    fn setup(&mut self) {
-        // Use system clock as SPI clock
+    fn setup(&mut self, target_frequency: u32, clocks: &Clocks) {
+        let reg_value = clock_register_value(target_frequency, clocks);
         self.register_block()
             .clock
-            .write(|w| unsafe { w.bits(1 << 31) })
+            .write(|w| unsafe { w.bits(reg_value) });
     }
 
     fn set_data_mode(&mut self, data_mode: embedded_hal::spi::Mode) -> &mut Self {
@@ -182,50 +302,91 @@ pub trait QuadInstance {
         // sprintln!("Done");
     }
 
+    #[inline(always)]
     fn transfer(&mut self, data: &[u8]) {
+        if data.len() % 4 != 0 {
+            panic!("Data Length for SPI must be a multiple of 4");
+        }
+        self.configure_datalen(data.len() as u32 * 8);
+
         let block = self.register_block();
+        // Wait until we know SPI is ready to proceed
+        while block.cmd.read().usr().bit_is_set() {}
 
         let words: &[u32] =
             unsafe { core::slice::from_raw_parts(data.as_ptr().cast(), data.len() / 4) };
-        for chunk in words.chunks(16) {
-            // wait if currently in a write
-            while block.cmd.read().usr().bit_is_set() {
-                // sprintln!("wait");
-            }
 
-            // Save words 16 at a time (64 bytes)
-            // let buffer = unsafe { core::slice::from_raw_parts_mut(block.w0.as_ptr(), 16) };
-            // for i in 0..chunk.len() {
-            //     buffer[i] = chunk[i];
-            // }
+        // Before we take off, load the upper and lower parts of the buffer
 
-            block.w0.write(|w| unsafe { w.bits(chunk[0]) });
-            block.w1.write(|w| unsafe { w.bits(chunk[1]) });
-            block.w2.write(|w| unsafe { w.bits(chunk[2]) });
-            block.w3.write(|w| unsafe { w.bits(chunk[3]) });
-            block.w4.write(|w| unsafe { w.bits(chunk[4]) });
-            block.w5.write(|w| unsafe { w.bits(chunk[5]) });
-            block.w6.write(|w| unsafe { w.bits(chunk[6]) });
-            block.w7.write(|w| unsafe { w.bits(chunk[7]) });
-            block.w8.write(|w| unsafe { w.bits(chunk[8]) });
-            block.w9.write(|w| unsafe { w.bits(chunk[9]) });
-            block.w10.write(|w| unsafe { w.bits(chunk[10]) });
-            block.w11.write(|w| unsafe { w.bits(chunk[11]) });
-            block.w12.write(|w| unsafe { w.bits(chunk[12]) });
-            block.w13.write(|w| unsafe { w.bits(chunk[13]) });
-            block.w14.write(|w| unsafe { w.bits(chunk[14]) });
-            block.w15.write(|w| unsafe { w.bits(chunk[15]) });
+        load_first_half(self.register_block(), &words[0..=7]);
+        load_second_half(self.register_block(), &words[8..=15]);
 
-            self.configure_datalen(chunk.len() as u32 * 32);
-            self.update();
+        // Start!
+        self.update();
+        block.cmd.modify(|_, w| w.usr().set_bit());
+        crate::start_cycle_count();
 
-            block.cmd.modify(|_, w| w.usr().set_bit());
+        // const WAITS: u8 = 51;
+        let rest_words = &words[16..];
+        for chunk in rest_words.array_chunks::<16>() {
+            // sprint!("*");
+            let first = &chunk[0..=7];
+            let second = &chunk[8..=15];
+
+            // Each half of the SPI buffer will take
+            // (Fcpu / Fspi) * 8 spi cycles / 32 bit register * 8 registers in each half
+            // So at 40 MHz, that's 256 cpu cycles
+            const WAIT: u32 = 256;
+            while crate::measure_cycle_count() < WAIT { }
+            // Once we're done waiting for the first half to complete
+            // Reset the CPU counter to 0
+            crate::start_cycle_count();
+
+            // we've passed the first half, so load that chunk now
+            load_first_half(self.register_block(), first);
+
+            // Wait for the second half to be done emitted from SPI
+            while crate::measure_cycle_count() < WAIT { }
+            crate::start_cycle_count();
+            // Load the second half
+            load_second_half(self.register_block(), second);
         }
+
     }
+}
+
+#[inline]
+fn load_first_half(block: &RegisterBlock, data: &[u32]) {
+    block.w0.write(|w| unsafe { w.bits(data[0]) });
+    block.w1.write(|w| unsafe { w.bits(data[1]) });
+    block.w2.write(|w| unsafe { w.bits(data[2]) });
+    block.w3.write(|w| unsafe { w.bits(data[3]) });
+    block.w4.write(|w| unsafe { w.bits(data[4]) });
+    block.w5.write(|w| unsafe { w.bits(data[5]) });
+    block.w6.write(|w| unsafe { w.bits(data[6]) });
+    block.w7.write(|w| unsafe { w.bits(data[7]) });
+}
+
+#[inline]
+fn load_second_half(block: &RegisterBlock, data: &[u32]) {
+    block.w8.write(|w| unsafe { w.bits(data[0]) });
+    block.w9.write(|w| unsafe { w.bits(data[1]) });
+    block.w10.write(|w| unsafe { w.bits(data[2]) });
+    block.w11.write(|w| unsafe { w.bits(data[3]) });
+    block.w12.write(|w| unsafe { w.bits(data[4]) });
+    block.w13.write(|w| unsafe { w.bits(data[5]) });
+    block.w14.write(|w| unsafe { w.bits(data[6]) });
+    block.w15.write(|w| unsafe { w.bits(data[7]) });
 }
 
 pub struct QSpi<I: QuadInstance> {
     spi_instance: I,
+    sio0: Gpio7<Unknown>,
+    sio1: Gpio2<Unknown>,
+    sio2: Gpio5<Unknown>,
+    sio3: Gpio4<Unknown>,
+    cs: Gpio10<Unknown>,
+    clk: Gpio6<Unknown>
 }
 
 impl<I: QuadInstance> QSpi<I> {
@@ -238,6 +399,8 @@ impl<I: QuadInstance> QSpi<I> {
         mut cs: Gpio10<Unknown>,
         mut clk: Gpio6<Unknown>,
         system: &mut PeripheralClockControl,
+        clocks: &Clocks,
+        freq: u32,
     ) -> QSpi<I> {
         sio0.set_to_push_pull_output()
             .connect_peripheral_to_output(spi.sio0());
@@ -252,12 +415,12 @@ impl<I: QuadInstance> QSpi<I> {
         clk.set_to_push_pull_output()
             .connect_peripheral_to_output(spi.sclk_signal());
 
-        let mut qspi = QSpi { spi_instance: spi };
+        let mut qspi = QSpi { spi_instance: spi, sio0, sio1, sio2, sio3, cs, clk };
 
+        qspi.spi_instance.setup(freq, clocks);
         qspi.spi_instance.enable_peripheral(system);
-        qspi.spi_instance.setup();
         qspi.spi_instance.init(false, false);
-        qspi.spi_instance.set_data_mode(embedded_hal::spi::MODE_0);
+        qspi.spi_instance.set_data_mode(embedded_hal::spi::MODE_1);
 
         qspi
     }
@@ -272,6 +435,10 @@ impl<I: QuadInstance> QSpi<I> {
 
     pub fn transfer(&mut self, data: &[u8]) {
         self.spi_instance.transfer(data)
+    }
+
+    pub fn free(self) -> (I, Gpio7<Unknown>, Gpio2<Unknown>, Gpio5<Unknown>, Gpio4<Unknown>, Gpio10<Unknown>, Gpio6<Unknown>) {
+        (self.spi_instance, self.sio0, self.sio1, self.sio2, self.sio3, self.cs, self.clk)
     }
 }
 

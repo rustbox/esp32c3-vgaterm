@@ -1,5 +1,5 @@
 use esp_hal_common::{interrupt, Cpu, CpuInterrupt, pac::{Interrupt, Peripherals}, InterruptKind, Priority};
-
+pub use esp32c3_hal::interrupt::TrapFrame;
 
 
 /// Grab the Interrupt enum value from a reference.

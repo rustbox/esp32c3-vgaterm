@@ -2,29 +2,40 @@
 #![no_main]
 #![feature(panic_info_message)]
 
-use esp32c3_hal::gpio::Gpio10;
-use esp32c3_hal::{gpio::Gpio9, gpio::IO, pac::Peripherals, prelude::*, Delay, Rtc};
-use esp_hal_common::clock::{ClockControl, CpuClock};
-use esp_hal_common::interrupt;
-use esp_hal_common::timer::TimerGroup;
-use esp_hal_common::{Input, Pin, PullDown};
+extern crate alloc;
 
-// use esp_hal_common::clock_control::ClockControl;
-// use panic_halt as _;
+use esp32c3_hal::clock::{ClockControl, CpuClock};
+use esp32c3_hal::prelude::*;
+use esp32c3_hal::timer::TimerGroup;
+use esp32c3_hal::{gpio::IO, pac::Peripherals, Rtc};
+
+use esp_hal_common::Priority;
 use riscv_rt::entry;
 
 use vgaterm;
-use vgaterm::video::BUFFER;
-use vgaterm::{sprint, sprintln};
-
-use bare_metal::Mutex;
+use vgaterm::video;
+use vgaterm::{sprint, sprintln, Delay};
 
 use core::arch::asm;
-use core::cell::RefCell;
 
-static mut BUTTON: Mutex<RefCell<Option<Gpio9<Input<PullDown>>>>> = Mutex::new(RefCell::new(None));
-static mut BUTTON2: Mutex<RefCell<Option<Gpio10<Input<PullDown>>>>> =
-    Mutex::new(RefCell::new(None));
+#[global_allocator]
+static ALLOCATOR: esp_alloc::EspHeap = esp_alloc::EspHeap::empty();
+
+fn init_heap() {
+    const HEAP_SIZE: usize = 32 * 1024;
+
+    extern "C" {
+        static mut _heap_start: u32;
+    }
+
+    unsafe {
+        let heap_start = &_heap_start as *const _ as usize;
+        ALLOCATOR.init(heap_start as *mut u8, HEAP_SIZE);
+    }
+}
+
+// static mut BUTTON: Mutex<RefCell<Option<Gpio9<Input<PullDown>>>>> = Mutex::new(RefCell::new(None));
+// static mut BUTTON2: Mutex<RefCell<Option<Gpio10<Input<PullDown>>>>> = Mutex::new(RefCell::new(None));
 
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
@@ -56,93 +67,53 @@ fn main() -> ! {
     let peripherals = Peripherals::take().unwrap();
     let mut system = peripherals.SYSTEM.split();
     let clocks = ClockControl::configure(system.clock_control, CpuClock::Clock160MHz).freeze();
-
+    
     // Disable the watchdog timers. For the ESP32-C3, this includes the Super WDT,
     // the RTC WDT, and the TIMG WDTs.
     let mut rtc = Rtc::new(peripherals.RTC_CNTL);
+
     let timer_group1 = TimerGroup::new(peripherals.TIMG1, &clocks);
     let mut wdt1 = timer_group1.wdt;
+
     rtc.swd.disable();
     rtc.rwdt.disable();
     wdt1.disable();
 
-    vgaterm::configure_timer0(peripherals.TIMG0, &clocks);
+    let io = IO::new(peripherals.GPIO, peripherals.IO_MUX);
 
-    // peripherals.SYSTEM.cpu_per_conf.write(|w| unsafe {
-    //     // Set true for 480 MHz stepped down to 160
-    //     w.pll_freq_sel().set_bit();
-    //     w.cpuperiod_sel().bits(0b01)
-    // });
-
-    // peripherals
-    //     .SYSTEM
-    //     .sysclk_conf
-    //     .write(|w| unsafe { w.soc_clk_sel().bits(1) });
+    configure_counter_for_cpu_cycles();
 
     vgaterm::configure(peripherals.UART0);
-
-    // vgaterm::configure_timer0(peripherals.TIMG0);
-
-    // vgaterm::enable_timer0_interrupt(
-    //     &interrupt::CpuInterrupt::Interrupt1,
-    //     interrupt::Priority::Priority1
-    // );
-
-    // vgaterm::start_timer0(10_000_000);
+    vgaterm::configure_timer0(peripherals.TIMG0, &clocks);
+    vgaterm::enable_timer0_interrupt(Priority::Priority1);
+    vgaterm::gpio::interrupt_enable(Priority::Priority2);
 
     unsafe {
         riscv::interrupt::enable();
     }
 
-    // Set GPIO5 as an output, and set its state high initially.
-    let io = IO::new(peripherals.GPIO, peripherals.IO_MUX);
 
-    // Set GPIO9 as an input
-    // let mut button = io.pins.gpio9.into_pull_down_input();
-    // let mut button2 = io.pins.gpio10.into_pull_down_input();
-    // button.listen(Event::FallingEdge);
-    // button2.listen(Event::FallingEdge);
-
-    // riscv::interrupt::free(|_cs| unsafe {
-    //     BUTTON.get_mut().replace(Some(button));
-    //     BUTTON2.get_mut().replace(Some(button2));
-    // });
-
-    // vgaterm::gpio::interrupt_enable(
-    //     &interrupt::CpuInterrupt::Interrupt3,
-    //     interrupt::Priority::Priority1,
-    //     interrupt::InterruptKind::Level
-    // );
-
-    // led.set_high().unwrap();
 
     // Initialize the Delay peripheral, and use it to toggle the LED state in a
     // loop.
-    let mut delay = Delay::new(&clocks);
+    let delay = vgaterm::Delay::new(&clocks);
 
-    configure_count_cycles();
-    let cnt = measure_clock(&mut delay);
-    sprintln!("We counted {} cycles in 1 second", cnt);
+    // sprintln!("Starting timer");
+    // vgaterm::start_timer0(1_000);
 
-    // let _ = vgaterm::video::ShortPixelGpios::new(
-    //     io.pins.gpio0,
-    //     io.pins.gpio1,
-    //     io.pins.gpio2,
-    //     io.pins.gpio3,
-    //     io.pins.gpio4,
-    //     io.pins.gpio5,
-    //     io.pins.gpio6,
-    //     io.pins.gpio7
-    // );
+    let sio0 = io.pins.gpio7;
+    let sio1 = io.pins.gpio2;
+    let sio2 = io.pins.gpio5;
+    let sio3 = io.pins.gpio4;
+    let cs = io.pins.gpio10;
+    let clk = io.pins.gpio6;
 
-    let mut sio0 = io.pins.gpio7;
-    let mut sio1 = io.pins.gpio2;
-    let mut sio2 = io.pins.gpio5;
-    let mut sio3 = io.pins.gpio4;
-    let mut cs = io.pins.gpio10;
-    let mut clk = io.pins.gpio6;
+    // This is a debugging signal that goes high during the portion
+    // of the visible frame, according to what the CPU believes
+    let mut frame_signal = io.pins.gpio8.into_push_pull_output();
+    let _ = frame_signal.set_low();
 
-    let mut qspi = vgaterm::spi::QSpi::new(
+    vgaterm::spi::configure(
         peripherals.SPI2,
         sio0,
         sio1,
@@ -151,66 +122,105 @@ fn main() -> ! {
         cs,
         clk,
         &mut system.peripheral_clock_control,
+        &clocks,
+        40_000_000,
     );
+    // White: 0xFF
+    // Red: 0x03
+    // Green: 0x1C
+    // Blue: 0x60, 0xE0
+    let mut pattern: [u8; 128] = [0; 128];
+    for h in 0..8 {
+        for l in 0..8 {
+            for p in 0..2 {
+                let value: u8 = h << 5 | p << 4 | l << 1 | p;
+                let i: usize = (p + 2*l + 16*h).into();
+                pattern[i] = value;
+            }
+        }
+    }
 
-    // let mut spi = Spi::new(
-    //     unsafe { Peripherals::steal().SPI2 },
-    //     clk,
-    //     sio0,
-    //     sio1,
-    //     cs,
-    //     80_000_000,
-    //     embedded_hal::spi::MODE_0,
-    //     &mut peripherals.SYSTEM,
-    // );
+    riscv::interrupt::free(|_| unsafe {
+        for line in 0..video::HEIGHT {
+            for p in 0..video::WIDTH {
+                let i = line * video::WIDTH + p;
+                
+                if line < 100 {
+                    video::BUFFER[i] = 255;
+                }
 
-    // peripherals.SPI2.user.write(|w| {
-    //     w.fwrite_quad().set_bit()
+                if line >= 100 && line < 200 {
+                    video::BUFFER[i] = 0b0110_0110;
+                }
+
+                if line >= 200 && line < 300 {
+                    video::BUFFER[i] = 0b0111_0111;
+                }
+
+                if line >= 300 && line < 400 {
+                    video::BUFFER[i] = 0b0001_0001;
+                }
+
+                for px in 576..639 {
+                    if line == 23 && p == px {
+                        video::BUFFER[i] = 0b0000_0000;
+                    }
+                }
+
+                if p == 575 {
+                    video::BUFFER[i] = 0xE0//(0xE0 as u8).wrapping_add(line as u8);
+                }
+                if p == 639 {
+                    video::BUFFER[i] = 3 //(3 as u8).wrapping_add(line as u8);
+                }
+                // if p == 0 {
+                //     video::BUFFER[i] = 0x60;
+                // }
+            }
+        }
+
+        sprintln!("")
+    });
+    // vgaterm::video::load_test_pattern(224, 224);
+    // vgaterm::gpio::pin_interrupt(io.pins.gpio3.into_floating_input(), Event::FallingEdge, |_| {
+    //     sprint!(".");
+    //     vgaterm::start_timer0_callback(1000, || {
+    //         sprintln!("*");
+    //         // let d = Delay::new(&clocks);
+    //         vgaterm::kernel::frame();
+    //     })
     // });
 
-    vgaterm::video::load_test_pattern(0x00, 0xFF);
-    riscv::interrupt::free(|_| unsafe {
-        for i in 0..0xff {
-            BUFFER[i] = i as u8
-        }
-    });
+    // vgaterm::start_timer0_callback(1_000_000, || {
+    //     sprintln!("one second!")
+    // });
+    // vgaterm::kernel::start(io.pins.gpio3);
+    // let mut hi = io.pins.gpio3.into_push_pull_output();
+    // let mut count = 0;
+    sprintln!("Clock speed: {} Hz", measure_clock(delay));
 
-    let mut frames = 0;
+    sprintln!("Transmitting pattern");
+    vgaterm::kernel::start(io.pins.gpio3);
+
+
     loop {
-        // vgaterm::start_cycle_count();
-        // let cycles = vgaterm::video::display_frame();
-        // let cycles = vgaterm::measure_cycle_count();
-        // sprintln!("Cycles ({}) per pixel ({}) = {}", cycles, vgaterm::video::BUFFER_SIZE, cycles as f32 / (vgaterm::video::BUFFER_SIZE) as f32);
-        frames += 1;
 
         unsafe {
-            qspi.transfer(&vgaterm::video::BUFFER);
+            riscv::asm::wfi();
+
         }
-        delay.delay_ms(10 as u32);
     }
+
 }
 
-struct Mems<'a>(usize, &'a [usize]);
 
-fn show_registers<'a>(addr_start: usize, end_offset: usize) -> Mems<'a> {
-    let raw = addr_start as *const usize;
-    sprintln!("Made raw pointer");
-    let slice = unsafe { core::slice::from_raw_parts(raw, end_offset / 4) };
-    sprintln!("Made slice");
-    Mems(addr_start, slice)
-}
-
-impl<'a> core::fmt::Display for Mems<'a> {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        for (i, reg) in self.1.iter().enumerate() {
-            let _ = write!(f, "{:#04x}: {:#032b}", self.0 + 4 * i, reg);
-        }
-        Ok(())
-    }
-}
-
+///
+/// Configure the esp32c2 custom Control and Status register
+/// `mpcer` to count only CPU clock cycles.
+/// 
+/// Page 28, https://www.espressif.com/sites/default/files/documentation/esp32-c3_technical_reference_manual_en.pdf
 #[no_mangle]
-fn configure_count_cycles() {
+fn configure_counter_for_cpu_cycles() {
     unsafe {
         // Set count event to clock cycles
         // Enable counting events and set overflow to rollover
@@ -219,13 +229,13 @@ fn configure_count_cycles() {
 }
 
 #[no_mangle]
-fn measure_clock(delay: &mut Delay) -> u32 {
+fn measure_clock(delay: Delay) -> u32 {
     unsafe {
         // Set event counter to 0
         asm!("csrwi 0x7E2, 0x00",)
     }
     let d: u32;
-    delay.delay_ms(1000 as u32);
+    delay.delay_ms(1000);
     unsafe {
         asm!(
             "csrr {}, 0x7E2",
@@ -235,33 +245,3 @@ fn measure_clock(delay: &mut Delay) -> u32 {
     d
 }
 
-// #[interrupt]
-// pub unsafe fn TG0_T0_LEVEL() {
-//     riscv::interrupt::free(|_| {
-//         vgaterm::clear_timer0(interrupt::CpuInterrupt::Interrupt1);
-//         // sprintln!("Interrupt 1");
-
-//         vgaterm::start_timer0(10_000_000);
-//     });
-// }
-
-// #[interrupt]
-// pub fn interrupt3() {
-//     riscv::interrupt::free(|cs| unsafe {
-//         sprintln!("Some GPIO interrupt!");
-
-//         let mut button = BUTTON.borrow(*cs).borrow_mut();
-//         let button = button.as_mut().unwrap();
-
-//         let mut button2 = BUTTON2.borrow(*cs).borrow_mut();
-//         let button2 = button2.as_mut().unwrap();
-
-//         sprintln!("Interrupt source: {:?}", vgaterm::interrupt::source());
-//         sprintln!("GPIO Pin: {}", vgaterm::check_gpio_source());
-
-//         vgaterm::interrupt::clear(interrupt::CpuInterrupt::Interrupt3);
-
-//         button.clear_interrupt();
-//         button2.clear_interrupt();
-//     });
-// }
