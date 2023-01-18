@@ -1,23 +1,22 @@
-
 use esp32c3_hal::clock::Clocks;
 use esp32c3_hal::gpio::{Gpio10, Gpio2, Gpio4, Gpio5, Gpio6, Gpio7};
-use esp_hal_common::pac::SPI2;
+use esp32c3_hal::peripherals::SPI2;
 use esp_hal_common::{
-    pac::spi2::RegisterBlock,
     system::{Peripheral, PeripheralClockControl},
     types::OutputSignal,
     OutputPin, Unknown,
 };
-use riscv::interrupt;
 
-use crate::sprintln;
+use esp_println::println;
+// use esp32c3_hal
+use riscv::interrupt;
 
 static mut QSPI: Option<QSpi<SPI2>> = None;
 
 ///
 /// Configure and initialize the Quad SPI instance. Once configured
 /// data may be transmitted with the `transmit()` function.
-/// 
+///
 pub fn configure(
     spi2: SPI2,
     sio0: Gpio7<Unknown>,
@@ -43,18 +42,24 @@ pub fn configure(
         freq,
     );
 
-    interrupt::free(|_| unsafe {
+    interrupt::free(|| unsafe {
         QSPI.replace(qspi);
     });
 }
 
 ///
 /// PANIC: if free is called before configure
-/// 
-pub fn free() -> (SPI2, Gpio7<Unknown>, Gpio2<Unknown>, Gpio5<Unknown>, Gpio4<Unknown>, Gpio10<Unknown>, Gpio6<Unknown>) {
-    let qspi = interrupt::free(|_| unsafe {
-        QSPI.take()
-    });
+///
+pub fn free() -> (
+    SPI2,
+    Gpio7<Unknown>,
+    Gpio2<Unknown>,
+    Gpio5<Unknown>,
+    Gpio4<Unknown>,
+    Gpio10<Unknown>,
+    Gpio6<Unknown>,
+) {
+    let qspi = interrupt::free(|| unsafe { QSPI.take() });
     let q = qspi.expect("QSPI must be configured before freed");
     q.free()
 }
@@ -62,7 +67,7 @@ pub fn free() -> (SPI2, Gpio7<Unknown>, Gpio2<Unknown>, Gpio5<Unknown>, Gpio4<Un
 ///
 /// Transmit data, a slice of u8, if the qspi instance has been configured.
 /// The buffer should be a length divisible by 4, and no longer than 32,768.
-/// 
+///
 pub fn transmit(data: &[u8]) {
     unsafe {
         if let Some(qspi) = QSPI.as_mut() {
@@ -73,27 +78,27 @@ pub fn transmit(data: &[u8]) {
 
 ///
 /// Compute the closest available SPI clock frequency and corresponding register value
-/// given the requested frequency. The clock speed equation is specified in chapter 26.7 of 
+/// given the requested frequency. The clock speed equation is specified in chapter 26.7 of
 /// https://www.espressif.com/sites/default/files/documentation/esp32-c3_technical_reference_manual_en.pdf
-/// 
+///
 /// The SPI clock frequency is  given by:
-/// 
+///
 /// Input Clock / ((Pre + 1) * (N + 1))
-/// 
-/// Where `Pre` and `N` are register values, and the Input Clock is the 
-/// APB_CLOCK, at 80 MHz. 
-/// 
+///
+/// Where `Pre` and `N` are register values, and the Input Clock is the
+/// APB_CLOCK, at 80 MHz.
+///
 fn clock_register_value(frequency: u32, clocks: &Clocks) -> u32 {
     // FIXME: this might not be always true
     let apb_clk_freq: u32 = clocks.apb_clock.to_Hz();
-    sprintln!("apb clock freq is {} MHz", apb_clk_freq / 1_000_000);
+    println!("apb clock freq is {} MHz", apb_clk_freq / 1_000_000);
 
     let reg_val: u32;
 
     if frequency > (apb_clk_freq / 2) {
         // Using APB frequency directly will give us the best result here.
         reg_val = 1 << 31;
-        sprintln!("Using apb clock");
+        println!("Using apb clock");
     } else {
         let mut best_n = 1;
         let mut best_pre = 0;
@@ -102,39 +107,35 @@ fn clock_register_value(frequency: u32, clocks: &Clocks) -> u32 {
             // This is at least 2, frequency must be less than apb_clock_freq
             let f_ratio = apb_clk_freq / frequency;
             best_pre = f_ratio / (n + 1) - 1;
-            
+
             // pre is 4 bits
             if best_pre < 16 {
                 break;
             }
         }
         let f = apb_clk_freq / ((best_pre + 1) * (best_n + 1));
-        sprintln!("using spi clock at {} MHz", f / 1_000_000);
+        println!("using spi clock at {} MHz", f / 1_000_000);
         reg_val = clock_register(best_pre, best_n)
     }
 
     reg_val
 }
 
-/// 
+///
 /// Generates the SPI Clock register value given the PRE and N
 /// input values
-/// 
+///
 fn clock_register(pre: u32, n: u32) -> u32 {
-
     let l = n;
-    let h = ((n + 1)/2).saturating_sub(1);
-    
-    let reg_value = l
-        | h << 6
-        | n << 12
-        | pre << 18;
-    
+    let h = ((n + 1) / 2).saturating_sub(1);
+
+    let reg_value = l | h << 6 | n << 12 | pre << 18;
+
     return reg_value;
 }
 
 pub trait QuadInstance {
-    fn register_block(&self) -> &RegisterBlock;
+    fn register_block(&self) -> &SPI2;
 
     fn sclk_signal(&self) -> OutputSignal;
 
@@ -176,7 +177,7 @@ pub trait QuadInstance {
                 .fwrite_quad()
                 .set_bit()
         });
-        // sprintln!("user: {:x}", block.user.read().bits());
+        // println!("user: {:x}", block.user.read().bits());
 
         block.clk_gate.modify(|_, w| {
             w.clk_en()
@@ -187,8 +188,8 @@ pub trait QuadInstance {
                 .set_bit()
         });
 
-        // sprintln!("dma_conf: {:x}", block.dma_conf.read().bits());
-        // sprintln!("dma_int_raw: {:x}", block.dma_int_raw.read().bits());
+        // println("dma_conf: {:x}", block.dma_conf.read().bits());
+        // println!("dma_int_raw: {:x}", block.dma_int_raw.read().bits());
         // block.dma_conf.reset();
         // block.dma_int_raw.reset();
         // block.dma_int_.reset();
@@ -269,37 +270,37 @@ pub trait QuadInstance {
         let block = self.register_block();
 
         block.dma_int_raw.reset(); // https://github.com/espressif/esp-idf/blob/7fb3e06c69ef150bbe6209b856be887cdb6cd5e9/components/hal/spi_hal_iram.c#L58
-                                   // sprintln!("W");
-                                   // sprintln!("{:x}", block.dma_int_st.read().bits());
-                                   // sprintln!("dma_int_raw: {:x}", block.dma_int_raw.read().bits());
-                                   // sprintln!("dma_int_ena: {:x}", block.dma_int_ena.read().bits());
-                                   // sprintln!("dma_int_st: {:x}", block.dma_int_st.read().bits());
+                                   // println!("W");
+                                   // println("{:x}", block.dma_int_st.read().bits());
+                                   // println!("dma_int_raw: {:x}", block.dma_int_raw.read().bits());
+                                   // println!("dma_int_ena: {:x}", block.dma_int_ena.read().bits());
+                                   // println!("dma_int_st: {:x}", block.dma_int_st.read().bits());
                                    // block.dma_int_clr
                                    // block.dma_
         while block.cmd.read().usr().bit_is_set() {
             // wait
-            // sprintln!("{:x}", block.dma_int_raw.read().bits());
-            // // sprintln!("{:?}", block.dma;
+            // println!("{:x}", block.dma_int_raw.read().bits());
+            // // println!("{:?}", block.dma;
             // unsafe {
             //     delay(160211074);
             // }
         }
-        // sprintln!("op complete");
+        // println!("op complete");
 
         self.configure_datalen(32);
 
-        // sprintln!("datalen configured");
+        // println!("datalen configured");
 
         block.w0.write(|w| unsafe { w.bits(word) });
 
-        // sprintln!("store word");
+        // println!("store word");
 
         self.update();
 
-        // sprintln!("update clock");
+        // println!("update clock");
 
         block.cmd.modify(|_, w| w.usr().set_bit());
-        // sprintln!("Done");
+        // println!("Done");
     }
 
     #[inline(always)]
@@ -329,7 +330,7 @@ pub trait QuadInstance {
         // const WAITS: u8 = 51;
         let rest_words = &words[16..];
         for chunk in rest_words.array_chunks::<16>() {
-            // sprint!("*");
+            // print!("*");
             let first = &chunk[0..=7];
             let second = &chunk[8..=15];
 
@@ -337,7 +338,7 @@ pub trait QuadInstance {
             // (Fcpu / Fspi) * 8 spi cycles / 32 bit register * 8 registers in each half
             // So at 40 MHz, that's 256 cpu cycles
             const WAIT: u32 = 256;
-            while crate::measure_cycle_count() < WAIT { }
+            while crate::measure_cycle_count() < WAIT {}
             // Once we're done waiting for the first half to complete
             // Reset the CPU counter to 0
             crate::start_cycle_count();
@@ -346,17 +347,16 @@ pub trait QuadInstance {
             load_first_half(self.register_block(), first);
 
             // Wait for the second half to be done emitted from SPI
-            while crate::measure_cycle_count() < WAIT { }
+            while crate::measure_cycle_count() < WAIT {}
             crate::start_cycle_count();
             // Load the second half
             load_second_half(self.register_block(), second);
         }
-
     }
 }
 
 #[inline]
-fn load_first_half(block: &RegisterBlock, data: &[u32]) {
+fn load_first_half(block: &SPI2, data: &[u32]) {
     block.w0.write(|w| unsafe { w.bits(data[0]) });
     block.w1.write(|w| unsafe { w.bits(data[1]) });
     block.w2.write(|w| unsafe { w.bits(data[2]) });
@@ -368,7 +368,7 @@ fn load_first_half(block: &RegisterBlock, data: &[u32]) {
 }
 
 #[inline]
-fn load_second_half(block: &RegisterBlock, data: &[u32]) {
+fn load_second_half(block: &SPI2, data: &[u32]) {
     block.w8.write(|w| unsafe { w.bits(data[0]) });
     block.w9.write(|w| unsafe { w.bits(data[1]) });
     block.w10.write(|w| unsafe { w.bits(data[2]) });
@@ -386,7 +386,7 @@ pub struct QSpi<I: QuadInstance> {
     sio2: Gpio5<Unknown>,
     sio3: Gpio4<Unknown>,
     cs: Gpio10<Unknown>,
-    clk: Gpio6<Unknown>
+    clk: Gpio6<Unknown>,
 }
 
 impl<I: QuadInstance> QSpi<I> {
@@ -415,7 +415,15 @@ impl<I: QuadInstance> QSpi<I> {
         clk.set_to_push_pull_output()
             .connect_peripheral_to_output(spi.sclk_signal());
 
-        let mut qspi = QSpi { spi_instance: spi, sio0, sio1, sio2, sio3, cs, clk };
+        let mut qspi = QSpi {
+            spi_instance: spi,
+            sio0,
+            sio1,
+            sio2,
+            sio3,
+            cs,
+            clk,
+        };
 
         qspi.spi_instance.setup(freq, clocks);
         qspi.spi_instance.enable_peripheral(system);
@@ -437,14 +445,32 @@ impl<I: QuadInstance> QSpi<I> {
         self.spi_instance.transfer(data)
     }
 
-    pub fn free(self) -> (I, Gpio7<Unknown>, Gpio2<Unknown>, Gpio5<Unknown>, Gpio4<Unknown>, Gpio10<Unknown>, Gpio6<Unknown>) {
-        (self.spi_instance, self.sio0, self.sio1, self.sio2, self.sio3, self.cs, self.clk)
+    pub fn free(
+        self,
+    ) -> (
+        I,
+        Gpio7<Unknown>,
+        Gpio2<Unknown>,
+        Gpio5<Unknown>,
+        Gpio4<Unknown>,
+        Gpio10<Unknown>,
+        Gpio6<Unknown>,
+    ) {
+        (
+            self.spi_instance,
+            self.sio0,
+            self.sio1,
+            self.sio2,
+            self.sio3,
+            self.cs,
+            self.clk,
+        )
     }
 }
 
-impl QuadInstance for esp32c3_hal::pac::SPI2 {
+impl QuadInstance for esp32c3_hal::peripherals::SPI2 {
     #[inline]
-    fn register_block(&self) -> &RegisterBlock {
+    fn register_block(&self) -> &SPI2 {
         self
     }
 

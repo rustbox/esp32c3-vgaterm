@@ -1,9 +1,23 @@
-use esp_hal_common::{interrupt, Cpu, CpuInterrupt, pac::{Interrupt, Peripherals}, InterruptKind, Priority};
 pub use esp32c3_hal::interrupt::TrapFrame;
 
+pub mod peripherals /* crate::interrupt::peripherals */ {
+    // crate::peripherals::Interrupt::GPIO;
+    pub use esp32c3_hal::peripherals::Interrupt;
+}
+
+/*
+pub use esp32c3_hal::interrupt::{CpuInterrupt, InterruptKind, Priority};
+pub use esp32c3_hal::{
+    interrupt,
+    peripherals::{
+        Interrupt::{self, GPIO as peripherals::Interrupt::GPIO},
+        Peripherals,
+    },
+    Cpu,
+};
 
 /// Grab the Interrupt enum value from a reference.
-/// 
+///
 /// This is needed because Interrupt is not Copy nor Clone
 fn which_interrupt(interrupt: &CpuInterrupt) -> CpuInterrupt {
     use CpuInterrupt::*;
@@ -42,21 +56,10 @@ fn which_interrupt(interrupt: &CpuInterrupt) -> CpuInterrupt {
     }
 }
 
-
-
-pub fn enable(
-        source: Interrupt, 
-        handler: &CpuInterrupt, 
-        kind: InterruptKind, 
-        priority: Priority) {
-
+pub fn enable(source: Interrupt, handler: &CpuInterrupt, kind: InterruptKind, priority: Priority) {
     interrupt::enable(source, priority).unwrap();
 
-    interrupt::set_kind(
-        Cpu::ProCpu,
-        which_interrupt(handler),
-        kind,
-    );
+    interrupt::set_kind(Cpu::ProCpu, which_interrupt(handler), kind);
 }
 
 pub fn clear(handler: CpuInterrupt) {
@@ -68,7 +71,7 @@ pub fn disable(source: Interrupt) {
 }
 
 pub fn source() -> Option<Interrupt> {
-    riscv::interrupt::free(|_| unsafe {
+    riscv::interrupt::free(|| unsafe {
         let periphs = Peripherals::steal();
         let status0 = &periphs.INTERRUPT_CORE0.intr_status_reg_0.read().bits();
         let int_num = if *status0 & 0x7FFF == 0 {
@@ -83,3 +86,4 @@ pub fn source() -> Option<Interrupt> {
         Interrupt::try_from(int_num as u8).ok()
     })
 }
+*/

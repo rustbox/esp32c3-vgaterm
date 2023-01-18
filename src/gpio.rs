@@ -1,13 +1,11 @@
 use alloc::boxed::Box;
 use esp32c3_hal::prelude::*;
 use esp32c3_hal::{
-    gpio_types::{Event, InputPin},
-    interrupt, pac,
+    gpio::{Event, InputPin},
+    interrupt,
 };
-use esp_hal_common::CpuInterrupt;
+use esp32c3_hal::peripherals;
 use riscv;
-
-use crate::{sprint, sprintln};
 
 pub const GPIO_MMIO_ADDRESS: usize = 0x6000_4000;
 pub const GPIO_OUT: usize = GPIO_MMIO_ADDRESS + 0x0004;
@@ -69,7 +67,7 @@ impl<P: InputPin> InterruptPin for P {
 pub struct PinRef(usize);
 
 pub fn interrupt_enable(priority: interrupt::Priority) {
-    interrupt::enable(pac::Interrupt::GPIO, priority).unwrap();
+    interrupt::enable(peripherals::Interrupt::GPIO, priority).unwrap();
 }
 
 pub fn pin_interrupt(
@@ -79,7 +77,7 @@ pub fn pin_interrupt(
 ) -> PinRef {
     let n = input.number() as usize;
 
-    riscv::interrupt::free(|_| unsafe {
+    riscv::interrupt::free(|| unsafe {
         input.listen(event);
 
         PINS[n] = Some(Box::new(input));
@@ -95,7 +93,7 @@ pub fn pin_interrupt(
 /// Stops the pin from listening for interrupt signals
 /// and removes the callback
 pub fn interrupt_disable(pin: PinRef) -> PinRef {
-    riscv::interrupt::free(|_| unsafe {
+    riscv::interrupt::free(|| unsafe {
         let n = pin.0;
         // SAFETY: unwrap the option is fine because we will only
         // grab the pin at array index given in the pin parameter
@@ -111,7 +109,7 @@ pub fn pin_reenable(
     event: Event,
     callback: impl FnMut(&mut Box<dyn InterruptPin>) -> () + 'static,
 ) -> PinRef {
-    riscv::interrupt::free(|_| unsafe {
+    riscv::interrupt::free(|| unsafe {
         let n = pin.0;
         if let Some(ref mut p) = PINS[n] {
             p.listen(event);
@@ -123,7 +121,7 @@ pub fn pin_reenable(
 
 pub fn pin_pause(pin: PinRef) -> PinRef {
     let n = pin.0;
-    riscv::interrupt::free(|_| unsafe {
+    riscv::interrupt::free(|| unsafe {
         if let Some(ref mut p) = PINS[n] {
             p.unlisten();
         }
@@ -133,7 +131,7 @@ pub fn pin_pause(pin: PinRef) -> PinRef {
 
 pub fn pin_resume(pin: PinRef, event: Event) -> PinRef {
     let n = pin.0;
-    riscv::interrupt::free(|_| unsafe {
+    riscv::interrupt::free(|| unsafe {
         if let Some(ref mut p) = PINS[n] {
             p.listen(event);
         }
@@ -142,8 +140,8 @@ pub fn pin_resume(pin: PinRef, event: Event) -> PinRef {
 }
 
 fn check_gpio_source() -> u32 {
-    riscv::interrupt::free(|_| unsafe {
-        let periphs = pac::Peripherals::steal();
+    riscv::interrupt::free(|| unsafe {
+        let periphs = peripherals::Peripherals::steal();
 
         let gpio_status = periphs.GPIO.status.read().bits();
         31 - gpio_status.leading_zeros()
@@ -239,7 +237,7 @@ pub fn read_low() -> u8 {
 #[interrupt]
 fn GPIO() {
     // sprint!("-");
-    riscv::interrupt::free(|_| {
+    riscv::interrupt::free(|| {
         let source = check_gpio_source() as usize;
         callback_pin(source);
     });

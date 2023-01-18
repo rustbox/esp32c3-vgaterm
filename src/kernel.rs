@@ -14,16 +14,17 @@
 //! software should reset all frame logic back to the beginning of the frame.
 //!
 
-use crate::{sprintln, video};
+use crate::video;
 
+use esp_println::println;
 use esp32c3_hal::gpio::Gpio3;
-use esp32c3_hal::gpio_types::{Unknown, Event};
+use esp32c3_hal::gpio::{Unknown, Event};
 use riscv::asm::wfi;
 
 pub const BLANKING_WAIT_TIME: u64 = 3960; // us
 
 pub fn start(start: Gpio3<Unknown>) {
-    sprintln!("start!");
+    println!("start!");
     let _ = crate::gpio::pin_interrupt(
         start.into_floating_input(),
         Event::RisingEdge,
@@ -40,7 +41,7 @@ pub fn start(start: Gpio3<Unknown>) {
             //     frames = 0;
             //     color += 1;
             //     let (r, g, b) = video::rgb_from_byte(color.into());
-            //     sprintln!("Color: {}, {}, {}", r, g, b);
+            //     println!("Color: {}, {}, {}", r, g, b);
             //     crate::video::load_test_pattern(color, color);
             // }
             frames += 1;
