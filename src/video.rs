@@ -17,7 +17,7 @@ pub static mut BUFFER: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];
 /// be sent one by one in order.
 ///
 pub fn transmit_frame() {
-    riscv::interrupt::free(|_| unsafe {
+    riscv::interrupt::free(|| unsafe {
         let a = &BUFFER[0..32000];
         let b = &BUFFER[32000..64000];
         let c = &BUFFER[64000..96000];
@@ -113,13 +113,13 @@ impl ShortPixelGpios {
 
 pub fn set_pixel(col: usize, row: usize, data: u8) {
     let i = row * WIDTH + col;
-    riscv::interrupt::free(|_| unsafe {
+    riscv::interrupt::free(|| unsafe {
         BUFFER[i] = data;
     })
 }
 
 pub fn load_test_pattern(val1: u8, val2: u8) {
-    riscv::interrupt::free(|_| unsafe {
+    riscv::interrupt::free(|| unsafe {
         for i in 0..BUFFER_SIZE {
             if i & 1 == 0 {
                 BUFFER[i] = val1;

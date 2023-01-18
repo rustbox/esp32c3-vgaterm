@@ -9,27 +9,25 @@
 //! interrupts (commonly with riscv::interrupt::free(...)) and then the interrupt should be cleared
 //! with `clear_timer0` passing in the correct interrupt number enum variant.
 //! 4. Start the timer with `start_timer0` and the number of ticks (?) to count down from.
-//! 
+//!
 //! As a reminder, interrupts (Machine interrupts: the `mie` bit of the `mstatus` register) will need
 //! to be enabled for any interrupt to occur generally.
 extern crate alloc;
 
-use bare_metal::Mutex;
+use critical_section::Mutex;
+use esp32c3_hal::{prelude::*, timer::Timer};
 use esp_hal_common::clock::Clocks;
-use esp_hal_common::pac::TIMG0;
+use esp_hal_common::peripherals::{self, TIMG0};
 use esp_hal_common::systimer::SystemTimer;
 use esp_hal_common::timer::{Timer0, TimerGroup};
-use esp_hal_common::{interrupt, interrupt::CpuInterrupt, interrupt::Priority, Cpu, pac};
-use esp32c3_hal::{timer::Timer, prelude::*};
+use esp_hal_common::{interrupt, interrupt::Priority};
 use fugit::HertzU64;
 
 use riscv;
 
+use alloc::boxed::Box;
 use core::borrow::BorrowMut;
 use core::cell::RefCell;
-use alloc::boxed::Box;
-
-use crate::sprintln;
 
 static TIMER0: Mutex<RefCell<Option<Timer<Timer0<TIMG0>>>>> = Mutex::new(RefCell::new(None));
 static mut TIMER0_CALLBACK: Option<Box<dyn FnMut() -> ()>> = None;
@@ -40,7 +38,7 @@ static mut DELAY: Option<Delay> = None;
 /// how we would normally do this.
 #[derive(Copy, Clone)]
 pub struct Delay {
-    pub freq: HertzU64
+    pub freq: HertzU64,
 }
 
 impl Delay {
@@ -55,10 +53,10 @@ impl Delay {
         }
     }
 
-    /// Builds a Delay struct directly 
+    /// Builds a Delay struct directly
     pub fn from_freq(freq_mhz: u64) -> Self {
         Self {
-            freq: HertzU64::MHz(freq_mhz)
+            freq: HertzU64::MHz(freq_mhz),
         }
     }
 
@@ -104,7 +102,7 @@ pub fn deadline(us: u64) -> u64 {
         match DELAY {
             Some(delay) => delay.deadline(us),
             // Assume 16MHz for the clock if we haven't made one I guess
-            None => SystemTimer::now().wrapping_add(us * 16)
+            None => SystemTimer::now().wrapping_add(us * 16),
         }
     }
 }
@@ -113,9 +111,7 @@ pub fn wait_until(deadline: u64) {
     unsafe {
         match DELAY {
             Some(delay) => delay.wait_until(deadline),
-            None => { 
-                while SystemTimer::now() <= deadline {} 
-            }
+            None => while SystemTimer::now() <= deadline {},
         }
     }
 }
@@ -127,35 +123,28 @@ pub fn configure_timer0(timg0: TIMG0, clocks: &Clocks) {
 
     group0.wdt.disable();
 
-    riscv::interrupt::free(|cs| unsafe {
-        TIMER0.borrow(*cs).replace(Some(timer0));
+    critical_section::with(|cs| unsafe {
+        TIMER0.borrow(cs).replace(Some(timer0));
         DELAY.replace(Delay::new(clocks));
     });
 }
 
 pub fn enable_timer0_interrupt(priority: Priority) {
-    interrupt::enable(
-        pac::Interrupt::TG0_T0_LEVEL,
-        priority,
-    ).unwrap();
+    interrupt::enable(peripherals::Interrupt::TG0_T0_LEVEL, priority).unwrap();
 
-    riscv::interrupt::free(|cs| {
-        match TIMER0.borrow(*cs).borrow_mut().as_mut() {
-            Some(timer) => {
-                timer.listen();
-            },
-            None => {}
+    critical_section::with(|cs| match TIMER0.borrow(cs).borrow_mut().as_mut() {
+        Some(timer) => {
+            timer.listen();
         }
-    })
+        None => {}
+    });
 }
 
 /// Start timer zero set for t microseconds
 pub fn start_timer0_callback(t: u64, callback: impl FnMut() -> () + 'static) {
-    riscv::interrupt::free(|cs| {
-        match TIMER0.borrow(*cs).borrow_mut().as_mut() {
-            Some(timer) => {
-                timer.start(t.micros())
-            },
+    critical_section::with(|cs| {
+        match TIMER0.borrow(cs).borrow_mut().as_mut() {
+            Some(timer) => timer.start(t.micros()),
             None => {}
         }
 
@@ -166,33 +155,27 @@ pub fn start_timer0_callback(t: u64, callback: impl FnMut() -> () + 'static) {
 }
 
 pub fn start_timer0(t: u64) {
-    riscv::interrupt::free(|cs| {
-        match TIMER0.borrow(*cs).borrow_mut().as_mut() {
-            Some(timer) => {
-                timer.start(t.micros())
-            },
-            None => {}
-        }
+    critical_section::with(|cs| match TIMER0.borrow(cs).borrow_mut().as_mut() {
+        Some(timer) => timer.start(t.micros()),
+        None => {}
     })
 }
 
 pub fn clear_timer0() {
-    riscv::interrupt::free(|cs| {
-        match TIMER0.borrow(*cs).borrow_mut().as_mut() {
-            Some(timer) => {
-                timer.clear_interrupt();
-            },
-            None => {}
+    critical_section::with(|cs| match TIMER0.borrow(cs).borrow_mut().as_mut() {
+        Some(timer) => {
+            timer.clear_interrupt();
         }
-    })// sprintln!("+")
+        None => {}
+    }) // println!("+")
 }
 
 #[interrupt]
 fn TG0_T0_LEVEL() {
-    // sprintln!("timer 0 interrupt!");
+    // println!("timer 0 interrupt!");
     clear_timer0();
-    
-    riscv::interrupt::free(|_| unsafe {
+
+    riscv::interrupt::free(|| unsafe {
         if let Some(callback) = &mut TIMER0_CALLBACK {
             callback();
         }

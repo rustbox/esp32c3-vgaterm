@@ -6,12 +6,19 @@ extern crate alloc;
 pub mod gpio;
 pub mod interrupt;
 pub mod kernel;
-pub mod println;
+// pub mod println;
 pub mod spi;
 mod timer;
 pub mod video;
 
-pub use println::configure;
+/// This is required for the #[interrupt] macro on interrupt handler functions to work properly.
+/// Such as gpio::GPIO() interrupt handler. This is due to how the esp32c3_hal crate implmented
+/// this macro, it expects `peripherals::Interrupt` to be available.
+pub mod peripherals {
+    pub use esp32c3_hal::peripherals::Interrupt;
+}
+
+// pub use println::configure;
 pub use timer::{
     clear_timer0, configure_timer0, deadline, delay, enable_timer0_interrupt, start_timer0,
     start_timer0_callback, wait_until, Delay,
