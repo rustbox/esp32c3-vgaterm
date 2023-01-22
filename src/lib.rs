@@ -10,6 +10,8 @@ pub mod kernel;
 pub mod spi;
 mod timer;
 pub mod video;
+pub mod color;
+pub mod display;
 
 /// This is required for the #[interrupt] macro on interrupt handler functions to work properly.
 /// Such as gpio::GPIO() interrupt handler. This is due to how the esp32c3_hal crate implmented

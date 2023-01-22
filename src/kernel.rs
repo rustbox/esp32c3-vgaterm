@@ -35,16 +35,17 @@ pub fn start(start: Gpio3<Unknown>) {
 
     let mut color: u8 = 0;
     let mut frames = 0;
+    let mut xoff: usize = 0;
     loop {
         unsafe {
-            // if frames == 60 {
+            // if frames == 10 {
             //     frames = 0;
             //     color += 1;
-            //     let (r, g, b) = video::rgb_from_byte(color.into());
-            //     println!("Color: {}, {}, {}", r, g, b);
-            //     crate::video::load_test_pattern(color, color);
+            //     xoff += 5;
+            //     // video::rgb_from_byte(color.into());
+            //     crate::video::all_colors_rectangles(0, xoff);
             // }
-            frames += 1;
+            // frames += 1;
             wfi();
         }
     }

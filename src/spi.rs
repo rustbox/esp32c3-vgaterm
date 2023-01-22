@@ -1,6 +1,13 @@
 use esp32c3_hal::clock::Clocks;
+use esp32c3_hal::dma::private::*;
+use esp32c3_hal::dma::DmaPriority;
+use esp32c3_hal::gdma::private::*;
+use esp32c3_hal::gdma::Gdma;
 use esp32c3_hal::gpio::{Gpio10, Gpio2, Gpio4, Gpio5, Gpio6, Gpio7};
-use esp32c3_hal::peripherals::SPI2;
+use esp32c3_hal::peripherals::{DMA, SPI2};
+use esp32c3_hal::prelude::*;
+use esp32c3_hal::spi::{Spi, SpiMode};
+use esp_hal_common::spi::dma::SpiDma;
 use esp_hal_common::{
     system::{Peripheral, PeripheralClockControl},
     types::OutputSignal,
@@ -8,10 +15,20 @@ use esp_hal_common::{
 };
 
 use esp_println::println;
-// use esp32c3_hal
 use riscv::interrupt;
 
-static mut QSPI: Option<QSpi<SPI2>> = None;
+static mut QSPI: Option<
+    SpiDma<
+        '_,
+        SPI2,
+        ChannelTx<'_, Channel0TxImpl, Channel0>,
+        ChannelRx<'_, Channel0RxImpl, Channel0>,
+        SuitablePeripheral0,
+    >,
+> = None;
+
+static mut descriptors: [u32; 8 * 3] = [0u32; 8 * 3];
+static mut rx_descriptors: [u32; 3] = [0u32; 1 * 3]; // should be zero, but dma will get mad
 
 ///
 /// Configure and initialize the Quad SPI instance. Once configured
@@ -25,22 +42,33 @@ pub fn configure(
     sio3: Gpio4<Unknown>,
     cs: Gpio10<Unknown>,
     clk: Gpio6<Unknown>,
+    dma: DMA,
     peripheral_clock: &mut PeripheralClockControl,
     clocks: &Clocks,
     freq: u32,
 ) {
-    let qspi = QSpi::new(
+    let dma = Gdma::new(dma, peripheral_clock);
+    let dma_channel = dma.channel0;
+
+    let qspi = Spi::new_quad_send_only(
         spi2,
+        clk,
         sio0,
         sio1,
         sio2,
         sio3,
         cs,
-        clk,
+        freq.Hz(),
+        SpiMode::Mode1,
         peripheral_clock,
         clocks,
-        freq,
-    );
+    )
+    .with_dma(dma_channel.configure(
+        false,
+        unsafe { &mut descriptors },
+        unsafe { &mut rx_descriptors },
+        DmaPriority::Priority0,
+    ));
 
     interrupt::free(|| unsafe {
         QSPI.replace(qspi);
@@ -50,28 +78,39 @@ pub fn configure(
 ///
 /// PANIC: if free is called before configure
 ///
-pub fn free() -> (
-    SPI2,
-    Gpio7<Unknown>,
-    Gpio2<Unknown>,
-    Gpio5<Unknown>,
-    Gpio4<Unknown>,
-    Gpio10<Unknown>,
-    Gpio6<Unknown>,
-) {
-    let qspi = interrupt::free(|| unsafe { QSPI.take() });
-    let q = qspi.expect("QSPI must be configured before freed");
-    q.free()
-}
+// pub fn free() -> (
+//     SPI2,
+//     Gpio7<Unknown>,
+//     Gpio2<Unknown>,
+//     Gpio5<Unknown>,
+//     Gpio4<Unknown>,
+//     Gpio10<Unknown>,
+//     Gpio6<Unknown>,
+// ) {
+//     let qspi = interrupt::free(|| unsafe { QSPI.take() });
+//     let q = qspi.expect("QSPI must be configured before freed");
+//     q.free()
+// }
 
 ///
 /// Transmit data, a slice of u8, if the qspi instance has been configured.
 /// The buffer should be a length divisible by 4, and no longer than 32,768.
 ///
-pub fn transmit(data: &[u8]) {
+pub fn transmit(data: &'static mut [u8]) {
+    static mut RECV: [u8; 0] = [];
     unsafe {
-        if let Some(qspi) = QSPI.as_mut() {
-            qspi.transfer(data);
+        if let Some(qspi) = QSPI.take() {
+            let transfer = qspi.dma_transfer(data,  &mut RECV).unwrap();
+            // here we could do something else while DMA transfer is in progress
+            // the buffers and spi is moved into the transfer and we can get it back via
+            // `wait`
+            let (_, _, q) = transfer.wait();
+
+            QSPI.replace(q);
+
+            // qspi.transfer(data);
+            // qspi.with_dma(..).transfer(...)
+            // unimplemented!()
         }
     }
 }

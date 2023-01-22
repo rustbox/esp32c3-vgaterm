@@ -27,8 +27,8 @@ opt-level = "s"
 # panic-halt = "0.2"
 embedded-hal = "0.2"
 critical-section = "1.1.1"
-esp-hal-common = { git = "https://github.com/esp-rs/esp-hal", features = ["esp32c3"], rev = "d29c4b1" }
-esp32c3-hal = { git = "https://github.com/esp-rs/esp-hal", features = ["direct-boot"], rev = "d29c4b1" }
+esp-hal-common = { features = ["esp32c3"],  git = "https://github.com/rustbox/esp-hal", branch = "vgaterm" }
+esp32c3-hal = { features = ["direct-boot"], git = "https://github.com/rustbox/esp-hal", branch = "vgaterm" }
 riscv = "0.10.0"
 riscv-rt = "0.11.0"
 nb = "1.0"

@@ -13,8 +13,8 @@ use esp_println::{print, println};
 use esp_hal_common::Priority;
 use riscv_rt::entry;
 
-use vgaterm;
-use vgaterm::video;
+use vgaterm::{self, video};
+use vgaterm::video::four_vertical_columns;
 use vgaterm::Delay;
 
 use core::arch::asm;
@@ -119,85 +119,17 @@ fn main() -> ! {
         sio3,
         cs,
         clk,
+        peripherals.DMA,
         &mut system.peripheral_clock_control,
         &clocks,
         40_000_000,
     );
-    // White: 0xFF
-    // Red: 0x03
-    // Green: 0x1C
-    // Blue: 0x60, 0xE0
-    let mut pattern: [u8; 128] = [0; 128];
-    for h in 0..8 {
-        for l in 0..8 {
-            for p in 0..2 {
-                let value: u8 = h << 5 | p << 4 | l << 1 | p;
-                let i: usize = (p + 2 * l + 16 * h).into();
-                pattern[i] = value;
-            }
-        }
-    }
+    
+    let image = include_bytes!("../image.bin");
+    video::load_from_slice(image);
 
-    riscv::interrupt::free(|| unsafe {
-        for line in 0..video::HEIGHT {
-            for p in 0..video::WIDTH {
-                let i = line * video::WIDTH + p;
-
-                if line < 100 {
-                    video::BUFFER[i] = 255;
-                }
-
-                if line >= 100 && line < 200 {
-                    video::BUFFER[i] = 0b0110_0110;
-                }
-
-                if line >= 200 && line < 300 {
-                    video::BUFFER[i] = 0b0111_0111;
-                }
-
-                if line >= 300 && line < 400 {
-                    video::BUFFER[i] = 0b0001_0001;
-                }
-
-                for px in 576..639 {
-                    if line == 23 && p == px {
-                        video::BUFFER[i] = 0b0000_0000;
-                    }
-                }
-
-                if p == 575 {
-                    video::BUFFER[i] = 0xE0 //(0xE0 as u8).wrapping_add(line as u8);
-                }
-                if p == 639 {
-                    video::BUFFER[i] = 3 //(3 as u8).wrapping_add(line as u8);
-                }
-                // if p == 0 {
-                //     video::BUFFER[i] = 0x60;
-                // }
-            }
-        }
-
-        println!("")
-    });
-    // vgaterm::video::load_test_pattern(224, 224);
-    // vgaterm::gpio::pin_interrupt(io.pins.gpio3.into_floating_input(), Event::FallingEdge, |_| {
-    //     print!(".");
-    //     vgaterm::start_timer0_callback(1000, || {
-    //         println!("*");
-    //         // let d = Delay::new(&clocks);
-    //         vgaterm::kernel::frame();
-    //     })
-    // });
-
-    // vgaterm::start_timer0_callback(1_000_000, || {
-    //     println!("one second!")
-    // });
-    // vgaterm::kernel::start(io.pins.gpio3);
-    // let mut hi = io.pins.gpio3.into_push_pull_output();
-    // let mut count = 0;
+    println!("Done");
     println!("Clock speed: {} Hz", measure_clock(delay));
-
-    println!("Transmitting pattern");
     vgaterm::kernel::start(io.pins.gpio3);
 
     loop {
