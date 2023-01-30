@@ -14,50 +14,52 @@
 //! software should reset all frame logic back to the beginning of the frame.
 //!
 
-use crate::video;
+use crate::channel::Receiver;
+use crate::display::Display;
+use crate::gpio::InterruptPin;
+use crate::terminal::TextField;
+use crate::{video, display};
 
+use alloc::boxed::Box;
 use esp_println::println;
 use esp32c3_hal::gpio::Gpio3;
 use esp32c3_hal::gpio::{Unknown, Event};
+use esp32c3_hal::macros::ram;
 use riscv::asm::wfi;
 
 pub const BLANKING_WAIT_TIME: u64 = 3960; // us
 
 pub fn start(start: Gpio3<Unknown>) {
     println!("start!");
+    // let mut terminal = TextField::new();
+    // let mut display = Display::new();
     let _ = crate::gpio::pin_interrupt(
         start.into_floating_input(),
         Event::RisingEdge,
-        |_| {
-            frame();
-        }
-    );
-
-    let mut color: u8 = 0;
-    let mut frames = 0;
-    let mut xoff: usize = 0;
-    loop {
-        unsafe {
-            // if frames == 10 {
-            //     frames = 0;
-            //     color += 1;
-            //     xoff += 5;
-            //     // video::rgb_from_byte(color.into());
-            //     crate::video::all_colors_rectangles(0, xoff);
+        frame,
+        // move |_| {
+            // frame();
+            // Get the pressed chars
+            // while let Some(t) = receiver.recv() {
+            //     terminal.type_next(t);
             // }
-            // frames += 1;
-            wfi();
-        }
-    }
+            // // Draw the characters on the frame
+            // terminal.draw(&mut display);
+            // // Flush the Display to the BUFFER
+            // display.flush()
+        // }
+    );
+    
 }
+
+
 
 
 ///
 /// Transmit the contents of the frame buffer out to the monitor via SPI.
 /// 
-#[inline]
-pub fn frame() {
-    crate::gpio::gpio_pin_out(8, true);
+// #[inline]
+#[ram]
+pub fn frame(_: &mut Box<dyn InterruptPin>) {
     crate::video::transmit_frame();
-    crate::gpio::gpio_pin_out(8, false);
 }

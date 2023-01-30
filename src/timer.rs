@@ -154,6 +154,24 @@ pub fn start_timer0_callback(t: u64, callback: impl FnMut() -> () + 'static) {
     })
 }
 
+pub fn start_repeat_timer0_callback(t: u64, mut callback: impl FnMut() -> () + 'static) {
+    critical_section::with(|cs| {
+        match TIMER0.borrow(cs).borrow_mut().as_mut() {
+            Some(timer) => timer.start(t.micros()),
+            None => {}
+        }
+
+        let f = move || {
+            callback();
+            start_timer0(t);
+        };
+
+        unsafe {
+            TIMER0_CALLBACK = Some(Box::new(f));
+        }
+    })
+}
+
 pub fn start_timer0(t: u64) {
     critical_section::with(|cs| match TIMER0.borrow(cs).borrow_mut().as_mut() {
         Some(timer) => timer.start(t.micros()),
@@ -180,6 +198,6 @@ fn TG0_T0_LEVEL() {
             callback();
         }
 
-        TIMER0_CALLBACK = None;
+        // TIMER0_CALLBACK = None;
     });
 }

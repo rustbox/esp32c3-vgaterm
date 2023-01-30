@@ -4,6 +4,12 @@
 
 extern crate alloc;
 
+use alloc::format;
+use embedded_graphics::mono_font::MonoTextStyleBuilder;
+use embedded_graphics::pixelcolor::Rgb888;
+use embedded_graphics::prelude::{Point, RgbColor};
+use embedded_graphics::primitives::{Circle, Primitive, PrimitiveStyle};
+use embedded_graphics::Drawable;
 use esp32c3_hal::clock::{ClockControl, CpuClock};
 use esp32c3_hal::prelude::*;
 use esp32c3_hal::timer::TimerGroup;
@@ -13,25 +19,27 @@ use esp_println::{print, println};
 use esp_hal_common::Priority;
 use riscv_rt::entry;
 
+use vgaterm::color::Rgb3;
 use vgaterm::{self, video};
-use vgaterm::video::four_vertical_columns;
-use vgaterm::Delay;
+use vgaterm::{display, Delay};
 
 use core::arch::asm;
+
+core::arch::global_asm!(".global _heap_size; _heap_size = 0x8000");
 
 #[global_allocator]
 static ALLOCATOR: esp_alloc::EspHeap = esp_alloc::EspHeap::empty();
 
 fn init_heap() {
-    const HEAP_SIZE: usize = 32 * 1024;
-
     extern "C" {
-        static mut _heap_start: u32;
+        static mut _heap_size: u32;
+        static mut _sheap: u32;
     }
 
     unsafe {
-        let heap_start = &_heap_start as *const _ as usize;
-        ALLOCATOR.init(heap_start as *mut u8, HEAP_SIZE);
+        let heap_start = &_sheap as *const _ as usize;
+        let heap_size = &_heap_size as *const _ as usize;
+        ALLOCATOR.init(heap_start as *mut u8, heap_size);
     }
 }
 
@@ -82,11 +90,15 @@ fn main() -> ! {
 
     let io = IO::new(peripherals.GPIO, peripherals.IO_MUX);
 
+    init_heap();
     configure_counter_for_cpu_cycles();
 
     vgaterm::configure_timer0(peripherals.TIMG0, &clocks);
+    let mut char_reciever = vgaterm::uart::configure(peripherals.UART0);
+    vgaterm::uart::start_uart_poll_timer(32000);
     vgaterm::enable_timer0_interrupt(Priority::Priority1);
     vgaterm::gpio::interrupt_enable(Priority::Priority2);
+    vgaterm::uart::interrupt_enable(Priority::Priority3);
 
     unsafe {
         riscv::interrupt::enable();
@@ -124,18 +136,49 @@ fn main() -> ! {
         &clocks,
         40_000_000,
     );
-    
+
     let image = include_bytes!("../image.bin");
     video::load_from_slice(image);
+
+    let mut display = vgaterm::display::Display::new();
 
     println!("Done");
     println!("Clock speed: {} Hz", measure_clock(delay));
     vgaterm::kernel::start(io.pins.gpio3);
 
+    // let mut text_display = vgaterm::display::TextDisplay::new();
+    let mut terminal = vgaterm::terminal::TextField::new();
+    // text_display.write_text(0, vgaterm::display::COLUMNS / 2 - 4, " WELCOME!");
+    // text_display.write_text(1, 0, " Welcome, Aly and Ilana, to Chez Douglass, where we will enjoy food, company, drink, and new friendships!");
+    // text_display.draw_dirty(&mut display);
+    // display.flush();
+
+    // let mut cursor = (0, 0);
     loop {
-        unsafe {
-            riscv::asm::wfi();
+        // while let Some(ch) = char_reciever.recv() {
+        //     text_display.write(cursor.0, cursor.1, ch);
+        //     text_display.draw_dirty(&mut display);
+        //     cursor.1 += 1;
+        //     if cursor.1 == display::COLUMNS {
+        //         cursor.1 = 0;
+        //         cursor.0 += 1;
+        //         if cursor.0 == display::ROWS {
+        //             cursor.0 = 0;
+        //         }
+        //     }
+        // }
+        // Get the pressed chars
+        while let Some(t) = char_reciever.recv() {
+            terminal.type_next(t);
         }
+        // Draw the characters on the frame
+        terminal.draw(&mut display);
+        // Flush the Display to the BUFFER
+        display.flush()
+
+        // unsafe {
+        //     riscv::asm::wfi();
+        // }
     }
 }
 
