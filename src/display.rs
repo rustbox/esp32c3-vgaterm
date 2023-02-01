@@ -1,4 +1,4 @@
-use core::convert::Infallible;
+use core::{convert::Infallible, borrow::Borrow};
 
 use alloc::{vec::Vec, string::{ToString, String}, collections::VecDeque};
 use embedded_graphics::{prelude::*, pixelcolor::raw::RawU8, Pixel, text::Text, mono_font::{MonoTextStyle, MonoTextStyleBuilder}};
@@ -74,15 +74,15 @@ impl DrawTarget for Display {
     }
 }
 
-#[derive(Default, Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct Character {
     character: [u8; 2],
-    color: CharColor
+    pub color: CharColor
 }
 
 impl Character {
 
-    pub fn new(ch: char) -> Character{
+    pub fn new(ch: char) -> Character {
         let mut chrs: [u8; 2] = [0; 2];
         let s = ch.to_string();
         let ch = s.as_str().as_bytes();
@@ -93,29 +93,63 @@ impl Character {
         Character { character: chrs, color: CharColor::default() }
     }
 
+    pub fn with_fore(self, color: Rgb3) -> Character {
+        Character {
+            character: self.character,
+            color: self.color.with_foreground(color)
+        }
+    }
+
+    pub fn with_back(self, color: Rgb3) -> Character {
+        Character {
+            character: self.character,
+            color: self.color.with_background(color)
+        }
+    }
+
     pub fn text_and_style(&self) -> (String, MonoTextStyle<Rgb3>) {
         let text = core::str::from_utf8(&self.character)
             .unwrap_or(" ").to_string();
 
-        let style = MonoTextStyleBuilder::new()
-            .text_color(self.color.foreground())
-            .background_color(self.color.background())
-            .font(&crate::text::TAMZEN_FONT_6x12)
-            .build();
+        let mut style_builder = if self.color.inverse() {
+            MonoTextStyleBuilder::new()
+                .text_color(self.color.background())
+                .background_color(self.color.foreground())
+                .font(&crate::text::TAMZEN_FONT_6x12)
+        } else {
+            MonoTextStyleBuilder::new()
+                .text_color(self.color.foreground())
+                .background_color(self.color.background())
+                .font(&crate::text::TAMZEN_FONT_6x12)
+        };
 
-        
+        if self.color.strikethrough() {
+            style_builder = style_builder.strikethrough();
+        }
+
+        if self.color.underline() {
+            style_builder = style_builder.underline();
+        }
+
+        let style = style_builder.build();
+
         (text, style)
     }
 }
 
+impl Default for Character {
+    fn default() -> Self {
+        Character { character: [32, 0], color: CharColor::default() }
+    }
+}
 
-/// Reverse: 15, Underline: 14, Strike: 13, Blink: 12, Back: 6-11 bits, Fore: 0-5 bits
-/// RUSB|bbgg.rr|bbggrr
+/// Inverse: 15, Underline: 14, Strike: 13, Blink: 12, Back: 6-11 bits, Fore: 0-5 bits
+/// IUSB|bbgg.rr|bbggrr
 #[derive(Debug, Clone, Copy)]
-struct CharColor(u16);
+pub struct CharColor(u16);
 
 impl CharColor {
-    fn new(foreground: Rgb3, background: Rgb3) -> CharColor {
+    pub fn new(foreground: Rgb3, background: Rgb3) -> CharColor {
         let fore2 = foreground.rgb2();
         let back2 = background.rgb2();
         let c = 
@@ -127,23 +161,65 @@ impl CharColor {
             ((back2.2 as u16) << 9);
         
 
-        // RUSB|bbgg.rr|bbggrr
+        // IUSB|bbgg.rr|bbggrr
         // bb0.gg0.rr
         CharColor(c)
     }
 
-    fn foreground(&self) -> Rgb3 {
+    pub fn foreground(&self) -> Rgb3 {
         let r = ((self.0 & 0b00000011) << 1) as u8;
         let g = ((self.0 & 0b00001100) >> 1) as u8;
         let b = ((self.0 & 0b00110000) >> 3) as u8;
         Rgb3::from_rgb2(r, g, b)
     }
 
-    fn background(&self) -> Rgb3 {
+    pub fn background(&self) -> Rgb3 {
         let r = ((self.0 & 0b11000000) >> 5) as u8;
         let g = ((self.0 & 0b00000011_00000000) >> 7) as u8;
         let b = ((self.0 & 0b00001100_00000000) >> 9) as u8;
         Rgb3::from_rgb2(r, g, b)
+    }
+
+    pub fn inverse(&self) -> bool {
+        self.0 & Inverse.bit() != 0
+    }
+
+    pub fn underline(&self) -> bool {
+        self.0 & Underline.bit() != 0
+    }
+
+    pub fn strikethrough(&self) -> bool {
+        self.0 & Strikethrough.bit() != 0
+    }
+
+    pub fn blink(&self) -> bool {
+        self.0 & Blink.bit() != 0
+    }
+
+    pub fn with_foreground(self, color: Rgb3) -> CharColor {
+        let (r2, g2, b2) = color.rgb2();
+        let c = (r2 + g2 << 2 + b2 << 4) as u16;
+
+        CharColor((self.0 & 0b11111111_11000000) | c)
+    }
+
+    pub fn with_background(self, color: Rgb3) -> CharColor {
+        let (r2, g2, b2) = color.rgb2();
+        // Background starts at bit 6
+        let c = ((r2 + g2 << 2 + b2 << 4) as u16) << 6;
+
+        CharColor((self.0 & 0b11110000_00111111) | c)
+    }
+
+    pub fn with_decoration(&mut self,
+        inverse: Option<Inverse>,
+        underline: Option<Underline>,
+        strikethrough: Option<Strikethrough>,
+        blink: Option<Blink>
+    ) -> CharColor {
+        let decs = inverse.bit() + underline.bit() + strikethrough.bit() + blink.bit();
+        self.0 = (self.0 & 0b00001111_11111111) | decs;
+        *self
     }
 }
 
@@ -153,12 +229,49 @@ impl Default for CharColor {
     }
 }
 
+pub struct Blink;
 
-enum Decoration {
-    Blink,
-    Strikethrough,
-    Underline,
-    Inverse
+impl Flag for Blink {
+    fn bit(&self) -> u16 {
+        1 << 12
+    }
+}
+
+pub struct Strikethrough;
+
+impl Flag for Strikethrough {
+    fn bit(&self) -> u16 {
+        1 << 13
+    }
+}
+
+pub struct Underline;
+
+impl Flag for Underline {
+    fn bit(&self) -> u16 {
+        1 << 14
+    }
+}
+
+pub struct Inverse;
+
+impl Flag for Inverse {
+    fn bit(&self) -> u16 {
+        1 << 15
+    }
+}
+
+impl<T: Flag> Flag for Option<T> {
+    fn bit(&self) -> u16 {
+        match self {
+            Some(f) => f.bit(),
+            None => 0
+        }
+    }
+}
+
+pub trait Flag {
+    fn bit(&self) -> u16;
 }
 
 pub const COLUMNS: usize = 105;
@@ -215,20 +328,7 @@ impl TextDisplay {
         D: DrawTarget<Color = Rgb3> {
 
         let ch = self.read_char(line, col);
-        let (text, style) = ch.text_and_style();
-        
-        let w = style.font.character_size.width;
-        let h = style.font.character_size.height;
-        let x = 2 + col as u32 * (w + style.font.character_spacing);
-        let y = line as u32 * h + h;
-
-        let text = Text::new(
-            &text, 
-            Point::new(x as i32, y as i32), 
-            style
-        );
-        
-        let _ = text.draw(target);
+        self.draw_character(line, col, ch, target);
     }
 
     pub fn draw_all<D>(&self, target: &mut D)
@@ -249,5 +349,25 @@ impl TextDisplay {
         while let Some(((line, col), _)) = self.dirty.pop_back() {
             self.draw(line, col, target)
         }
+    }
+
+    pub fn draw_character<D>(&self, line: usize, col: usize, character: Character, target: &mut D)
+    where
+        D: DrawTarget<Color = Rgb3> {
+    
+        let (text, style) = character.text_and_style();
+    
+        let w = style.font.character_size.width;
+        let h = style.font.character_size.height;
+        let x = 2 + col as u32 * (w + style.font.character_spacing);
+        let y = line as u32 * h + h;
+
+        let text = Text::new(
+            &text, 
+            Point::new(x as i32, y as i32), 
+            style
+        );
+        
+        let _ = text.draw(target);
     }
 }

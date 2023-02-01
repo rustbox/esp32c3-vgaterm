@@ -1,6 +1,6 @@
 use embedded_graphics::prelude::DrawTarget;
 
-use crate::{display::{TextDisplay, self}, color::Rgb3};
+use crate::{display::{TextDisplay, self, Inverse}, color::Rgb3};
 
 pub type Row = usize;
 pub type Col = usize;
@@ -31,6 +31,10 @@ impl TextField {
     where
         D: DrawTarget<Color = Rgb3> {
 
+        let mut cursor_char = self.text.read_char(self.cursor.0, self.cursor.1);
+        cursor_char.color.with_decoration(Some(Inverse), None, None, None);
         self.text.draw_dirty(target);
+        self.text.draw_character(self.cursor.0, self.cursor.1, cursor_char, target);
+        
     }
 }

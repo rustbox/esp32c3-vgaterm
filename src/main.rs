@@ -154,6 +154,7 @@ fn main() -> ! {
     // display.flush();
 
     // let mut cursor = (0, 0);
+    // terminal
     loop {
         // while let Some(ch) = char_reciever.recv() {
         //     text_display.write(cursor.0, cursor.1, ch);
