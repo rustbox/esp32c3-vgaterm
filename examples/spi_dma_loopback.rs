@@ -26,8 +26,7 @@ use esp32c3_hal::{
     prelude::*,
     spi::{Spi, SpiMode},
     timer::TimerGroup,
-    Delay,
-    Rtc,
+    Delay, Rtc,
 };
 use esp_backtrace as _;
 use esp_println::println;
@@ -91,7 +90,6 @@ fn main() -> ! {
         &mut rx_descriptors,
         DmaPriority::Priority0,
     ));
-
 
     let mut delay = Delay::new(&clocks);
 

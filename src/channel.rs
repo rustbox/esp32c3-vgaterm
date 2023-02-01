@@ -1,11 +1,10 @@
 use core::cell::RefCell;
 
-use alloc::{rc::Rc, collections::VecDeque};
+use alloc::{collections::VecDeque, rc::Rc};
 use critical_section::Mutex;
 
-
 pub struct Sender<T> {
-    inner: Rc<Inner<T>>
+    inner: Rc<Inner<T>>,
 }
 
 impl<T> Sender<T> {
@@ -19,12 +18,14 @@ impl<T> Sender<T> {
 
 impl<T> Clone for Sender<T> {
     fn clone(&self) -> Sender<T> {
-        Sender { inner: Rc::clone(&self.inner) }
+        Sender {
+            inner: Rc::clone(&self.inner),
+        }
     }
 }
 
 pub struct Receiver<T> {
-    inner: Rc<Inner<T>>
+    inner: Rc<Inner<T>>,
 }
 
 impl<T> Receiver<T> {
@@ -41,14 +42,16 @@ struct Inner<T> {
 }
 
 pub fn channel<T>() -> (Sender<T>, Receiver<T>) {
-    let inner = Inner { queue: Mutex::new(RefCell::new(VecDeque::new())) };
+    let inner = Inner {
+        queue: Mutex::new(RefCell::new(VecDeque::new())),
+    };
     let inner = Rc::new(inner);
     (
         Sender {
-            inner: inner.clone()
+            inner: inner.clone(),
         },
         Receiver {
-            inner: inner.clone()
-        }
+            inner: inner.clone(),
+        },
     )
 }

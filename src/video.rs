@@ -34,7 +34,7 @@ pub fn transmit_frame() {
 /// Split the frame buffer into 4 equallay sized columns (160 pixels wide) each
 /// of the color given in the arguments. Color a corresponds to the first column,
 /// b to the second, etc.
-/// 
+///
 pub fn four_vertical_columns(a: u8, b: u8, c: u8, d: u8) {
     riscv::interrupt::free(|| unsafe {
         for line in 0..HEIGHT {
@@ -52,13 +52,12 @@ pub fn four_vertical_columns(a: u8, b: u8, c: u8, d: u8) {
                 if p >= 320 && p < 480 {
                     BUFFER[i] = c;
                 }
-                
+
                 if p >= 480 && p < 640 {
                     BUFFER[i] = d;
                 }
             }
         }
-
     });
 }
 
@@ -66,7 +65,7 @@ pub fn four_vertical_columns(a: u8, b: u8, c: u8, d: u8) {
 /// Sets the frame buffer to a 16x16 set of rectangles of all 256 displayable
 /// colors. Offset refers to what color we start with when making each rectangle.
 /// x_off is the offset along the x-axis the rectangles should be drawn.
-/// 
+///
 pub fn all_colors_rectangles(offset: u8, x_off: usize) {
     let box_w = WIDTH / 16;
     let box_h = HEIGHT / 16;
@@ -95,7 +94,7 @@ pub fn test_pattern() -> [u8; 128] {
             }
         }
     }
-    return pattern
+    return pattern;
 }
 
 pub fn load_from_slice(s: &[u8]) {

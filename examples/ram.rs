@@ -9,11 +9,7 @@
 #![no_main]
 
 use esp32c3_hal::{
-    clock::ClockControl,
-    macros::ram,
-    peripherals::Peripherals,
-    prelude::*,
-    timer::TimerGroup,
+    clock::ClockControl, macros::ram, peripherals::Peripherals, prelude::*, timer::TimerGroup,
 };
 use esp_backtrace as _;
 use esp_println::println;

@@ -1,12 +1,11 @@
+use esp32c3_hal::prelude::*;
+use esp32c3_hal::{interrupt, peripherals};
 use esp_hal_common::Cpu;
 use esp_hal_common::{peripherals::UART0, Uart};
-use esp32c3_hal::{interrupt, peripherals};
-use esp32c3_hal::prelude::*;
-use esp_println::{println, print};
+use esp_println::{print, println};
 
-use crate::channel::{self, Sender, Receiver};
+use crate::channel::{self, Receiver, Sender};
 use crate::interrupt::which_priority;
-
 
 static mut SENDER: Option<UartTransmitter> = None;
 
@@ -15,7 +14,10 @@ pub fn configure(uart: UART0) -> Receiver<char> {
     let (tx, rx) = channel::channel();
 
     riscv::interrupt::free(|| unsafe {
-        SENDER.replace(UartTransmitter { serial: serial0, tx })
+        SENDER.replace(UartTransmitter {
+            serial: serial0,
+            tx,
+        })
     });
 
     rx
@@ -25,27 +27,21 @@ pub fn start_uart_poll_timer(interval_us: u64) {
     riscv::interrupt::free(|| unsafe {
         if let Some(sender) = &mut SENDER {
             // let tx = sender.tx.clone();
-            crate::timer::start_repeat_timer0_callback(interval_us,
-                || {
-                    // print!(".");
-                    while let nb::Result::Ok(c) = sender.serial.read() {
-                        sender.tx.send(c as char);
-                    }
+            crate::timer::start_repeat_timer0_callback(interval_us, || {
+                // print!(".");
+                while let nb::Result::Ok(c) = sender.serial.read() {
+                    sender.tx.send(c as char);
                 }
-            );
+            });
         }
     })
 }
 
 pub fn interrupt_enable(priority: interrupt::Priority) {
+    interrupt::enable(peripherals::Interrupt::UART0, which_priority(&priority)).unwrap();
 
-    interrupt::enable(
-        peripherals::Interrupt::UART0,
-        which_priority(&priority),
-    ).unwrap();
-
-    use interrupt::Priority::*;
     use interrupt::CpuInterrupt::*;
+    use interrupt::Priority::*;
     let cpu_int = match priority {
         Priority1 => Interrupt1,
         Priority2 => Interrupt2,
@@ -62,7 +58,7 @@ pub fn interrupt_enable(priority: interrupt::Priority) {
         Priority13 => Interrupt13,
         Priority14 => Interrupt14,
         Priority15 => Interrupt15,
-        None => Interrupt1
+        None => Interrupt1,
     };
 
     interrupt::set_kind(
@@ -81,7 +77,7 @@ pub fn interrupt_enable(priority: interrupt::Priority) {
 
 struct UartTransmitter<'a> {
     serial: Uart<'a, UART0>,
-    tx: Sender<char>
+    tx: Sender<char>,
 }
 
 #[interrupt]

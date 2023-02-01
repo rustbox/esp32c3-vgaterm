@@ -1,20 +1,33 @@
 use core::convert::Infallible;
 
-use alloc::{vec::Vec, string::{ToString, String}, collections::VecDeque};
-use embedded_graphics::{prelude::*, pixelcolor::raw::RawU8, Pixel, text::Text, mono_font::{MonoTextStyle, MonoTextStyleBuilder}};
+use alloc::{
+    collections::VecDeque,
+    string::{String, ToString},
+    vec::Vec,
+};
+use embedded_graphics::{
+    mono_font::{MonoTextStyle, MonoTextStyleBuilder},
+    pixelcolor::raw::RawU8,
+    prelude::*,
+    text::Text,
+    Pixel,
+};
 use esp_println::println;
 
-use crate::{video, color::{self, Rgb3}};
-
+use crate::{
+    color::{self, Rgb3},
+    video,
+};
 
 pub struct Display {
-    local_buffer: Vec<(usize, u8)>
+    local_buffer: Vec<(usize, u8)>,
 }
 
 impl Display {
-
     pub fn new() -> Display {
-        Display { local_buffer: Vec::new() }
+        Display {
+            local_buffer: Vec::new(),
+        }
     }
 
     pub fn push(&mut self, pos: usize, color: u8) {
@@ -42,9 +55,7 @@ impl Display {
     }
 
     pub fn read(&self, x: usize, y: usize) -> u8 {
-        riscv::interrupt::free(|| unsafe {
-            video::BUFFER[y * video::WIDTH + x]
-        })
+        riscv::interrupt::free(|| unsafe { video::BUFFER[y * video::WIDTH + x] })
     }
 }
 
@@ -59,17 +70,21 @@ impl DrawTarget for Display {
     type Error = Infallible;
 
     fn draw_iter<I>(&mut self, pixels: I) -> Result<(), Self::Error>
-        where
-            I: IntoIterator<Item = embedded_graphics::Pixel<Self::Color>> {
-        
+    where
+        I: IntoIterator<Item = embedded_graphics::Pixel<Self::Color>>,
+    {
         for Pixel(coord, color) in pixels.into_iter() {
-            if coord.x >= 0 && coord.x < video::WIDTH as i32 && coord.y >= 0 && coord.y < video::HEIGHT as i32 {
+            if coord.x >= 0
+                && coord.x < video::WIDTH as i32
+                && coord.y >= 0
+                && coord.y < video::HEIGHT as i32
+            {
                 let i = coord.y as usize * video::WIDTH + coord.x as usize;
                 let raw = RawU8::from(color);
                 self.push(i, raw.into_inner());
             }
         }
-                
+
         Ok(())
     }
 }
@@ -77,12 +92,11 @@ impl DrawTarget for Display {
 #[derive(Default, Debug, Clone, Copy)]
 pub struct Character {
     character: [u8; 2],
-    color: CharColor
+    color: CharColor,
 }
 
 impl Character {
-
-    pub fn new(ch: char) -> Character{
+    pub fn new(ch: char) -> Character {
         let mut chrs: [u8; 2] = [0; 2];
         let s = ch.to_string();
         let ch = s.as_str().as_bytes();
@@ -90,12 +104,16 @@ impl Character {
         if ch.len() > 1 {
             chrs[1] = ch[1];
         }
-        Character { character: chrs, color: CharColor::default() }
+        Character {
+            character: chrs,
+            color: CharColor::default(),
+        }
     }
 
     pub fn text_and_style(&self) -> (String, MonoTextStyle<Rgb3>) {
         let text = core::str::from_utf8(&self.character)
-            .unwrap_or(" ").to_string();
+            .unwrap_or(" ")
+            .to_string();
 
         let style = MonoTextStyleBuilder::new()
             .text_color(self.color.foreground())
@@ -103,11 +121,9 @@ impl Character {
             .font(&crate::text::TAMZEN_FONT_6x12)
             .build();
 
-        
         (text, style)
     }
 }
-
 
 /// Reverse: 15, Underline: 14, Strike: 13, Blink: 12, Back: 6-11 bits, Fore: 0-5 bits
 /// RUSB|bbgg.rr|bbggrr
@@ -118,14 +134,12 @@ impl CharColor {
     fn new(foreground: Rgb3, background: Rgb3) -> CharColor {
         let fore2 = foreground.rgb2();
         let back2 = background.rgb2();
-        let c = 
-            ((fore2.0 as u16) >> 1) |
-            ((fore2.1 as u16) << 1) |
-            ((fore2.2 as u16) << 3) |
-            ((back2.0 as u16) << 5) |
-            ((back2.1 as u16) << 7) |
-            ((back2.2 as u16) << 9);
-        
+        let c = ((fore2.0 as u16) >> 1)
+            | ((fore2.1 as u16) << 1)
+            | ((fore2.2 as u16) << 3)
+            | ((back2.0 as u16) << 5)
+            | ((back2.1 as u16) << 7)
+            | ((back2.2 as u16) << 9);
 
         // RUSB|bbgg.rr|bbggrr
         // bb0.gg0.rr
@@ -153,26 +167,24 @@ impl Default for CharColor {
     }
 }
 
-
 enum Decoration {
     Blink,
     Strikethrough,
     Underline,
-    Inverse
+    Inverse,
 }
 
 pub const COLUMNS: usize = 105;
 pub const ROWS: usize = 33;
 
-
 pub struct TextDisplay {
     buffer: [Character; ROWS * COLUMNS],
-    dirty: VecDeque<((usize, usize), Character)>
+    dirty: VecDeque<((usize, usize), Character)>,
 }
 
 impl TextDisplay {
     pub fn new() -> TextDisplay {
-        TextDisplay { 
+        TextDisplay {
             buffer: [Character::default(); COLUMNS * ROWS],
             dirty: VecDeque::new(),
         }
@@ -206,35 +218,30 @@ impl TextDisplay {
                     row = 0
                 }
             }
-
         }
     }
 
     pub fn draw<D>(&self, line: usize, col: usize, target: &mut D)
     where
-        D: DrawTarget<Color = Rgb3> {
-
+        D: DrawTarget<Color = Rgb3>,
+    {
         let ch = self.read_char(line, col);
         let (text, style) = ch.text_and_style();
-        
+
         let w = style.font.character_size.width;
         let h = style.font.character_size.height;
         let x = 2 + col as u32 * (w + style.font.character_spacing);
         let y = line as u32 * h + h;
 
-        let text = Text::new(
-            &text, 
-            Point::new(x as i32, y as i32), 
-            style
-        );
-        
+        let text = Text::new(&text, Point::new(x as i32, y as i32), style);
+
         let _ = text.draw(target);
     }
 
     pub fn draw_all<D>(&self, target: &mut D)
     where
-        D: DrawTarget<Color = Rgb3> {
-
+        D: DrawTarget<Color = Rgb3>,
+    {
         for l in (0..ROWS).rev() {
             for c in (0..COLUMNS).rev() {
                 self.draw(l, c, target);
@@ -244,8 +251,8 @@ impl TextDisplay {
 
     pub fn draw_dirty<D>(&mut self, target: &mut D)
     where
-        D: DrawTarget<Color = Rgb3> {
-
+        D: DrawTarget<Color = Rgb3>,
+    {
         while let Some(((line, col), _)) = self.dirty.pop_back() {
             self.draw(line, col, target)
         }

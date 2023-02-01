@@ -1,18 +1,24 @@
 use embedded_graphics::prelude::DrawTarget;
 
-use crate::{display::{TextDisplay, self}, color::Rgb3};
+use crate::{
+    color::Rgb3,
+    display::{self, TextDisplay},
+};
 
 pub type Row = usize;
 pub type Col = usize;
 
 pub struct TextField {
     text: TextDisplay,
-    cursor: (Row, Col)
+    cursor: (Row, Col),
 }
 
 impl TextField {
     pub fn new() -> TextField {
-        TextField { text: TextDisplay::new(), cursor: (0, 0) }
+        TextField {
+            text: TextDisplay::new(),
+            cursor: (0, 0),
+        }
     }
 
     pub fn type_next(&mut self, t: char) {
@@ -29,8 +35,8 @@ impl TextField {
 
     pub fn draw<D>(&mut self, target: &mut D)
     where
-        D: DrawTarget<Color = Rgb3> {
-
+        D: DrawTarget<Color = Rgb3>,
+    {
         self.text.draw_dirty(target);
     }
 }

@@ -1,5 +1,7 @@
-use embedded_graphics::{prelude::{PixelColor, RawData, RgbColor}, pixelcolor::raw::RawU8};
-
+use embedded_graphics::{
+    pixelcolor::raw::RawU8,
+    prelude::{PixelColor, RawData, RgbColor},
+};
 
 pub fn rgb_from_byte(color: u8) -> (u8, u8, u8) {
     let color: u16 = color as u16;
@@ -11,7 +13,11 @@ pub fn rgb_from_byte(color: u8) -> (u8, u8, u8) {
     let green3 = ((rgb >> 3) & 0b000_000_111) as u8;
     let blue3 = ((rgb >> 6) & 0b000_000_111) as u8;
 
-    (color3_to_byte(red3), color3_to_byte(green3), color3_to_byte(blue3))
+    (
+        color3_to_byte(red3),
+        color3_to_byte(green3),
+        color3_to_byte(blue3),
+    )
 }
 
 pub fn byte_from_rgb(red: u8, green: u8, blue: u8) -> u8 {
@@ -51,7 +57,7 @@ pub fn byte_to_rgb3(b: u8) -> (u8, u8, u8) {
     (
         (rgb_bits & 0b000000111) as u8,
         ((rgb_bits & 0b000111000) >> 3) as u8,
-        ((rgb_bits & 0b111000000) >> 6) as u8
+        ((rgb_bits & 0b111000000) >> 6) as u8,
     )
 }
 
@@ -66,7 +72,7 @@ pub fn color3_to_byte(color: u8) -> u8 {
         5 => 182,
         6 => 218,
         7 => 255,
-        _ => 0
+        _ => 0,
     }
 }
 
@@ -78,7 +84,7 @@ pub fn color2_to_color3(color2: u8) -> u8 {
         1 => 3,
         2 => 6,
         3 => 7,
-        _ => unreachable!()
+        _ => unreachable!(),
     }
 }
 
@@ -93,7 +99,7 @@ pub fn color3_to_color2(color3: u8) -> u8 {
         5 => 2,
         6 => 2,
         7 => 3,
-        _ => unreachable!()
+        _ => unreachable!(),
     }
 }
 
@@ -102,19 +108,23 @@ pub fn color3_to_color2(color3: u8) -> u8 {
 pub struct Rgb3 {
     red: u8,
     green: u8,
-    blue: u8
+    blue: u8,
 }
 
 impl Rgb3 {
     pub const fn new(r: u8, g: u8, b: u8) -> Rgb3 {
-        Rgb3 { red: r % 8, green: g % 8, blue: b % 8 }
+        Rgb3 {
+            red: r % 8,
+            green: g % 8,
+            blue: b % 8,
+        }
     }
 
     pub fn from_rgb2(r: u8, g: u8, b: u8) -> Rgb3 {
         Rgb3::new(
-            color2_to_color3(r), 
-            color2_to_color3(g), 
-            color2_to_color3(b)
+            color2_to_color3(r),
+            color2_to_color3(g),
+            color2_to_color3(b),
         )
     }
 
@@ -122,7 +132,7 @@ impl Rgb3 {
         (
             color3_to_color2(self.r()),
             color3_to_color2(self.g()),
-            color3_to_color2(self.b())
+            color3_to_color2(self.b()),
         )
     }
 }
@@ -174,4 +184,3 @@ impl From<Rgb3> for RawU8 {
         RawU8::new(rgb3_to_byte(v))
     }
 }
-

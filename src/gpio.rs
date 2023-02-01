@@ -1,10 +1,10 @@
 use alloc::boxed::Box;
+use esp32c3_hal::peripherals;
 use esp32c3_hal::prelude::*;
 use esp32c3_hal::{
     gpio::{Event, InputPin},
     interrupt,
 };
-use esp32c3_hal::peripherals;
 use riscv;
 
 pub const GPIO_MMIO_ADDRESS: usize = 0x6000_4000;
@@ -187,7 +187,7 @@ pub fn write_word_w1(d: u32) {
 /// Set a single GPIO pin to high or low. True for high, False for low.
 /// This sets the corresponding bit of the GPIO output register to a
 /// 1 or 0 to set the value of the GPIO pin high or low.
-/// 
+///
 /// So for pin value of 3, we set bit 3 of GPIO_OUT register to the
 /// given value. All other bit values will be 0.
 ///
@@ -225,7 +225,7 @@ pub fn read_byte_mask(mask: u32) -> u8 {
 
 ///
 /// Read from GPIO 0-7 as a single byte
-/// 
+///
 pub fn read_low() -> u8 {
     unsafe {
         let gpio_in = GPIO_IN as *mut u32;

@@ -1,10 +1,9 @@
 pub use esp32c3_hal::interrupt::TrapFrame;
 
-pub mod peripherals /* crate::interrupt::peripherals */ {
+pub mod peripherals {
     // crate::peripherals::Interrupt::GPIO;
     pub use esp32c3_hal::peripherals::Interrupt;
 }
-
 
 pub use esp32c3_hal::interrupt::{CpuInterrupt, InterruptKind, Priority};
 // pub use esp32c3_hal::{
@@ -74,7 +73,7 @@ pub fn which_priority(priority: &Priority) -> Priority {
         Priority13 => Priority13,
         Priority14 => Priority14,
         Priority15 => Priority15,
-        None => None
+        None => None,
     }
 }
 
@@ -108,4 +107,3 @@ pub fn which_priority(priority: &Priority) -> Priority {
 //         Interrupt::try_from(int_num as u8).ok()
 //     })
 // }
-

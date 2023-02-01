@@ -100,7 +100,7 @@ pub fn transmit(data: &'static mut [u8]) {
     static mut RECV: [u8; 0] = [];
     unsafe {
         if let Some(qspi) = QSPI.take() {
-            let transfer = qspi.dma_transfer(data,  &mut RECV).unwrap();
+            let transfer = qspi.dma_transfer(data, &mut RECV).unwrap();
             // here we could do something else while DMA transfer is in progress
             // the buffers and spi is moved into the transfer and we can get it back via
             // `wait`
