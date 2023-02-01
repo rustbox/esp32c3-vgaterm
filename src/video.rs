@@ -1,5 +1,5 @@
-use esp32c3_hal::gpio::*;
-use esp_hal_common::{Output, PushPull, Unknown};
+
+
 
 use crate::spi;
 

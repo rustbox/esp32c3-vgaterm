@@ -123,6 +123,7 @@ impl GlyphMapping for Mapping {
 
 const GLYPH_MAPPING: Mapping = Mapping;
 
+#[allow(non_upper_case_globals)]
 pub const TAMZEN_FONT_6x12: MonoFont = MonoFont {
     image: ImageRaw::new_binary(RAW, 96),
     character_size: Size::new(6, 12),

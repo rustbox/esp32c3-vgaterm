@@ -27,8 +27,8 @@ static mut QSPI: Option<
     >,
 > = None;
 
-static mut descriptors: [u32; 8 * 3] = [0u32; 8 * 3];
-static mut rx_descriptors: [u32; 3] = [0u32; 1 * 3]; // should be zero, but dma will get mad
+static mut DESCRIPTORS: [u32; 8 * 3] = [0u32; 8 * 3];
+static mut RX_DESCRIPTORS: [u32; 3] = [0u32; 1 * 3]; // should be zero, but dma will get mad
 
 ///
 /// Configure and initialize the Quad SPI instance. Once configured
@@ -65,8 +65,8 @@ pub fn configure(
     )
     .with_dma(dma_channel.configure(
         false,
-        unsafe { &mut descriptors },
-        unsafe { &mut rx_descriptors },
+        unsafe { &mut DESCRIPTORS },
+        unsafe { &mut RX_DESCRIPTORS },
         DmaPriority::Priority0,
     ));
 

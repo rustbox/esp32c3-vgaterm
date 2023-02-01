@@ -26,7 +26,6 @@ use fugit::HertzU64;
 use riscv;
 
 use alloc::boxed::Box;
-use core::borrow::BorrowMut;
 use core::cell::RefCell;
 
 static TIMER0: Mutex<RefCell<Option<Timer<Timer0<TIMG0>>>>> = Mutex::new(RefCell::new(None));

@@ -167,6 +167,7 @@ impl Default for CharColor {
     }
 }
 
+#[allow(unused)]
 enum Decoration {
     Blink,
     Strikethrough,

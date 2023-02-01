@@ -4,12 +4,6 @@
 
 extern crate alloc;
 
-use alloc::format;
-use embedded_graphics::mono_font::MonoTextStyleBuilder;
-use embedded_graphics::pixelcolor::Rgb888;
-use embedded_graphics::prelude::{Point, RgbColor};
-use embedded_graphics::primitives::{Circle, Primitive, PrimitiveStyle};
-use embedded_graphics::Drawable;
 use esp32c3_hal::clock::{ClockControl, CpuClock};
 use esp32c3_hal::prelude::*;
 use esp32c3_hal::timer::TimerGroup;
@@ -19,9 +13,8 @@ use esp_println::{print, println};
 use esp_hal_common::Priority;
 use riscv_rt::entry;
 
-use vgaterm::color::Rgb3;
+use vgaterm::Delay;
 use vgaterm::{self, video};
-use vgaterm::{display, Delay};
 
 use core::arch::asm;
 

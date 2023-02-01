@@ -14,18 +14,18 @@
 //! software should reset all frame logic back to the beginning of the frame.
 //!
 
-use crate::channel::Receiver;
-use crate::display::Display;
+
+
 use crate::gpio::InterruptPin;
-use crate::terminal::TextField;
-use crate::{display, video};
+
+
 
 use alloc::boxed::Box;
 use esp32c3_hal::gpio::Gpio3;
 use esp32c3_hal::gpio::{Event, Unknown};
 use esp32c3_hal::macros::ram;
 use esp_println::println;
-use riscv::asm::wfi;
+
 
 pub const BLANKING_WAIT_TIME: u64 = 3960; // us
 
