@@ -1,9 +1,8 @@
-use embedded_graphics::prelude::DrawTarget;
-
 use crate::{
     color::Rgb3,
-    display::{self, TextDisplay},
+    display::{self, Inverse, TextDisplay},
 };
+use embedded_graphics::prelude::DrawTarget;
 
 pub const IROWS: isize = display::ROWS as isize;
 pub const ICOLS: isize = display::COLUMNS as isize;
@@ -62,6 +61,7 @@ impl TextField {
     }
 
     pub fn type_next(&mut self, t: char) {
+        #[allow(unused)] // used for \r and \n below
         let icursor = (self.cursor.0 as isize, self.cursor.1 as isize);
 
         self.cursor = match t {
@@ -71,9 +71,11 @@ impl TextField {
                 self.text.write(cur.0, cur.1, ' ');
                 cur
             }
+
             // these two don't work so hot yet, because of terminal <-> serial interaction reasons
             // '\r' => self.cursor.offset(0, -icursor.1),
             // '\n' => self.cursor.offset(1, -icursor.1),
+
             // taken from char::escape_default (below)
             '\\' | '\'' | '"' => {
                 self.text.write(self.cursor.0, self.cursor.1, t);
@@ -94,6 +96,12 @@ impl TextField {
     where
         D: DrawTarget<Color = Rgb3>,
     {
+        let mut cursor_char = self.text.read_char(self.cursor.0, self.cursor.1);
+        cursor_char
+            .color
+            .with_decoration(Some(Inverse), None, None, None);
         self.text.draw_dirty(target);
+        self.text
+            .draw_character(self.cursor.0, self.cursor.1, cursor_char, target);
     }
 }

@@ -1,6 +1,3 @@
-
-
-
 use crate::spi;
 
 pub const WIDTH: usize = 640;
