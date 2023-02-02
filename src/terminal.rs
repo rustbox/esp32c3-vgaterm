@@ -1,8 +1,9 @@
 use crate::{
     color::Rgb3,
-    display::{self, Character, TextDisplay},
+    display::{self, Character, TextDisplay, Inverse},
 };
 use embedded_graphics::prelude::DrawTarget;
+use esp_hal_common::systimer::SystemTimer;
 
 pub const IROWS: isize = display::ROWS as isize;
 pub const ICOLS: isize = display::COLUMNS as isize;
@@ -52,6 +53,8 @@ pub struct Cursor {
     pub pos: CursorPos,
     pub character: Character,
     pub changed: bool,
+    time_to_next_blink: u64,
+    blink_length: u64,
 }
 
 impl Cursor {
@@ -59,12 +62,24 @@ impl Cursor {
         let pos = self.pos.offset(r, c);
         if pos != self.pos {
             self.changed = true;
+            self.set_inverted();
         }
         self.pos = pos;
         pos
     }
 
-    fn invert(&mut self) {
+    fn set_inverted(&mut self) {
+        self.character.color.with_decoration(
+            Some(Inverse), 
+            self.character.color.underline(),
+            self.character.color.strikethrough(),
+            self.character.color.blink()
+        );
+        // Reset blink timer while we're typing
+        self.time_to_next_blink = SystemTimer::now().wrapping_add(self.blink_length);
+    }
+
+    fn swap_invert(&mut self) {
         self.character.color.invert_fore_back();
         self.changed = true;
     }
@@ -78,6 +93,12 @@ impl Cursor {
     where
         D: DrawTarget<Color = Rgb3>,
     {
+        let now = SystemTimer::now();
+        if now >= self.time_to_next_blink {
+            self.time_to_next_blink = now.wrapping_add(self.blink_length);
+            self.swap_invert();
+        }
+
         if self.changed {
             // let (t, s) = self.character.text_and_style();
             // println!("Drawing cursor: fore: {:?}, back: {:?}", s.text_color, s.background_color);
@@ -94,8 +115,10 @@ impl Default for Cursor {
             pos: Default::default(),
             character: Character::default(),
             changed: true,
+            time_to_next_blink: SystemTimer::now().wrapping_add(8_000_000),
+            blink_length: 8_000_000,
         };
-        c.invert();
+        c.swap_invert();
         c
     }
 }
