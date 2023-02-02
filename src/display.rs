@@ -36,7 +36,6 @@ impl Display {
     }
 
     pub fn flush(&mut self) {
-
         while let Some((pos, px)) = self.local_buffer.pop_back() {
             riscv::interrupt::free(|| unsafe {
                 video::BUFFER[pos] = px;
@@ -108,7 +107,10 @@ impl Character {
             chrs[1] = ch[1];
         }
         self.character = chrs;
-        Character { character: chrs, color: self.color }
+        Character {
+            character: chrs,
+            color: self.color,
+        }
     }
 
     pub fn with_fore(self, color: Rgb3) -> Character {
@@ -269,7 +271,12 @@ impl CharColor {
         if self.inverse().is_some() {
             self.with_decoration(None, self.underline(), self.strikethrough(), self.blink());
         } else {
-            self.with_decoration(Some(Inverse), self.underline(), self.strikethrough(), self.blink());
+            self.with_decoration(
+                Some(Inverse),
+                self.underline(),
+                self.strikethrough(),
+                self.blink(),
+            );
         }
     }
 }
