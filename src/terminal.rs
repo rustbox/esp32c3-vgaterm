@@ -1,6 +1,6 @@
 use crate::{
     color::Rgb3,
-    display::{self, Inverse, TextDisplay},
+    display::{self, Character, TextDisplay},
 };
 use embedded_graphics::prelude::DrawTarget;
 
@@ -11,9 +11,9 @@ pub type Row = usize;
 pub type Col = usize;
 
 #[derive(Debug, Default, PartialEq, Eq, Clone, Copy)]
-pub struct Cursor(pub Row, pub Col);
+pub struct CursorPos(pub Row, pub Col);
 
-impl Cursor {
+impl CursorPos {
     /// a cursor offset by r and c, which may be negative
     ///
     /// # Examples
@@ -37,13 +37,66 @@ impl Cursor {
     ///
     /// (see also: https://play.rust-lang.org/?version=stable&mode=debug&edition=2021&gist=3aacdae98b11d36599604d6300f1c71f
     ///  whoever said there's no testing in no_std?)
-    pub fn offset(&self, r: isize, c: isize) -> Cursor {
+    pub fn offset(&self, r: isize, c: isize) -> CursorPos {
         let cols = self.1 as isize + c;
         let (p, cols) = (cols.div_euclid(ICOLS), cols.rem_euclid(ICOLS));
         let rows = (self.0 as isize + r + p) % IROWS;
         let rows = (rows + IROWS) % IROWS; // (-IROWS, IROWS) -> [0, IROWS)
 
-        Cursor(rows as usize, cols as usize)
+        CursorPos(rows as usize, cols as usize)
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct Cursor {
+    pub pos: CursorPos,
+    pub character: Character,
+    pub changed: bool,
+}
+
+impl Cursor {
+    fn offset(&mut self, r: isize, c: isize) -> CursorPos {
+        let pos = self.pos.offset(r, c);
+        if pos != self.pos {
+            self.changed = true;
+        }
+        self.pos = pos;
+        pos
+    }
+
+    fn invert(&mut self) {
+        self.character.color.invert_fore_back();
+        self.changed = true;
+    }
+
+    fn set_char(&mut self, c: char) {
+        self.character.with_char(c);
+        self.changed = true;
+    }
+
+    fn draw<D>(&mut self, target: &mut D, text: &TextDisplay)
+    where
+        D: DrawTarget<Color = Rgb3>,
+    {
+        if self.changed {
+            // let (t, s) = self.character.text_and_style();
+            // println!("Drawing cursor: fore: {:?}, back: {:?}", s.text_color, s.background_color);
+            // println!("{:?}", t);
+            text.draw_character(self.pos.0, self.pos.1, self.character, target);
+            self.changed = false;
+        }
+    }
+}
+
+impl Default for Cursor {
+    fn default() -> Self {
+        let mut c = Cursor {
+            pos: Default::default(),
+            character: Character::default(),
+            changed: true,
+        };
+        c.invert();
+        c
     }
 }
 
@@ -60,16 +113,27 @@ impl TextField {
         }
     }
 
+    /// Moves the cursor by the given offset, and sets the cursor character to character
+    /// currently being selected by the new cursor position
+    pub fn move_cursor(&mut self, r: isize, c: isize) {
+        // self.text.write(self.cursor.pos.0, self.cursor.pos.1, self.cursor.character.char());
+        let moved = self.cursor.offset(r, c);
+        let c = self.text.read_char(moved.0, moved.1).char();
+        self.cursor.set_char(c);
+        // println!("Cursor: {:?}", self.cursor);
+    }
+
     pub fn type_next(&mut self, t: char) {
         #[allow(unused)] // used for \r and \n below
-        let icursor = (self.cursor.0 as isize, self.cursor.1 as isize);
+        let icursor = (self.cursor.pos.0 as isize, self.cursor.pos.1 as isize);
 
-        self.cursor = match t {
+        match t {
             '\u{08}' | '\u{7f}' => {
                 // backspace
-                let cur = self.cursor.offset(0, -1);
-                self.text.write(cur.0, cur.1, ' ');
-                cur
+                self.text.write(self.cursor.pos.0, self.cursor.pos.1, ' ');
+                self.move_cursor(0, -1);
+                // self.cursor.set_char(' ');
+                self.text.write(self.cursor.pos.0, self.cursor.pos.1, ' ');
             }
 
             // these two don't work so hot yet, because of terminal <-> serial interaction reasons
@@ -78,16 +142,14 @@ impl TextField {
 
             // taken from char::escape_default (below)
             '\\' | '\'' | '"' => {
-                self.text.write(self.cursor.0, self.cursor.1, t);
-                self.cursor.offset(0, 1)
+                self.text.write(self.cursor.pos.0, self.cursor.pos.1, t);
+                self.move_cursor(0, 1);
             }
             _ => {
                 for c in t.escape_default() {
-                    self.text.write(self.cursor.0, self.cursor.1, c);
-                    self.cursor = self.cursor.offset(0, 1);
+                    self.text.write(self.cursor.pos.0, self.cursor.pos.1, c);
+                    self.move_cursor(0, 1);
                 }
-
-                self.cursor
             }
         };
     }
@@ -96,12 +158,7 @@ impl TextField {
     where
         D: DrawTarget<Color = Rgb3>,
     {
-        let mut cursor_char = self.text.read_char(self.cursor.0, self.cursor.1);
-        cursor_char
-            .color
-            .with_decoration(Some(Inverse), None, None, None);
         self.text.draw_dirty(target);
-        self.text
-            .draw_character(self.cursor.0, self.cursor.1, cursor_char, target);
+        self.cursor.draw(target, &self.text);
     }
 }

@@ -3,7 +3,6 @@ use core::convert::Infallible;
 use alloc::{
     collections::VecDeque,
     string::{String, ToString},
-    vec::Vec,
 };
 use embedded_graphics::{
     mono_font::{MonoTextStyle, MonoTextStyleBuilder},
@@ -12,7 +11,6 @@ use embedded_graphics::{
     text::Text,
     Pixel,
 };
-use esp_println::println;
 
 use crate::{
     color::{self, Rgb3},
@@ -20,34 +18,26 @@ use crate::{
 };
 
 pub struct Display {
-    local_buffer: Vec<(usize, u8)>,
+    local_buffer: VecDeque<(usize, u8)>,
 }
 
 impl Display {
     pub fn new() -> Display {
         Display {
-            local_buffer: Vec::new(),
+            local_buffer: VecDeque::new(),
         }
     }
 
     pub fn push(&mut self, pos: usize, color: u8) {
         if self.local_buffer.len() >= 512 {
-            self.internal_flush()
+            self.flush();
         }
-        self.local_buffer.push((pos, color))
-    }
-
-    fn internal_flush(&mut self) {
-        riscv::interrupt::free(|| unsafe {
-            // TODO can we do like bulk insert this local buffer as a slice into the BUFFER?
-            while let Some((pos, px)) = self.local_buffer.pop() {
-                video::BUFFER[pos] = px;
-            }
-        });
+        self.local_buffer.push_front((pos, color))
     }
 
     pub fn flush(&mut self) {
-        while let Some((pos, px)) = self.local_buffer.pop() {
+
+        while let Some((pos, px)) = self.local_buffer.pop_back() {
             riscv::interrupt::free(|| unsafe {
                 video::BUFFER[pos] = px;
             });
@@ -84,7 +74,6 @@ impl DrawTarget for Display {
                 self.push(i, raw.into_inner());
             }
         }
-
         Ok(())
     }
 }
@@ -110,6 +99,18 @@ impl Character {
         }
     }
 
+    pub fn with_char(&mut self, ch: char) -> Character {
+        let mut chrs: [u8; 2] = [0; 2];
+        let s = ch.to_string();
+        let ch = s.as_str().as_bytes();
+        chrs[0] = ch[0];
+        if ch.len() > 1 {
+            chrs[1] = ch[1];
+        }
+        self.character = chrs;
+        Character { character: chrs, color: self.color }
+    }
+
     pub fn with_fore(self, color: Rgb3) -> Character {
         Character {
             character: self.character,
@@ -124,12 +125,17 @@ impl Character {
         }
     }
 
+    pub fn char(&self) -> char {
+        let c: u32 = (self.character[0] as u32) + (self.character[1] as u32) << 8;
+        char::from_u32(c).unwrap_or(' ')
+    }
+
     pub fn text_and_style(&self) -> (String, MonoTextStyle<Rgb3>) {
         let text = core::str::from_utf8(&self.character)
             .unwrap_or(" ")
             .to_string();
 
-        let mut style_builder = if self.color.inverse() {
+        let mut style_builder = if self.color.inverse().is_some() {
             MonoTextStyleBuilder::new()
                 .text_color(self.color.background())
                 .background_color(self.color.foreground())
@@ -141,11 +147,11 @@ impl Character {
                 .font(&crate::text::TAMZEN_FONT_6x12)
         };
 
-        if self.color.strikethrough() {
+        if self.color.strikethrough().is_some() {
             style_builder = style_builder.strikethrough();
         }
 
-        if self.color.underline() {
+        if self.color.underline().is_some() {
             style_builder = style_builder.underline();
         }
 
@@ -199,20 +205,36 @@ impl CharColor {
         Rgb3::from_rgb2(r, g, b)
     }
 
-    pub fn inverse(&self) -> bool {
-        self.0 & Inverse.bit() != 0
+    pub fn inverse(&self) -> Option<Inverse> {
+        if self.0 & Inverse.bit() != 0 {
+            Some(Inverse)
+        } else {
+            None
+        }
     }
 
-    pub fn underline(&self) -> bool {
-        self.0 & Underline.bit() != 0
+    pub fn underline(&self) -> Option<Underline> {
+        if self.0 & Underline.bit() != 0 {
+            Some(Underline)
+        } else {
+            None
+        }
     }
 
-    pub fn strikethrough(&self) -> bool {
-        self.0 & Strikethrough.bit() != 0
+    pub fn strikethrough(&self) -> Option<Strikethrough> {
+        if self.0 & Strikethrough.bit() != 0 {
+            Some(Strikethrough)
+        } else {
+            None
+        }
     }
 
-    pub fn blink(&self) -> bool {
-        self.0 & Blink.bit() != 0
+    pub fn blink(&self) -> Option<Blink> {
+        if self.0 & Blink.bit() != 0 {
+            Some(Blink)
+        } else {
+            None
+        }
     }
 
     pub fn with_foreground(self, color: Rgb3) -> CharColor {
@@ -240,6 +262,15 @@ impl CharColor {
         let decs = inverse.bit() + underline.bit() + strikethrough.bit() + blink.bit();
         self.0 = (self.0 & 0b00001111_11111111) | decs;
         *self
+    }
+
+    // If inverted, go back to not inverted, and if not inverted, do the invert
+    pub fn invert_fore_back(&mut self) {
+        if self.inverse().is_some() {
+            self.with_decoration(None, self.underline(), self.strikethrough(), self.blink());
+        } else {
+            self.with_decoration(Some(Inverse), self.underline(), self.strikethrough(), self.blink());
+        }
     }
 }
 
@@ -333,7 +364,6 @@ impl TextDisplay {
             if col == COLUMNS {
                 col = 0;
                 row += 1;
-                println!("resetting line, {}, {}", row, col);
                 if row == ROWS {
                     row = 0
                 }
