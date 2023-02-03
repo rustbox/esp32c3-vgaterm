@@ -100,12 +100,10 @@ impl Character {
 
     pub fn with_char(&mut self, ch: char) -> Character {
         let mut chrs: [u8; 2] = [0; 2];
-        let s = ch.to_string();
-        let ch = s.as_str().as_bytes();
+        let ch = (ch as u32).to_ne_bytes();
         chrs[0] = ch[0];
-        if ch.len() > 1 {
-            chrs[1] = ch[1];
-        }
+        chrs[1] = ch[1];
+
         self.character = chrs;
         Character {
             character: chrs,
