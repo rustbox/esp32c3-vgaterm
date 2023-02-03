@@ -88,7 +88,6 @@ fn main() -> ! {
 
     vgaterm::configure_timer0(peripherals.TIMG0, &clocks);
     let mut char_reciever = vgaterm::uart::configure(peripherals.UART0);
-    vgaterm::uart::start_uart_poll_timer(32000);
     vgaterm::enable_timer0_interrupt(Priority::Priority1);
     vgaterm::gpio::interrupt_enable(Priority::Priority2);
     vgaterm::uart::interrupt_enable(Priority::Priority3);
@@ -149,18 +148,6 @@ fn main() -> ! {
     // let mut cursor = (0, 0);
     // terminal
     loop {
-        // while let Some(ch) = char_reciever.recv() {
-        //     text_display.write(cursor.0, cursor.1, ch);
-        //     text_display.draw_dirty(&mut display);
-        //     cursor.1 += 1;
-        //     if cursor.1 == display::COLUMNS {
-        //         cursor.1 = 0;
-        //         cursor.0 += 1;
-        //         if cursor.0 == display::ROWS {
-        //             cursor.0 = 0;
-        //         }
-        //     }
-        // }
         // Get the pressed chars
         while let Some(t) = char_reciever.recv() {
             terminal.type_next(t);
@@ -168,11 +155,11 @@ fn main() -> ! {
         // Draw the characters on the frame
         terminal.draw(&mut display);
         // Flush the Display to the BUFFER
-        display.flush()
+        display.flush();
 
-        // unsafe {
-        //     riscv::asm::wfi();
-        // }
+        unsafe {
+            riscv::asm::wfi();
+        }
     }
 }
 

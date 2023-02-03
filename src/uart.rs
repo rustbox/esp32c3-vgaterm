@@ -68,7 +68,7 @@ pub fn interrupt_enable(priority: interrupt::Priority) {
 
     riscv::interrupt::free(|| unsafe {
         if let Some(sender) = &mut SENDER {
-            sender.serial.set_rx_fifo_full_threshold(8);
+            sender.serial.set_rx_fifo_full_threshold(1);
             sender.serial.listen_rx_fifo_full();
         }
     })
