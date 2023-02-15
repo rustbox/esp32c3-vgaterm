@@ -14,12 +14,13 @@
 //! software should reset all frame logic back to the beginning of the frame.
 //!
 
-use crate::gpio::InterruptPin;
 
-use alloc::boxed::Box;
+
+
 use esp32c3_hal::gpio::Gpio3;
 use esp32c3_hal::gpio::{Event, Unknown};
 use esp32c3_hal::macros::ram;
+use esp_hal_common::{Floating, Input};
 use esp_println::println;
 
 pub const BLANKING_WAIT_TIME: u64 = 3960; // us
@@ -51,6 +52,6 @@ pub fn start(start: Gpio3<Unknown>) {
 ///
 // #[inline]
 #[ram]
-pub fn frame(_: &mut Box<dyn InterruptPin>) {
+pub fn frame(_: &mut Gpio3<Input<Floating>>) {
     crate::video::transmit_frame();
 }

@@ -6,14 +6,15 @@ extern crate alloc;
 
 use riscv_rt::entry;
 
-use esp32c3_hal::systimer::SystemTimer;
-use esp32c3_hal::interrupt::Priority;
-use esp32c3_hal::gpio::Event;
 use esp32c3_hal::clock::CpuClock;
+
+use esp32c3_hal::interrupt::Priority;
+use esp32c3_hal::prelude::*;
+
 use esp32c3_hal::timer::TimerGroup;
-use esp32c3_hal::{peripherals::Peripherals, clock::ClockControl};
-use esp32c3_hal::{prelude::*, Rtc, IO};
-use esp_println::{println, print};
+use esp32c3_hal::{clock::ClockControl, peripherals::Peripherals};
+use esp32c3_hal::{Rtc, IO};
+use esp_println::{print, println};
 use vgaterm::keyboard;
 
 core::arch::global_asm!(".global _heap_size; _heap_size = 0x8000");
@@ -65,7 +66,7 @@ extern "C" fn stop() -> ! {
 #[entry]
 fn main() -> ! {
     let peripherals = Peripherals::take();
-    let mut system = peripherals.SYSTEM.split();
+    let system = peripherals.SYSTEM.split();
     let clocks = ClockControl::configure(system.clock_control, CpuClock::Clock160MHz).freeze();
 
     // Disable the watchdog timers. For the ESP32-C3, this includes the Super WDT,
@@ -93,13 +94,11 @@ fn main() -> ! {
 
     println!("Hello World");
 
-    let clk = io.pins.gpio6.into_pull_up_input();
-    let data = io.pins.gpio8.into_pull_up_input();
-    let data_pin = data.number();
-
     vgaterm::gpio::interrupt_enable(Priority::Priority1);
 
-    
+    keyboard::configure(io.pins.gpio8.into(), io.pins.gpio6.into());
+
+    keyboard::send_reset();
 
     loop {
         unsafe {

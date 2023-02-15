@@ -1,10 +1,13 @@
+use core::{any::Any, marker::PhantomData};
+
 use alloc::boxed::Box;
 use esp32c3_hal::peripherals;
 use esp32c3_hal::prelude::*;
 use esp32c3_hal::{
-    gpio::{Event, InputPin},
+    gpio::{Event, Pin},
     interrupt,
 };
+
 use riscv;
 
 pub const GPIO_MMIO_ADDRESS: usize = 0x6000_4000;
@@ -12,140 +15,185 @@ pub const GPIO_OUT: usize = GPIO_MMIO_ADDRESS + 0x0004;
 pub const GPIO_IN: usize = GPIO_MMIO_ADDRESS + 0x003C;
 pub const GPIO_OUT_W1TS: usize = GPIO_MMIO_ADDRESS + 0x0008;
 
-const EMPTY_PIN: Option<Box<dyn InterruptPin>> = None;
-const EMPTY_CB: Option<Box<dyn FnMut(&mut Box<dyn InterruptPin>) -> ()>> = None;
-static mut PINS: [Option<Box<dyn InterruptPin>>; 32] = [EMPTY_PIN; 32];
-static mut CALLBACKS: [Option<Box<Callback>>; 32] = [EMPTY_CB; 32];
+const INIT_INTERRUPT: Option<Box<dyn Irq>> = None;
+static mut INTERRUPTS: [Option<Box<dyn Irq>>; 32] = [INIT_INTERRUPT; 32];
+
+pub struct PinInterrupt<T>
+where
+    T: Pin + 'static,
+{
+    pub pin: T,
+    pub event: Event,
+    pub callback: Box<Callback<T>>,
+}
+
+// NB: all Irqs must be PinInterrupts
+trait Irq: Any {
+    fn apply(&mut self);
+
+    fn as_any(self: Box<Self>) -> Box<dyn Any> {
+        Box::new(self)
+    }
+
+    fn as_any_mut(self: &mut Self) -> &mut dyn Any;
+}
+
+impl<T> Irq for PinInterrupt<T>
+where
+    T: Pin + 'static,
+{
+    fn apply(&mut self) {
+        (self.callback)(&mut self.pin);
+        self.pin.clear_interrupt();
+    }
+
+    fn as_any_mut(self: &mut Self) -> &mut dyn Any {
+        self
+    }
+}
 
 pub const LOW: bool = false;
 pub const HIGH: bool = true;
 
-type Callback = dyn FnMut(&mut Box<dyn InterruptPin>) -> ();
+mod example {
+    use esp32c3_hal::prelude::*;
+    use esp_hal_common::{
+        peripherals::Peripherals, BankGpioRegisterAccess, Event, GpioPin, GpioSignal, Input,
+        InteruptStatusRegisterAccess, IsOutputPin, OpenDrain, Output, PinType, PullUp, IO,
+    };
 
-fn callback_pin(source: usize) {
-    unsafe {
-        if let Some(ref mut pin) = PINS[source] {
-            if let Some(callback) = &mut CALLBACKS[source] {
-                callback(pin);
-                pin.clear_interrupt();
-            }
+    #[allow(dead_code)]
+    fn example() {
+        let peripherals = Peripherals::take();
+        let io = IO::new(peripherals.GPIO, peripherals.IO_MUX);
+
+        let pin = super::pin_interrupt(
+            io.pins.gpio6.into_pull_up_input(),
+            Event::FallingEdge,
+            |_| {},
+        );
+
+        let (clk, event, callback) = super::interrupt_disable(pin);
+
+        let mut clk_out = clk.into_open_drain_output();
+        let _ = clk_out.set_high();
+
+        super::pin_interrupt(W(clk_out).into(), event, callback);
+    }
+
+    // Wrapper type to allow us to implement From<GpioPin<..>>
+    struct W<T>(T);
+
+    impl<M, R, I, P, S, const N: u8> From<W<GpioPin<M, R, I, P, S, N>>>
+        for GpioPin<Output<OpenDrain>, R, I, P, S, N>
+    where
+        R: BankGpioRegisterAccess,
+        I: InteruptStatusRegisterAccess,
+        P: PinType + IsOutputPin,
+        S: GpioSignal,
+    {
+        fn from(value: W<GpioPin<M, R, I, P, S, N>>) -> Self {
+            value.0.into_open_drain_output()
         }
     }
-}
 
-pub trait InterruptPin {
-    type T;
-
-    fn number(&self) -> u8;
-
-    fn clear_interrupt(&mut self);
-
-    fn value(&self) -> bool;
-
-    fn listen(&mut self, event: Event);
-
-    fn unlisten(&mut self);
-
-    fn inner(self) -> Self::T;
-}
-
-impl<P: InputPin> InterruptPin for P {
-    type T = P;
-
-    fn number(&self) -> u8 {
-        self.number()
+    impl<M, R, I, P, S, const N: u8> From<W<GpioPin<M, R, I, P, S, N>>>
+        for GpioPin<Input<PullUp>, R, I, P, S, N>
+    where
+        R: BankGpioRegisterAccess,
+        I: InteruptStatusRegisterAccess,
+        P: PinType + IsOutputPin,
+        S: GpioSignal,
+    {
+        fn from(value: W<GpioPin<M, R, I, P, S, N>>) -> Self {
+            value.0.into_pull_up_input()
+        }
     }
 
-    fn clear_interrupt(&mut self) {
-        self.clear_interrupt()
-    }
+    #[allow(dead_code)]
+    fn steal() {
+        use esp_hal_common::GpioExt;
+        let peripherals = unsafe { Peripherals::steal() };
 
-    fn value(&self) -> bool {
-        self.is_input_high()
-    }
-
-    fn listen(&mut self, event: Event) {
-        self.listen(event)
-    }
-
-    fn unlisten(&mut self) {
-        self.unlisten();
+        let _z = peripherals.GPIO.split();
     }
 }
 
-pub struct PinRef(usize);
+pub struct PinRef<T>(usize, PhantomData<T>);
 
 pub fn interrupt_enable(priority: interrupt::Priority) {
     interrupt::enable(peripherals::Interrupt::GPIO, priority).unwrap();
 }
 
-pub fn pin_interrupt(
-    mut input: impl InterruptPin + 'static,
+pub fn pin_interrupt<T: Pin + 'static>(
+    mut input: T,
     event: Event,
-    callback: impl FnMut(&mut Box<dyn InterruptPin>) -> () + 'static,
-) -> PinRef {
+    callback: impl FnMut(&mut T) -> () + 'static,
+) -> PinRef<T> {
     let n = input.number() as usize;
 
-    riscv::interrupt::free(|| unsafe {
+    riscv::interrupt::free(|| {
         input.listen(event);
 
-        PINS[n] = Some(Box::new(input));
-        CALLBACKS[n] = Some(Box::new(callback));
-
-        // if let Some(ref p) = PINS[n] {
-        //     sprintln!("{:?}", p.number());
-        // }
+        unsafe { &mut INTERRUPTS[n] }.replace(Box::new(PinInterrupt {
+            pin: input,
+            event,
+            callback: Box::new(callback),
+        }))
     });
-    PinRef(n)
+    PinRef(n, PhantomData)
 }
+
+type Callback<T> = dyn FnMut(&mut T) -> ();
 
 /// Stops the pin from listening for interrupt signals
-/// and removes the callback
-pub fn interrupt_disable(pin: PinRef) -> PinRef {
-    riscv::interrupt::free(|| unsafe {
+/// removes and returns the callback
+pub fn interrupt_disable<T>(pin: PinRef<T>) -> (T, Event, Box<Callback<T>>)
+where
+    T: Pin + 'static,
+{
+    riscv::interrupt::free(|| {
         let n = pin.0;
-        // SAFETY: unwrap the option is fine because we will only
+        // SAFETY: we're in an interrupt::free block with only one hart,
+        // so the static dereference is fine
+        // also: unwrap the option is fine because we will only
         // grab the pin at array index given in the pin parameter
         // so we know there is Some pin
-        PINS[n].take().unwrap().unlisten();
-        CALLBACKS[n].take();
-    });
-    pin
+        let mut isr = unsafe { &mut INTERRUPTS[n] }
+            .take()
+            .unwrap()
+            .as_any()
+            .downcast::<PinInterrupt<T>>()
+            .unwrap();
+
+        isr.pin.unlisten();
+
+        (isr.pin, isr.event, isr.callback)
+    })
 }
 
-pub fn pin_reenable(
-    pin: PinRef,
-    event: Event,
-    callback: impl FnMut(&mut Box<dyn InterruptPin>) -> () + 'static,
-) -> PinRef {
-    riscv::interrupt::free(|| unsafe {
+pub fn pin_pause<T: Pin + 'static>(pin: &mut PinRef<T>) {
+    let n = pin.0;
+    riscv::interrupt::free(|| {
+        if let Some(irq) = unsafe { &mut INTERRUPTS[n] } {
+            irq.as_any_mut()
+                .downcast_mut::<PinInterrupt<T>>()
+                .unwrap()
+                .pin
+                .unlisten();
+        }
+    });
+}
+
+pub fn pin_resume<T: Pin + 'static>(pin: &mut PinRef<T>) {
+    riscv::interrupt::free(|| {
         let n = pin.0;
-        if let Some(ref mut p) = PINS[n] {
-            p.listen(event);
-        }
-        CALLBACKS[n].replace(Box::new(callback));
-    });
-    pin
-}
+        if let Some(irq) = unsafe { &mut INTERRUPTS[n] } {
+            let isr = irq.as_any_mut().downcast_mut::<PinInterrupt<T>>().unwrap();
 
-pub fn pin_pause(pin: PinRef) -> PinRef {
-    let n = pin.0;
-    riscv::interrupt::free(|| unsafe {
-        if let Some(ref mut p) = PINS[n] {
-            p.unlisten();
+            isr.pin.listen(isr.event);
         }
     });
-    pin
-}
-
-pub fn pin_resume(pin: PinRef, event: Event) -> PinRef {
-    let n = pin.0;
-    riscv::interrupt::free(|| unsafe {
-        if let Some(ref mut p) = PINS[n] {
-            p.listen(event);
-        }
-    });
-    pin
 }
 
 fn check_gpio_source() -> u32 {
@@ -238,7 +286,6 @@ pub fn read_pin(pin: u8) -> bool {
         let data = gpio_in.read_volatile();
         data & (1 << pin as u32) != 0
     }
-
 }
 
 ///
@@ -257,6 +304,8 @@ fn GPIO() {
     // sprint!("-");
     riscv::interrupt::free(|| {
         let source = check_gpio_source() as usize;
-        callback_pin(source);
+        if let Some(ref mut irq) = unsafe { &mut INTERRUPTS[source] } {
+            irq.apply();
+        };
     });
 }
