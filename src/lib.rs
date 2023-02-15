@@ -1,5 +1,6 @@
 #![no_std]
 #![feature(array_chunks)]
+#![feature(const_trait_impl)]
 
 extern crate alloc;
 
@@ -16,6 +17,8 @@ pub mod text;
 mod timer;
 pub mod uart;
 pub mod video;
+pub mod ansi;
+pub mod keyboard;
 
 /// This is required for the #[interrupt] macro on interrupt handler functions to work properly.
 /// Such as gpio::GPIO() interrupt handler. This is due to how the esp32c3_hal crate implmented

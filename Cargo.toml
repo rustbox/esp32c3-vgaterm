@@ -18,7 +18,13 @@ path  = "src/lib.rs"
 name  = "vgaterm"
 test  = false
 bench = false
-path  = "src/main.rs"
+path  = "src/bin/vgaterm.rs"
+
+[[bin]]
+name = "keypad"
+test = false
+bench = false
+path = "src/bin/keypad.rs"
 
 [profile.release]
 opt-level = 2
@@ -45,6 +51,8 @@ esp32c3-hal = { features = [
 ], git = "https://github.com/rustbox/esp-hal", branch = "vgaterm" }
 fugit = "0.3.6"
 nb = "1.0"
+nom = { version = "7.1.3", default-features = false, features = ["alloc"]}
+pc-keyboard = "0.6.1"
 riscv = "0.10.0"
 riscv-rt = "0.11.0"
 unroll = "0.1.5"

@@ -129,7 +129,7 @@ fn main() -> ! {
         40_000_000,
     );
 
-    let image = include_bytes!("../image.bin");
+    let image = include_bytes!("../../image.bin");
     video::load_from_slice(image);
 
     let mut display = vgaterm::display::Display::new();

@@ -17,6 +17,9 @@ const EMPTY_CB: Option<Box<dyn FnMut(&mut Box<dyn InterruptPin>) -> ()>> = None;
 static mut PINS: [Option<Box<dyn InterruptPin>>; 32] = [EMPTY_PIN; 32];
 static mut CALLBACKS: [Option<Box<Callback>>; 32] = [EMPTY_CB; 32];
 
+pub const LOW: bool = false;
+pub const HIGH: bool = true;
+
 type Callback = dyn FnMut(&mut Box<dyn InterruptPin>) -> ();
 
 fn callback_pin(source: usize) {
@@ -31,6 +34,8 @@ fn callback_pin(source: usize) {
 }
 
 pub trait InterruptPin {
+    type T;
+
     fn number(&self) -> u8;
 
     fn clear_interrupt(&mut self);
@@ -40,9 +45,13 @@ pub trait InterruptPin {
     fn listen(&mut self, event: Event);
 
     fn unlisten(&mut self);
+
+    fn inner(self) -> Self::T;
 }
 
 impl<P: InputPin> InterruptPin for P {
+    type T = P;
+
     fn number(&self) -> u8 {
         self.number()
     }
@@ -221,6 +230,15 @@ pub fn read_byte_mask(mask: u32) -> u8 {
         }
         value as u8
     }
+}
+
+pub fn read_pin(pin: u8) -> bool {
+    let gpio_in = GPIO_IN as *mut u32;
+    unsafe {
+        let data = gpio_in.read_volatile();
+        data & (1 << pin as u32) != 0
+    }
+
 }
 
 ///
