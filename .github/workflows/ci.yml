@@ -24,7 +24,8 @@ jobs:
       - uses: Swatinem/rust-cache@v1
       - uses: actions-rs/cargo@v1
         with:
-          command: check --all-targets
+          command: check
+          args: --all-targets
 
   # --------------------------------------------------------------------------
   # Fmt
@@ -37,7 +38,8 @@ jobs:
       - uses: Swatinem/rust-cache@v1
       - uses: actions-rs/cargo@v1
         with:
-          command: fmt --check
+          command: fmt
+          args: --check
 
   # --------------------------------------------------------------------------
   # Clippy
