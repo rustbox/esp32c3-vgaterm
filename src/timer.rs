@@ -23,13 +23,13 @@ use esp32c3_hal::{interrupt, interrupt::Priority};
 use esp32c3_hal::{prelude::*, timer::Timer};
 use fugit::HertzU64;
 
-use riscv;
+
 
 use alloc::boxed::Box;
 use core::cell::RefCell;
 
 static TIMER0: Mutex<RefCell<Option<Timer<Timer0<TIMG0>>>>> = Mutex::new(RefCell::new(None));
-static mut TIMER0_CALLBACK: Option<Box<dyn FnMut() -> ()>> = None;
+static mut TIMER0_CALLBACK: Option<Box<dyn FnMut()>> = None;
 static mut DELAY: Option<Delay> = None;
 
 /// Uses the `SYSTIMER` peripheral for counting clock cycles, as
@@ -77,7 +77,7 @@ impl Delay {
 
     pub fn deadline(&self, us: u64) -> u64 {
         let clocks = (us * self.freq.raw()) / HertzU64::MHz(1).raw();
-        return SystemTimer::now().wrapping_add(clocks);
+        SystemTimer::now().wrapping_add(clocks)
     }
 
     pub fn wait_until(&self, deadline: u64) {
@@ -140,7 +140,7 @@ pub fn enable_timer0_interrupt(priority: Priority) {
 }
 
 /// Start timer zero set for t microseconds
-pub fn start_timer0_callback(t: u64, callback: impl FnMut() -> () + 'static) {
+pub fn start_timer0_callback(t: u64, callback: impl FnMut() + 'static) {
     critical_section::with(|cs| {
         match TIMER0.borrow(cs).borrow_mut().as_mut() {
             Some(timer) => timer.start(t.micros()),
@@ -153,7 +153,7 @@ pub fn start_timer0_callback(t: u64, callback: impl FnMut() -> () + 'static) {
     })
 }
 
-pub fn start_repeat_timer0_callback(t: u64, mut callback: impl FnMut() -> () + 'static) {
+pub fn start_repeat_timer0_callback(t: u64, mut callback: impl FnMut() + 'static) {
     critical_section::with(|cs| {
         match TIMER0.borrow(cs).borrow_mut().as_mut() {
             Some(timer) => timer.start(t.micros()),

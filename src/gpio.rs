@@ -13,11 +13,11 @@ pub const GPIO_IN: usize = GPIO_MMIO_ADDRESS + 0x003C;
 pub const GPIO_OUT_W1TS: usize = GPIO_MMIO_ADDRESS + 0x0008;
 
 const EMPTY_PIN: Option<Box<dyn InterruptPin>> = None;
-const EMPTY_CB: Option<Box<dyn FnMut(&mut Box<dyn InterruptPin>) -> ()>> = None;
+const EMPTY_CB: Option<Box<dyn FnMut(&mut Box<dyn InterruptPin>)>> = None;
 static mut PINS: [Option<Box<dyn InterruptPin>>; 32] = [EMPTY_PIN; 32];
 static mut CALLBACKS: [Option<Box<Callback>>; 32] = [EMPTY_CB; 32];
 
-type Callback = dyn FnMut(&mut Box<dyn InterruptPin>) -> ();
+type Callback = dyn FnMut(&mut Box<dyn InterruptPin>);
 
 fn callback_pin(source: usize) {
     unsafe {
@@ -73,7 +73,7 @@ pub fn interrupt_enable(priority: interrupt::Priority) {
 pub fn pin_interrupt(
     mut input: impl InterruptPin + 'static,
     event: Event,
-    callback: impl FnMut(&mut Box<dyn InterruptPin>) -> () + 'static,
+    callback: impl FnMut(&mut Box<dyn InterruptPin>) + 'static,
 ) -> PinRef {
     let n = input.number() as usize;
 
@@ -107,7 +107,7 @@ pub fn interrupt_disable(pin: PinRef) -> PinRef {
 pub fn pin_reenable(
     pin: PinRef,
     event: Event,
-    callback: impl FnMut(&mut Box<dyn InterruptPin>) -> () + 'static,
+    callback: impl FnMut(&mut Box<dyn InterruptPin>) + 'static,
 ) -> PinRef {
     riscv::interrupt::free(|| unsafe {
         let n = pin.0;
@@ -215,7 +215,7 @@ pub fn read_byte_mask(mask: u32) -> u8 {
             // Shift the value right however many spaces from the mask to
             // the nth bit in the output value.
             let nth_value_bit = ((1 << b) & masked) >> (b - n_bit);
-            value = value | nth_value_bit;
+            value |= nth_value_bit;
 
             n_bit += 1;
         }
