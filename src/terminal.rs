@@ -1,9 +1,9 @@
 use crate::{
     color::Rgb3,
-    display::{self, Character, TextDisplay, Inverse},
+    display::{self, Character, Inverse, TextDisplay},
 };
 use embedded_graphics::prelude::DrawTarget;
-use esp_hal_common::systimer::SystemTimer;
+use esp32c3_hal::systimer::SystemTimer;
 
 pub const IROWS: isize = display::ROWS as isize;
 pub const ICOLS: isize = display::COLUMNS as isize;
@@ -70,10 +70,10 @@ impl Cursor {
 
     fn set_inverted(&mut self) {
         self.character.color.with_decoration(
-            Some(Inverse), 
+            Some(Inverse),
             self.character.color.underline(),
             self.character.color.strikethrough(),
-            self.character.color.blink()
+            self.character.color.blink(),
         );
         // Reset blink timer while we're typing
         self.time_to_next_blink = SystemTimer::now().wrapping_add(self.blink_length);

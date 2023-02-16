@@ -6,4 +6,7 @@
 # and https://www.gnu.org/software/screen/manual/screen.html#Using-Exec
 # this is funny, especially if you leave off the -echo part:
 # exec ! stty sane -echo -echoe -echok 115200
-exec ! stty ocrnl opost inlcr icrnl -icrnl -onlcr 115200
+
+#exec ! stty ocrnl opost inlcr icrnl -icrnl -onlcr 115200
+
+exec ! stty icrnl 115200

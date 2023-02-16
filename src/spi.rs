@@ -1,4 +1,3 @@
-use esp32c3_hal::clock::Clocks;
 use esp32c3_hal::dma::private::*;
 use esp32c3_hal::dma::DmaPriority;
 use esp32c3_hal::gdma::private::*;
@@ -6,12 +5,12 @@ use esp32c3_hal::gdma::Gdma;
 use esp32c3_hal::gpio::{Gpio10, Gpio2, Gpio4, Gpio5, Gpio6, Gpio7};
 use esp32c3_hal::peripherals::{DMA, SPI2};
 use esp32c3_hal::prelude::*;
+use esp32c3_hal::spi::dma::SpiDma;
 use esp32c3_hal::spi::{Spi, SpiMode};
-use esp_hal_common::spi::dma::SpiDma;
-use esp_hal_common::{
+use esp32c3_hal::{clock::Clocks, gpio::OutputSignal};
+use esp32c3_hal::{
+    gpio::{OutputPin, Unknown},
     system::{Peripheral, PeripheralClockControl},
-    types::OutputSignal,
-    OutputPin, Unknown,
 };
 
 use esp_println::println;

@@ -5,14 +5,12 @@
 extern crate alloc;
 
 use esp32c3_hal::clock::{ClockControl, CpuClock};
+use esp32c3_hal::interrupt::Priority;
 use esp32c3_hal::prelude::*;
 use esp32c3_hal::timer::TimerGroup;
 use esp32c3_hal::{gpio::IO, peripherals::Peripherals, Rtc};
 use esp_println::{print, println};
-
-use esp_hal_common::Priority;
 use riscv_rt::entry;
-
 use vgaterm::Delay;
 use vgaterm::{self, video};
 
@@ -150,6 +148,7 @@ fn main() -> ! {
     loop {
         // Get the pressed chars
         while let Some(t) = char_reciever.recv() {
+            println!("got: {}", t.escape_default());
             terminal.type_next(t);
         }
         // Draw the characters on the frame

@@ -15,12 +15,12 @@
 extern crate alloc;
 
 use critical_section::Mutex;
+use esp32c3_hal::clock::Clocks;
+use esp32c3_hal::peripherals::{self, TIMG0};
+use esp32c3_hal::systimer::SystemTimer;
+use esp32c3_hal::timer::{Timer0, TimerGroup};
+use esp32c3_hal::{interrupt, interrupt::Priority};
 use esp32c3_hal::{prelude::*, timer::Timer};
-use esp_hal_common::clock::Clocks;
-use esp_hal_common::peripherals::{self, TIMG0};
-use esp_hal_common::systimer::SystemTimer;
-use esp_hal_common::timer::{Timer0, TimerGroup};
-use esp_hal_common::{interrupt, interrupt::Priority};
 use fugit::HertzU64;
 
 use riscv;
