@@ -31,12 +31,19 @@ where
 trait Irq: Any {
     fn apply(&mut self);
 
-    fn as_any(self: Box<Self>) -> Box<dyn Any> {
-        Box::new(self)
-    }
-
+    fn as_any(self: Box<Self>) -> Box<dyn Any>;
     fn as_any_mut(self: &mut Self) -> &mut dyn Any;
 }
+
+// requires unstable #![feature(trait_upcasting)]
+// impl dyn Irq {
+//     fn as_any(self: Box<Self>) -> Box<dyn Any> {
+//         self
+//     }
+//     fn as_any_mut(self: &mut Self) -> &mut dyn Any {
+//         self as &mut dyn Any
+//     }
+// }
 
 impl<T> Irq for PinInterrupt<T>
 where
@@ -47,8 +54,11 @@ where
         self.pin.clear_interrupt();
     }
 
-    fn as_any_mut(self: &mut Self) -> &mut dyn Any {
+    fn as_any(self: Box<Self>) -> Box<dyn Any> {
         self
+    }
+    fn as_any_mut(self: &mut Self) -> &mut dyn Any {
+        self as &mut dyn Any
     }
 }
 

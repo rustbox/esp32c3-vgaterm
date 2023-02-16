@@ -4,6 +4,7 @@
 
 extern crate alloc;
 
+use esp_println::println;
 use riscv_rt::entry;
 
 use esp32c3_hal::prelude::*;
@@ -80,6 +81,7 @@ fn main() -> ! {
         unsafe { riscv::asm::wfi() };
 
         let (input, event, callback) = interrupt_disable(pref);
+        println!("I now hold pin {}", input.number());
         pref = pin_interrupt(input, event, callback);
     }
 }
