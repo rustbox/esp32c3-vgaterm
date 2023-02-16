@@ -9,9 +9,9 @@ pub fn rgb_from_byte(color: u8) -> (u8, u8, u8) {
     let highest = shifted >> 7;
     let rgb = shifted + highest;
 
-    let red3 = (rgb & 0b000_000_111) as u8;
-    let green3 = ((rgb >> 3) & 0b000_000_111) as u8;
-    let blue3 = ((rgb >> 6) & 0b000_000_111) as u8;
+    let red3 = (rgb & 0b0_0000_0111) as u8;
+    let green3 = ((rgb >> 3) & 0b0_0000_0111) as u8;
+    let blue3 = ((rgb >> 6) & 0b0_0000_0111) as u8;
 
     (
         color3_to_byte(red3),
@@ -26,8 +26,8 @@ pub fn byte_from_rgb(red: u8, green: u8, blue: u8) -> u8 {
     let b3 = blue / 36;
 
     let r: u16 = (r3 & 0b00000111).into();
-    let g: u16 = (g3 as u16 & 0b00000111 as u16) << 3;
-    let b: u16 = (b3 as u16 & 0b00000111 as u16) << 6;
+    let g: u16 = (g3 as u16 & 0b00000111_u16) << 3;
+    let b: u16 = (b3 as u16 & 0b00000111_u16) << 6;
     let rgb3: u16 = r + g + b;
     // Convert to vgaterm color byte by rshift 1
     (rgb3 >> 1) as u8
@@ -39,8 +39,8 @@ pub fn rgb3_from_rgb(red: u8, green: u8, blue: u8) -> u16 {
     let b3 = blue / 36;
 
     let r: u16 = (r3 & 0b00000111).into();
-    let g: u16 = (g3 as u16 & 0b00000111 as u16) << 3;
-    let b: u16 = (b3 as u16 & 0b00000111 as u16) << 6;
+    let g: u16 = (g3 as u16 & 0b00000111_u16) << 3;
+    let b: u16 = (b3 as u16 & 0b00000111_u16) << 6;
     r + g + b
 }
 

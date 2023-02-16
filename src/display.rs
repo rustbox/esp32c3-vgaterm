@@ -126,7 +126,7 @@ impl Character {
     }
 
     pub fn char(&self) -> char {
-        let c: u32 = (self.character[0] as u32) + (self.character[1] as u32) << 8;
+        let c: u32 = ((self.character[0] as u32) + (self.character[1] as u32)) << 8;
         char::from_u32(c).unwrap_or(' ')
     }
 
@@ -200,8 +200,8 @@ impl CharColor {
 
     pub fn background(&self) -> Rgb3 {
         let r = ((self.0 & 0b11000000) >> 5) as u8;
-        let g = ((self.0 & 0b00000011_00000000) >> 7) as u8;
-        let b = ((self.0 & 0b00001100_00000000) >> 9) as u8;
+        let g = ((self.0 & 0b0000_0011_0000_0000) >> 7) as u8;
+        let b = ((self.0 & 0b0000_1100_0000_0000) >> 9) as u8;
         Rgb3::from_rgb2(r, g, b)
     }
 
@@ -239,17 +239,17 @@ impl CharColor {
 
     pub fn with_foreground(self, color: Rgb3) -> CharColor {
         let (r2, g2, b2) = color.rgb2();
-        let c = (r2 + g2 << 2 + b2 << 4) as u16;
+        let c = ((r2 + g2) << (2 + b2) << 4) as u16;
 
-        CharColor((self.0 & 0b11111111_11000000) | c)
+        CharColor((self.0 & 0b1111_1111_1100_0000) | c)
     }
 
     pub fn with_background(self, color: Rgb3) -> CharColor {
         let (r2, g2, b2) = color.rgb2();
         // Background starts at bit 6
-        let c = ((r2 + g2 << 2 + b2 << 4) as u16) << 6;
+        let c = (((r2 + g2) << (2 + b2) << 4) as u16) << 6;
 
-        CharColor((self.0 & 0b11110000_00111111) | c)
+        CharColor((self.0 & 0b1111_0000_0011_1111) | c)
     }
 
     pub fn with_decoration(
@@ -260,7 +260,7 @@ impl CharColor {
         blink: Option<Blink>,
     ) -> CharColor {
         let decs = inverse.bit() + underline.bit() + strikethrough.bit() + blink.bit();
-        self.0 = (self.0 & 0b00001111_11111111) | decs;
+        self.0 = (self.0 & 0b0000_1111_1111_1111) | decs;
         *self
     }
 

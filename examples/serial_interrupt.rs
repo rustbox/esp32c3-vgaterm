@@ -14,7 +14,6 @@ use esp32c3_hal::{
     peripherals::{self, Peripherals, UART0},
     prelude::*,
     timer::TimerGroup,
-    uart::config::AtCmdConfig,
     Cpu, Rtc, Uart,
 };
 use esp_backtrace as _;

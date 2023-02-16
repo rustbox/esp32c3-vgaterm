@@ -29,7 +29,7 @@ use esp32c3_hal::{
     Delay, Rtc,
 };
 use esp_backtrace as _;
-use esp_println::println;
+
 use riscv_rt::entry;
 
 #[entry]
@@ -69,7 +69,7 @@ fn main() -> ! {
     let dma_channel = dma.channel0;
 
     let mut descriptors = [0u32; 8 * 3];
-    let mut rx_descriptors = [0u32; 1 * 3];
+    let mut rx_descriptors = [0u32; 3];
 
     let mut spi = Spi::new_quad_send_only(
         peripherals.SPI2,

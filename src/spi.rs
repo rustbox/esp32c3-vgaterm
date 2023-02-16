@@ -27,7 +27,7 @@ static mut QSPI: Option<
 > = None;
 
 static mut DESCRIPTORS: [u32; 8 * 3] = [0u32; 8 * 3];
-static mut RX_DESCRIPTORS: [u32; 3] = [0u32; 1 * 3]; // should be zero, but dma will get mad
+static mut RX_DESCRIPTORS: [u32; 3] = [0u32; 3]; // should be zero, but dma will get mad
 
 ///
 /// Configure and initialize the Quad SPI instance. Once configured
@@ -167,9 +167,7 @@ fn clock_register(pre: u32, n: u32) -> u32 {
     let l = n;
     let h = ((n + 1) / 2).saturating_sub(1);
 
-    let reg_value = l | h << 6 | n << 12 | pre << 18;
-
-    return reg_value;
+    l | h << 6 | n << 12 | pre << 18
 }
 
 pub trait QuadInstance {

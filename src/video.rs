@@ -42,15 +42,15 @@ pub fn four_vertical_columns(a: u8, b: u8, c: u8, d: u8) {
                     BUFFER[i] = a;
                 }
 
-                if p >= 160 && p < 320 {
+                if (160..320).contains(&p) {
                     BUFFER[i] = b;
                 }
 
-                if p >= 320 && p < 480 {
+                if (320..480).contains(&p) {
                     BUFFER[i] = c;
                 }
 
-                if p >= 480 && p < 640 {
+                if (480..640).contains(&p) {
                     BUFFER[i] = d;
                 }
             }
@@ -91,12 +91,12 @@ pub fn test_pattern() -> [u8; 128] {
             }
         }
     }
-    return pattern;
+    pattern
 }
 
 pub fn load_from_slice(s: &[u8]) {
     riscv::interrupt::free(|| unsafe {
-        for (i, p) in s.into_iter().enumerate() {
+        for (i, p) in s.iter().enumerate() {
             if i >= BUFFER.len() {
                 break;
             }

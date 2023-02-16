@@ -286,7 +286,7 @@ pub fn read_byte_mask(mask: u32) -> u8 {
             // Shift the value right however many spaces from the mask to
             // the nth bit in the output value.
             let nth_value_bit = ((1 << b) & masked) >> (b - n_bit);
-            value = value | nth_value_bit;
+            value |= nth_value_bit;
 
             n_bit += 1;
         }
