@@ -1,5 +1,5 @@
+use esp32c3_hal::gpio::{Event, Floating, Gpio6, Gpio8, Input, InputPin};
 use esp32c3_hal::prelude::*;
-use esp_hal_common::{Event, Floating, Gpio6, Gpio8, Input, InputPin};
 use esp_println::println;
 use pc_keyboard::{layouts, HandleControl, Keyboard, ScancodeSet2};
 

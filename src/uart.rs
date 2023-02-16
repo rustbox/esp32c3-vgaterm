@@ -1,7 +1,7 @@
 use esp32c3_hal::prelude::*;
+use esp32c3_hal::Cpu;
 use esp32c3_hal::{interrupt, peripherals};
-use esp_hal_common::Cpu;
-use esp_hal_common::{peripherals::UART0, Uart};
+use esp32c3_hal::{peripherals::UART0, Uart};
 
 use crate::channel::{self, Receiver, Sender};
 use crate::interrupt::which_priority;

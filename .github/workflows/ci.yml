@@ -3,6 +3,8 @@ on:
     branches:
       - main
   push:
+    branches:
+    - '!main'
   workflow_dispatch:
 
 name: CI
@@ -12,19 +14,30 @@ env:
 
 jobs:
   # --------------------------------------------------------------------------
-  # Check 
+  # Check
 
   check:
     name: cargo check
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
     steps:
       - uses: actions/checkout@v3
       - uses: Swatinem/rust-cache@v1
       - uses: actions-rs/cargo@v1
         with:
-          command: check
+          command: check --all-targets
+
+  # --------------------------------------------------------------------------
+  # Fmt
+
+  fmt:
+    name: cargo fmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: Swatinem/rust-cache@v1
+      - uses: actions-rs/cargo@v1
+        with:
+          command: fmt --check
 
   # --------------------------------------------------------------------------
   # Clippy
@@ -38,4 +51,4 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: clippy
-          args: -- --no-deps
+          args: -- --no-deps --all-targets

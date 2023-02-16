@@ -67,9 +67,13 @@ pub const HIGH: bool = true;
 
 mod example {
     use esp32c3_hal::prelude::*;
-    use esp_hal_common::{
-        peripherals::Peripherals, BankGpioRegisterAccess, Event, GpioPin, GpioSignal, Input,
-        InteruptStatusRegisterAccess, IsOutputPin, OpenDrain, Output, PinType, PullUp, IO,
+    use esp32c3_hal::{
+        gpio::{
+            BankGpioRegisterAccess, Event, GpioPin, GpioSignal, Input,
+            InteruptStatusRegisterAccess, IsOutputPin, OpenDrain, Output, PinType, PullUp,
+        },
+        peripherals::Peripherals,
+        IO,
     };
 
     #[allow(dead_code)]
@@ -122,7 +126,7 @@ mod example {
 
     #[allow(dead_code)]
     fn steal() {
-        use esp_hal_common::GpioExt;
+        use esp32c3_hal::gpio::GpioExt;
         let peripherals = unsafe { Peripherals::steal() };
 
         let _z = peripherals.GPIO.split();

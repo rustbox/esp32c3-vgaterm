@@ -3,7 +3,7 @@ use crate::{
     display::{self, Character, Inverse, TextDisplay},
 };
 use embedded_graphics::prelude::DrawTarget;
-use esp_hal_common::systimer::SystemTimer;
+use esp32c3_hal::systimer::SystemTimer;
 use esp_println::println;
 
 pub const IROWS: isize = display::ROWS as isize;
@@ -155,7 +155,8 @@ impl TextField {
             '\u{08}' | '\u{7f}' => {
                 // backspace
                 let curs_char = self.cursor.character.char();
-                self.text.write(self.cursor.pos.0, self.cursor.pos.1, curs_char);
+                self.text
+                    .write(self.cursor.pos.0, self.cursor.pos.1, curs_char);
                 self.move_cursor(0, -1);
                 // self.cursor.set_char(' ');
                 self.text.write(self.cursor.pos.0, self.cursor.pos.1, ' ');
