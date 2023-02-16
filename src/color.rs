@@ -203,29 +203,45 @@ pub const ANSI_BASE_BG_HIGH_START: u8 = 100;
 pub const ANSI_BASE_BG_HIGH_STOP: u8 = ANSI_BASE_BG_HIGH_START + 7;
 
 pub static ANSI_BASE_LOW_COLORS: [Rgb3; 8] = [
-    Rgb3::BLACK, Rgb3::new(5, 0, 0), 
-    Rgb3::new(0, 5, 0), Rgb3::new(5, 5, 0),
-    Rgb3::new(0, 0, 5), Rgb3::new(5, 0, 5),
-    Rgb3::new(0, 5, 5), Rgb3::new(6, 6, 6)
+    Rgb3::BLACK,
+    Rgb3::new(5, 0, 0),
+    Rgb3::new(0, 5, 0),
+    Rgb3::new(5, 5, 0),
+    Rgb3::new(0, 0, 5),
+    Rgb3::new(5, 0, 5),
+    Rgb3::new(0, 5, 5),
+    Rgb3::new(6, 6, 6),
 ];
 pub static ANSI_BASE_HIGH_COLORS: [Rgb3; 8] = [
-    Rgb3::new(2, 2, 2), Rgb3::new(7, 0, 0),
-    Rgb3::new(0, 7, 0), Rgb3::new(7, 7, 0),
-    Rgb3::new(0, 0, 7), Rgb3::new(7, 2, 7),
-    Rgb3::new(2, 7, 7), Rgb3::WHITE,
+    Rgb3::new(2, 2, 2),
+    Rgb3::new(7, 0, 0),
+    Rgb3::new(0, 7, 0),
+    Rgb3::new(7, 7, 0),
+    Rgb3::new(0, 0, 7),
+    Rgb3::new(7, 2, 7),
+    Rgb3::new(2, 7, 7),
+    Rgb3::WHITE,
 ];
 
 pub fn ansi_base_color(fore: u8, back: u8) -> (Rgb3, Rgb3) {
     let fg = match fore {
-        ANSI_BASE_FG_LOW_START..=ANSI_BASE_FG_LOW_STOP => ANSI_BASE_LOW_COLORS[(fore - ANSI_BASE_FG_LOW_START) as usize],
-        ANSI_BASE_FG_HIGH_START..=ANSI_BASE_FG_HIGH_STOP => ANSI_BASE_HIGH_COLORS[(fore - ANSI_BASE_FG_HIGH_START) as usize],
-        _ => Rgb3::BLACK
+        ANSI_BASE_FG_LOW_START..=ANSI_BASE_FG_LOW_STOP => {
+            ANSI_BASE_LOW_COLORS[(fore - ANSI_BASE_FG_LOW_START) as usize]
+        }
+        ANSI_BASE_FG_HIGH_START..=ANSI_BASE_FG_HIGH_STOP => {
+            ANSI_BASE_HIGH_COLORS[(fore - ANSI_BASE_FG_HIGH_START) as usize]
+        }
+        _ => Rgb3::BLACK,
     };
 
     let bg = match back {
-        ANSI_BASE_BG_LOW_START..=ANSI_BASE_BG_LOW_STOP => ANSI_BASE_LOW_COLORS[(back - ANSI_BASE_BG_LOW_START) as usize],
-        ANSI_BASE_BG_HIGH_START..=ANSI_BASE_BG_HIGH_STOP => ANSI_BASE_HIGH_COLORS[(back - ANSI_BASE_BG_HIGH_START) as usize],
-        _ => Rgb3::BLACK
+        ANSI_BASE_BG_LOW_START..=ANSI_BASE_BG_LOW_STOP => {
+            ANSI_BASE_LOW_COLORS[(back - ANSI_BASE_BG_LOW_START) as usize]
+        }
+        ANSI_BASE_BG_HIGH_START..=ANSI_BASE_BG_HIGH_STOP => {
+            ANSI_BASE_HIGH_COLORS[(back - ANSI_BASE_BG_HIGH_START) as usize]
+        }
+        _ => Rgb3::BLACK,
     };
     (fg, bg)
 }
@@ -254,12 +270,11 @@ pub fn ansi_256_color(color: u8) -> Rgb3 {
                     3 => 4,
                     4 => 5,
                     5 => 7,
-                    _ => 0
+                    _ => 0,
                 }
             }
             Rgb3::new(map_6_to_8(red6), map_6_to_8(green6), map_6_to_8(blue6))
-        },
-        232..=255 => Rgb3::new(color / 24, color / 24, color / 24)
+        }
+        232..=255 => Rgb3::new(color / 24, color / 24, color / 24),
     }
-
 }

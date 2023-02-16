@@ -22,7 +22,7 @@
 //! ESC [ 0 K           => Erase start of line to cursor
 //! ESC [ 1 K           => Erase start of line to the cursor
 //! ESC [ 2 K           => Erase entire line
-//! 
+//!
 //! Graphics/Colors
 //! ===============
 //! ESC [ <fg>;<bg>; m  => Set fg color between 30-37; 90-97. bg color between 40-47, 100-107
@@ -43,15 +43,14 @@
 //! ESC [ 27 m          => unset inverse mode
 //! ESC [ 9 m           => set strikethrough
 //! ESC [ 29 m          => unset strikethrough
-//! 
-//! 
+//!
+//!
 //! [Op(name), [Param(value)]]
-//! 
-
+//!
 
 struct Color {
     fg: u8,
-    bg: u8
+    bg: u8,
 }
 
 enum TextMode {
