@@ -167,8 +167,6 @@ fn clock_register(pre: u32, n: u32) -> u32 {
     let l = n;
     let h = ((n + 1) / 2).saturating_sub(1);
 
-    
-
     l | h << 6 | n << 12 | pre << 18
 }
 

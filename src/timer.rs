@@ -23,8 +23,6 @@ use esp32c3_hal::{interrupt, interrupt::Priority};
 use esp32c3_hal::{prelude::*, timer::Timer};
 use fugit::HertzU64;
 
-
-
 use alloc::boxed::Box;
 use core::cell::RefCell;
 

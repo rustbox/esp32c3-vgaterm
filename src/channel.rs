@@ -50,8 +50,6 @@ pub fn channel<T>() -> (Sender<T>, Receiver<T>) {
         Sender {
             inner: inner.clone(),
         },
-        Receiver {
-            inner,
-        },
+        Receiver { inner },
     )
 }
