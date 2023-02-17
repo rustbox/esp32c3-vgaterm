@@ -32,7 +32,7 @@ trait Irq: Any {
     fn apply(&mut self);
 
     fn as_any(self: Box<Self>) -> Box<dyn Any>;
-    fn as_any_mut(self: &mut Self) -> &mut dyn Any;
+    fn as_any_mut(&mut self) -> &mut dyn Any;
 }
 
 // requires unstable #![feature(trait_upcasting)]
@@ -57,7 +57,7 @@ where
     fn as_any(self: Box<Self>) -> Box<dyn Any> {
         self
     }
-    fn as_any_mut(self: &mut Self) -> &mut dyn Any {
+    fn as_any_mut(&mut self) -> &mut dyn Any {
         self as &mut dyn Any
     }
 }
@@ -142,7 +142,7 @@ pub fn interrupt_enable(priority: interrupt::Priority) {
 pub fn pin_interrupt<T: Pin + 'static>(
     mut input: T,
     event: Event,
-    callback: impl FnMut(&mut T) -> () + 'static,
+    callback: impl FnMut(&mut T) + 'static,
 ) -> PinRef<T> {
     let n = input.number() as usize;
 
@@ -158,7 +158,7 @@ pub fn pin_interrupt<T: Pin + 'static>(
     PinRef(n, PhantomData)
 }
 
-type Callback<T> = dyn FnMut(&mut T) -> ();
+type Callback<T> = dyn FnMut(&mut T);
 
 /// Stops the pin from listening for interrupt signals
 /// removes and returns the callback
