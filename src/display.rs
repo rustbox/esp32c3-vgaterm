@@ -48,6 +48,12 @@ impl Display {
     }
 }
 
+impl Default for Display {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl OriginDimensions for Display {
     fn size(&self) -> Size {
         Size::new(video::WIDTH as u32, video::HEIGHT as u32)
@@ -418,5 +424,11 @@ impl TextDisplay {
         let text = Text::new(&text, Point::new(x as i32, y as i32), style);
 
         let _ = text.draw(target);
+    }
+}
+
+impl Default for TextDisplay {
+    fn default() -> Self {
+        Self::new()
     }
 }

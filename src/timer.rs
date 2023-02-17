@@ -129,20 +129,18 @@ pub fn configure_timer0(timg0: TIMG0, clocks: &Clocks) {
 pub fn enable_timer0_interrupt(priority: Priority) {
     interrupt::enable(peripherals::Interrupt::TG0_T0_LEVEL, priority).unwrap();
 
-    critical_section::with(|cs| match TIMER0.borrow(cs).borrow_mut().as_mut() {
-        Some(timer) => {
+    critical_section::with(|cs| {
+        if let Some(timer) = TIMER0.borrow(cs).borrow_mut().as_mut() {
             timer.listen();
         }
-        None => {}
     });
 }
 
 /// Start timer zero set for t microseconds
 pub fn start_timer0_callback(t: u64, callback: impl FnMut() + 'static) {
     critical_section::with(|cs| {
-        match TIMER0.borrow(cs).borrow_mut().as_mut() {
-            Some(timer) => timer.start(t.micros()),
-            None => {}
+        if let Some(timer) = TIMER0.borrow(cs).borrow_mut().as_mut() {
+            timer.start(t.micros())
         }
 
         unsafe {
@@ -153,9 +151,8 @@ pub fn start_timer0_callback(t: u64, callback: impl FnMut() + 'static) {
 
 pub fn start_repeat_timer0_callback(t: u64, mut callback: impl FnMut() + 'static) {
     critical_section::with(|cs| {
-        match TIMER0.borrow(cs).borrow_mut().as_mut() {
-            Some(timer) => timer.start(t.micros()),
-            None => {}
+        if let Some(timer) = TIMER0.borrow(cs).borrow_mut().as_mut() {
+            timer.start(t.micros())
         }
 
         let f = move || {
@@ -170,18 +167,18 @@ pub fn start_repeat_timer0_callback(t: u64, mut callback: impl FnMut() + 'static
 }
 
 pub fn start_timer0(t: u64) {
-    critical_section::with(|cs| match TIMER0.borrow(cs).borrow_mut().as_mut() {
-        Some(timer) => timer.start(t.micros()),
-        None => {}
+    critical_section::with(|cs| {
+        if let Some(timer) = TIMER0.borrow(cs).borrow_mut().as_mut() {
+            timer.start(t.micros())
+        }
     })
 }
 
 pub fn clear_timer0() {
-    critical_section::with(|cs| match TIMER0.borrow(cs).borrow_mut().as_mut() {
-        Some(timer) => {
+    critical_section::with(|cs| {
+        if let Some(timer) = TIMER0.borrow(cs).borrow_mut().as_mut() {
             timer.clear_interrupt();
         }
-        None => {}
     }) // println!("+")
 }
 

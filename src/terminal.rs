@@ -188,3 +188,9 @@ impl TextField {
         self.cursor.draw(target, &self.text);
     }
 }
+
+impl Default for TextField {
+    fn default() -> Self {
+        Self::new()
+    }
+}

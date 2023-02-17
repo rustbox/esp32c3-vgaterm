@@ -114,11 +114,11 @@ pub fn set_pixel(col: usize, row: usize, data: u8) {
 
 pub fn load_test_pattern(val1: u8, val2: u8) {
     riscv::interrupt::free(|| unsafe {
-        for i in 0..BUFFER_SIZE {
+        for (i, e) in BUFFER.iter_mut().enumerate() {
             if i & 1 == 0 {
-                BUFFER[i] = val1;
+                *e = val1;
             } else {
-                BUFFER[i] = val2;
+                *e = val2;
             }
         }
     })

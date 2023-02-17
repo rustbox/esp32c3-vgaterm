@@ -69,7 +69,9 @@ fn main() -> ! {
         riscv::interrupt::enable();
     }
 
-    loop {}
+    loop {
+        unsafe { riscv::asm::wfi() }
+    }
 }
 
 #[interrupt]

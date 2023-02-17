@@ -108,16 +108,13 @@ pub fn send_reset() {
     })
 }
 
-pub fn keys(foo: u16) {
+pub fn keys(word: u16) {
     let mut kb: Keyboard<layouts::Us104Key, ScancodeSet2> = Keyboard::new(HandleControl::Ignore);
-    match kb.add_word(foo) {
+    match kb.add_word(word) {
         Ok(Some(x)) => {
             println!("{:?}", x);
-            match kb.process_keyevent(x) {
-                Some(y) => {
-                    println!("{:?}", y);
-                }
-                None => {}
+            if let Some(y) = kb.process_keyevent(x) {
+                println!("{:?}", y);
             }
         }
         Ok(None) => {}
