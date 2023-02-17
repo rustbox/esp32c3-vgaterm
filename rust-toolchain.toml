@@ -3,6 +3,6 @@
 # The default profile includes rustc, rust-std, cargo, rust-docs, rustfmt and clippy.
 # https://rust-lang.github.io/rustup/concepts/profiles.html
 profile    = "default"
-channel    = "nightly"
+channel    = "nightly-2023-02-15"
 components = ["rust-src"]
 targets    = ["riscv32imac-unknown-none-elf"]

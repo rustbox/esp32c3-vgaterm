@@ -18,7 +18,13 @@ path  = "src/lib.rs"
 name  = "vgaterm"
 test  = false
 bench = false
-path  = "src/main.rs"
+path  = "src/bin/vgaterm.rs"
+
+[[bin]]
+name  = "keypad"
+test  = false
+bench = false
+path  = "src/bin/keypad.rs"
 
 [profile.release]
 opt-level = 2

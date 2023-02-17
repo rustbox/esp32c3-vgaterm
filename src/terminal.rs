@@ -4,6 +4,7 @@ use crate::{
 };
 use embedded_graphics::prelude::DrawTarget;
 use esp32c3_hal::systimer::SystemTimer;
+use esp_println::println;
 
 pub const IROWS: isize = display::ROWS as isize;
 pub const ICOLS: isize = display::COLUMNS as isize;
@@ -63,8 +64,8 @@ impl Cursor {
         if pos != self.pos {
             self.changed = true;
             self.set_inverted();
+            self.pos = pos;
         }
-        self.pos = pos;
         pos
     }
 
@@ -116,7 +117,7 @@ impl Default for Cursor {
             character: Character::default(),
             changed: true,
             time_to_next_blink: SystemTimer::now().wrapping_add(8_000_000),
-            blink_length: 8_000_000,
+            blink_length: 12_000_000,
         };
         c.swap_invert();
         c
@@ -141,9 +142,9 @@ impl TextField {
     pub fn move_cursor(&mut self, r: isize, c: isize) {
         // self.text.write(self.cursor.pos.0, self.cursor.pos.1, self.cursor.character.char());
         let moved = self.cursor.offset(r, c);
+        println!("Cursor moving to ({}, {})", r, c);
         let c = self.text.read_char(moved.0, moved.1).char();
         self.cursor.set_char(c);
-        // println!("Cursor: {:?}", self.cursor);
     }
 
     pub fn type_next(&mut self, t: char) {
@@ -153,7 +154,9 @@ impl TextField {
         match t {
             '\u{08}' | '\u{7f}' => {
                 // backspace
-                self.text.write(self.cursor.pos.0, self.cursor.pos.1, ' ');
+                let curs_char = self.cursor.character.char();
+                self.text
+                    .write(self.cursor.pos.0, self.cursor.pos.1, curs_char);
                 self.move_cursor(0, -1);
                 // self.cursor.set_char(' ');
                 self.text.write(self.cursor.pos.0, self.cursor.pos.1, ' ');

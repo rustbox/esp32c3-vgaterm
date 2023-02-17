@@ -44,7 +44,7 @@ pub fn rgb3_from_rgb(red: u8, green: u8, blue: u8) -> u16 {
     r + g + b
 }
 
-pub fn rgb3_to_byte(rgb3: u16) -> u8 {
+pub const fn rgb3_to_byte(rgb3: u16) -> u8 {
     (rgb3 >> 1) as u8
 }
 
@@ -135,6 +135,14 @@ impl Rgb3 {
             color3_to_color2(self.b()),
         )
     }
+
+    pub const fn to_byte(&self) -> u8 {
+        let mut v = self.red as u16;
+        v += (self.green as u16) << 3;
+        v += (self.green as u16) << 6;
+
+        rgb3_to_byte(v)
+    }
 }
 
 impl PixelColor for Rgb3 {
@@ -182,5 +190,91 @@ impl From<Rgb3> for RawU8 {
         v += u16::from(value.b()) << 6;
 
         RawU8::new(rgb3_to_byte(v))
+    }
+}
+
+pub const ANSI_BASE_FG_LOW_START: u8 = 30;
+pub const ANSI_BASE_FG_LOW_STOP: u8 = ANSI_BASE_FG_LOW_START + 7;
+pub const ANSI_BASE_FG_HIGH_START: u8 = 90;
+pub const ANSI_BASE_FG_HIGH_STOP: u8 = ANSI_BASE_FG_HIGH_START + 7;
+pub const ANSI_BASE_BG_LOW_START: u8 = 40;
+pub const ANSI_BASE_BG_LOW_STOP: u8 = ANSI_BASE_BG_LOW_START + 7;
+pub const ANSI_BASE_BG_HIGH_START: u8 = 100;
+pub const ANSI_BASE_BG_HIGH_STOP: u8 = ANSI_BASE_BG_HIGH_START + 7;
+
+pub static ANSI_BASE_LOW_COLORS: [Rgb3; 8] = [
+    Rgb3::BLACK,
+    Rgb3::new(5, 0, 0),
+    Rgb3::new(0, 5, 0),
+    Rgb3::new(5, 5, 0),
+    Rgb3::new(0, 0, 5),
+    Rgb3::new(5, 0, 5),
+    Rgb3::new(0, 5, 5),
+    Rgb3::new(6, 6, 6),
+];
+pub static ANSI_BASE_HIGH_COLORS: [Rgb3; 8] = [
+    Rgb3::new(2, 2, 2),
+    Rgb3::new(7, 0, 0),
+    Rgb3::new(0, 7, 0),
+    Rgb3::new(7, 7, 0),
+    Rgb3::new(0, 0, 7),
+    Rgb3::new(7, 2, 7),
+    Rgb3::new(2, 7, 7),
+    Rgb3::WHITE,
+];
+
+pub fn ansi_base_color(fore: u8, back: u8) -> (Rgb3, Rgb3) {
+    let fg = match fore {
+        ANSI_BASE_FG_LOW_START..=ANSI_BASE_FG_LOW_STOP => {
+            ANSI_BASE_LOW_COLORS[(fore - ANSI_BASE_FG_LOW_START) as usize]
+        }
+        ANSI_BASE_FG_HIGH_START..=ANSI_BASE_FG_HIGH_STOP => {
+            ANSI_BASE_HIGH_COLORS[(fore - ANSI_BASE_FG_HIGH_START) as usize]
+        }
+        _ => Rgb3::BLACK,
+    };
+
+    let bg = match back {
+        ANSI_BASE_BG_LOW_START..=ANSI_BASE_BG_LOW_STOP => {
+            ANSI_BASE_LOW_COLORS[(back - ANSI_BASE_BG_LOW_START) as usize]
+        }
+        ANSI_BASE_BG_HIGH_START..=ANSI_BASE_BG_HIGH_STOP => {
+            ANSI_BASE_HIGH_COLORS[(back - ANSI_BASE_BG_HIGH_START) as usize]
+        }
+        _ => Rgb3::BLACK,
+    };
+    (fg, bg)
+}
+
+pub fn ansi_256_color(color: u8) -> Rgb3 {
+    // 0-15 are ANSI_BASE_LOW_COLORS and ANSI_BASE_HIGH_COLORS
+    // then 6 x 6 x 6 color cube offset by 16
+    // Last is greyscale from 232-255
+    match color {
+        0..=7 => ANSI_BASE_LOW_COLORS[color as usize],
+        8..=15 => ANSI_BASE_HIGH_COLORS[color as usize],
+        16..=231 => {
+            // c = red * 36 + green * 6 + blue
+            let mut cube_color = color - 16;
+            let red6 = cube_color / 36;
+            cube_color -= red6 * 36;
+            let green6 = cube_color / 6;
+            cube_color -= green6 * 6;
+            let blue6 = cube_color;
+
+            fn map_6_to_8(v6: u8) -> u8 {
+                match v6 {
+                    0 => 0,
+                    1 => 1,
+                    2 => 2,
+                    3 => 4,
+                    4 => 5,
+                    5 => 7,
+                    _ => 0,
+                }
+            }
+            Rgb3::new(map_6_to_8(red6), map_6_to_8(green6), map_6_to_8(blue6))
+        }
+        232..=255 => Rgb3::new(color / 24, color / 24, color / 24),
     }
 }
