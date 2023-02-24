@@ -10,7 +10,6 @@ use esp32c3_hal::prelude::*;
 use esp32c3_hal::timer::TimerGroup;
 use esp32c3_hal::{gpio::IO, peripherals::Peripherals, Rtc};
 use esp_println::{print, println};
-use riscv_rt::entry;
 use vgaterm::Delay;
 use vgaterm::{self, video};
 

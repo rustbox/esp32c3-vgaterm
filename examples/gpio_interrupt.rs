@@ -4,9 +4,6 @@
 
 extern crate alloc;
 
-use esp_println::println;
-use riscv_rt::entry;
-
 use esp32c3_hal::prelude::*;
 use esp32c3_hal::{
     clock::ClockControl,
@@ -17,6 +14,7 @@ use esp32c3_hal::{
     Rtc,
 };
 use esp_backtrace as _;
+use esp_println::println;
 use vgaterm::gpio::{interrupt_disable, pin_interrupt};
 
 core::arch::global_asm!(".global _heap_size; _heap_size = 0x8000");

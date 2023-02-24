@@ -4,13 +4,9 @@
 
 extern crate alloc;
 
-use riscv_rt::entry;
-
 use esp32c3_hal::clock::CpuClock;
-
 use esp32c3_hal::interrupt::Priority;
 use esp32c3_hal::prelude::*;
-
 use esp32c3_hal::timer::TimerGroup;
 use esp32c3_hal::{clock::ClockControl, peripherals::Peripherals};
 use esp32c3_hal::{Rtc, IO};

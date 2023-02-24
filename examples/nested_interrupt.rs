@@ -8,7 +8,6 @@ use core::{borrow::Borrow, cell::RefCell};
 
 use critical_section::Mutex;
 use esp_println::println;
-use riscv_rt::entry;
 
 use esp32c3_hal::{
     clock::ClockControl,
