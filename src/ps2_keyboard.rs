@@ -13,7 +13,7 @@ static mut DATA: Option<Gpio8<Input<Floating>>> = None;
 static mut CLOCK_REF: Option<PinRef<Gpio6<Input<Floating>>>> = None;
 
 pub fn configure(data: Gpio8<Input<Floating>>, clk: Gpio6<Input<Floating>>) {
-    let k = Keyboard::new(HandleControl::Ignore);
+    let k = Keyboard::new(ScancodeSet2::new(), layouts::Us104Key, HandleControl::Ignore);
     let data_pin = data.number();
 
     let r = crate::gpio::pin_interrupt(clk, Event::FallingEdge, move |clk| {
@@ -109,7 +109,7 @@ pub fn send_reset() {
 }
 
 pub fn keys(word: u16) {
-    let mut kb: Keyboard<layouts::Us104Key, ScancodeSet2> = Keyboard::new(HandleControl::Ignore);
+    let mut kb = Keyboard::new(ScancodeSet2::new(), layouts::Us104Key, HandleControl::Ignore);
     match kb.add_word(word) {
         Ok(Some(x)) => {
             println!("{:?}", x);
