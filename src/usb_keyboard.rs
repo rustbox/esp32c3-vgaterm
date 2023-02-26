@@ -14,7 +14,7 @@ use fixedbitset::FixedBitSet;
 /// 9-10:   Product ID [Low, High]
 ///
 #[derive(Debug, Clone, Copy)]
-pub struct ReportHeader {
+pub struct Header {
     pub length: u16,
     pub msg_type: u8,
     pub device_type: DeviceType,
@@ -26,23 +26,23 @@ pub struct ReportHeader {
 
 /// The bytes contained in the USB-UART report for which keys are pressed.
 #[derive(Debug, Clone)]
-pub struct ReportMessage {
+pub struct Message {
     pub message: Vec<u8>,
 }
 
 /// The Error variants while parsing a USB-UART Header/Message
 #[derive(Debug, Clone)]
 pub enum Error<'a> {
-    ReportNotLongEnough(&'a [u8]),
+    ResponseNotLongEnough(&'a [u8]),
     WrongStartByte(&'a [u8]),
     DeviceNotKeyboard(&'a [u8]),
     WrongEndByte(Vec<u8>),
 }
 
-impl ReportHeader {
-    pub fn from_bytes(report: &[u8]) -> Result<ReportHeader, Error> {
+impl Header {
+    pub fn from_bytes(report: &[u8]) -> Result<Header, Error> {
         if report.len() < HEADER_LENGTH {
-            return Err(Error::ReportNotLongEnough(report));
+            return Err(Error::ResponseNotLongEnough(report));
         }
 
         if report[0] != START {
@@ -59,7 +59,7 @@ impl ReportHeader {
             return Err(Error::DeviceNotKeyboard(report));
         }
 
-        Ok(ReportHeader {
+        Ok(Header {
             length,
             msg_type: report[3],
             device_type: DeviceType::Keyboard,
@@ -342,7 +342,7 @@ pub enum KeyEvent<T> {
 #[derive(Debug, Clone)]
 pub enum Parse<'a> {
     Continue,
-    Finished(Result<ReportMessage, Error<'a>>),
+    Finished(Result<Message, Error<'a>>),
 }
 
 /// State of the Keyboard USB-UART Header/Message parser. Waiting
@@ -353,7 +353,7 @@ pub enum Parse<'a> {
 enum ParseState {
     Waiting,
     ReportStarted,
-    MessageStarted(ReportHeader),
+    MessageStarted(Header),
 }
 
 
@@ -378,7 +378,7 @@ enum ParseState {
 /// keycodes.
 pub struct USBKeyboardDevice {
     layout: &'static [Key],
-    last_keys: FixedBitSet,
+    last_keys: Vec<u8>,
     parse_state: ParseState,
     report_buffer: Vec<u8>,
     message_buffer: Vec<u8>,
@@ -390,7 +390,7 @@ impl USBKeyboardDevice {
     pub fn new(layout: &'static [Key]) -> USBKeyboardDevice {
         USBKeyboardDevice {
             layout,
-            last_keys: FixedBitSet::with_capacity(256),
+            last_keys: Vec::new(),
             report_buffer: Vec::new(),
             message_buffer: Vec::new(),
             parse_state: ParseState::Waiting,
@@ -423,7 +423,7 @@ impl USBKeyboardDevice {
                     self.parse_state = ParseState::ReportStarted;
                     Parse::Continue
                 } else {
-                    match ReportHeader::from_bytes(&self.report_buffer) {
+                    match Header::from_bytes(&self.report_buffer) {
                         Ok(r) => {
                             // Since we've generated a Header, the currently incoming byte
                             // is actually part of the "message", so that byte should be
@@ -452,7 +452,7 @@ impl USBKeyboardDevice {
                     if b == END {
                         self.report_buffer.clear();
                         self.parse_state = ParseState::Waiting;
-                        Parse::Finished(Ok(ReportMessage {
+                        Parse::Finished(Ok(Message {
                             message: self.message_buffer.drain(..).collect(),
                         }))
                     } else {
@@ -473,31 +473,31 @@ impl USBKeyboardDevice {
     /// were pressed since the last time and the list of Keys released since the last time
     /// forming a Vec of KeyEvents.
     pub fn next_report(&mut self, message: &[u8]) -> Vec<KeyEvent<u8>> {
-        let mut new_keys = FixedBitSet::with_capacity(256);
+        let mut new_keys = Vec::new();
 
         // Get all the currently pressed modifier keys and generate the keycodes for them
         let mod_keys = message[0];
         let mod_key_offset = 0xE0;
         for i in 0..8 {
             if (mod_keys & 1 << i) != 0 {
-                new_keys.insert(mod_key_offset + i);
+                new_keys.push((mod_key_offset + i) as u8);
             }
         }
 
         // Add each subsequent key press from the report
         for m in &message[2..] {
-            new_keys.insert(*m as usize);
+            new_keys.push(*m);
         }
 
         // Get keys added in the new report and keys removed since the last report
-        let added = new_keys.difference(&self.last_keys);
-        let released = self.last_keys.difference(&new_keys);
+        let added: Vec<_> = new_keys.iter().filter(|k| !self.last_keys.contains(*k)).collect();
+        let released: Vec<_> = self.last_keys.iter().filter(|k| !new_keys.contains(*k)).collect();
         let mut events = Vec::new();
         for k in added {
-            events.push(KeyEvent::Pressed(k as u8))
+            events.push(KeyEvent::Pressed(*k))
         }
         for k in released {
-            events.push(KeyEvent::Released(k as u8));
+            events.push(KeyEvent::Released(*k));
         }
 
         // The new report is now the previous
