@@ -16,6 +16,7 @@ use esp32c3_hal::{
 use esp_println::println;
 use riscv::interrupt;
 
+#[allow(clippy::type_complexity)]
 static mut QSPI: Option<
     SpiDma<
         '_,
@@ -33,6 +34,7 @@ static mut RX_DESCRIPTORS: [u32; 3] = [0u32; 3]; // should be zero, but dma will
 /// Configure and initialize the Quad SPI instance. Once configured
 /// data may be transmitted with the `transmit()` function.
 ///
+#[allow(clippy::too_many_arguments)]
 pub fn configure(
     spi2: SPI2,
     sio0: Gpio7<Unknown>,
@@ -426,6 +428,7 @@ pub struct QSpi<I: QuadInstance> {
 }
 
 impl<I: QuadInstance> QSpi<I> {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         spi: I,
         mut sio0: Gpio7<Unknown>,
@@ -481,6 +484,7 @@ impl<I: QuadInstance> QSpi<I> {
         self.spi_instance.transfer(data)
     }
 
+    #[allow(clippy::type_complexity)]
     pub fn free(
         self,
     ) -> (

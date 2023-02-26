@@ -1,6 +1,6 @@
 use core::cell::RefCell;
 
-use alloc::{collections::VecDeque, rc::Rc, sync::Arc};
+use alloc::{collections::VecDeque, sync::Arc};
 use critical_section::Mutex;
 
 pub struct Sender<T> {

@@ -1,5 +1,4 @@
 use alloc::vec::Vec;
-use fixedbitset::FixedBitSet;
 
 ///
 /// Header

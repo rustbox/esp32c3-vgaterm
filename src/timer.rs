@@ -149,6 +149,7 @@ pub fn start_timer0_callback(t: u64, callback: impl FnMut() + 'static) {
     })
 }
 
+#[allow(dead_code)]
 pub fn start_repeat_timer0_callback(t: u64, mut callback: impl FnMut() + 'static) {
     critical_section::with(|cs| {
         if let Some(timer) = TIMER0.borrow(cs).borrow_mut().as_mut() {
