@@ -355,23 +355,22 @@ enum ParseState {
     MessageStarted(Header),
 }
 
-
 ///
 /// The USBKeyboardDevice is for taking USB-UART input byte by byte and generates `KeyEvents`s
 /// that represent a key being pressed or released.
-/// 
+///
 /// When parsing USB-UART input, `next_report_byte` will return Parse::Continue to indicate that
 /// the USBKeyboardDevice is ready to receive more input for parsing the message.
-/// 
+///
 /// If a full USB-UART header and message has been succesfully parsed, `next_report_byte` will
 /// return the Finished variant with an Ok result containing the key pressed report. This is
 /// a Vec of u8 which contains the keycodes/report codes as defined in Table 12 of
 /// https://web.archive.org/web/20180826215839/http://www.usb.org/developers/hidpage/Hut1_12v2.pdf.
-/// 
+///
 /// Once a Message is parsed and returned, `next_report` will compare the incoming message with
 /// the last given message and will return the list of keys pressed and released as a Vec of
 /// KeyEvent of the keycodes (as u8).
-/// 
+///
 /// Each keycode can be mapped to actual Keys using the layout internal to the USBKeyboardDevice using
 /// `translate_keycode`, which would allow you to make the events list above contain Keys instead of
 /// keycodes.
@@ -384,7 +383,6 @@ pub struct USBKeyboardDevice {
 }
 
 impl USBKeyboardDevice {
-
     /// Create a new Keyboard Device with the given layout
     pub fn new(layout: &'static [Key]) -> USBKeyboardDevice {
         USBKeyboardDevice {
@@ -489,8 +487,15 @@ impl USBKeyboardDevice {
         }
 
         // Get keys added in the new report and keys removed since the last report
-        let added: Vec<_> = new_keys.iter().filter(|k| !self.last_keys.contains(*k)).collect();
-        let released: Vec<_> = self.last_keys.iter().filter(|k| !new_keys.contains(*k)).collect();
+        let added: Vec<_> = new_keys
+            .iter()
+            .filter(|k| !self.last_keys.contains(*k))
+            .collect();
+        let released: Vec<_> = self
+            .last_keys
+            .iter()
+            .filter(|k| !new_keys.contains(*k))
+            .collect();
         let mut events = Vec::new();
         for k in added {
             events.push(KeyEvent::Pressed(*k))
