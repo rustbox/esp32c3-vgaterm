@@ -1,5 +1,5 @@
 [build]
-target = "riscv32imc-unknown-none-elf"
+target = "riscv32imac-unknown-none-elf"
 rustflags = [
   # Required to obtain backtraces (e.g. when using the "esp-backtrace" crate.)
   # NOTE: May negatively impact performance of produced code

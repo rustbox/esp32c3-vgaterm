@@ -17,8 +17,7 @@ use esp32c3_hal::{clock::ClockControl, peripherals::Peripherals};
 use esp32c3_hal::{Rtc, IO};
 use esp_println::{print, println};
 use vgaterm::{
-    ps2_keyboard,
-    usb_keyboard::{self, KeyEvent, Parse, USBKeyboardDevice, END, START, US_ENGLISH},
+    usb_keyboard::{KeyEvent, Parse, USBKeyboardDevice, US_ENGLISH},
 };
 
 core::arch::global_asm!(".global _heap_size; _heap_size = 0x8000");

@@ -12,8 +12,6 @@ pub mod ansi;
 pub mod channel;
 pub mod color;
 pub mod display;
-pub mod keymap;
-pub mod ps2_keyboard;
 pub mod usb_keyboard;
 pub mod spi;
 pub mod terminal;
