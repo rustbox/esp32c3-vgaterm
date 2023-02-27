@@ -349,6 +349,7 @@ pub enum Parse<'a> {
 /// ReportStarted indicates that the Header is recognized and parsing
 /// has begun. Once the Header is parsed the state transitions to
 /// MessageStarted.
+#[derive(Debug)]
 enum ParseState {
     Waiting,
     ReportStarted,
@@ -374,6 +375,7 @@ enum ParseState {
 /// Each keycode can be mapped to actual Keys using the layout internal to the USBKeyboardDevice using
 /// `translate_keycode`, which would allow you to make the events list above contain Keys instead of
 /// keycodes.
+#[derive(Debug)]
 pub struct USBKeyboardDevice {
     layout: &'static [Key],
     last_keys: Vec<u8>,
@@ -522,6 +524,13 @@ impl USBKeyboardDevice {
             self.layout[code as usize]
         } else {
             Key::UndefinedKey(code)
+        }
+    }
+
+    pub fn code_event_into_key(&self, event: KeyEvent<u8>) -> KeyEvent<Key> {
+        match event {
+            KeyEvent::Pressed(k) => KeyEvent::Pressed(self.translate_keycode(k)),
+            KeyEvent::Released(k) => KeyEvent::Released(self.translate_keycode(k))
         }
     }
 

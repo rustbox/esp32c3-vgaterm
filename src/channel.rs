@@ -24,6 +24,7 @@ impl<T> Clone for Sender<T> {
     }
 }
 
+#[derive(Debug)]
 pub struct Receiver<T> {
     inner: Arc<Inner<T>>,
 }
@@ -37,6 +38,7 @@ impl<T> Receiver<T> {
     }
 }
 
+#[derive(Debug)]
 struct Inner<T> {
     queue: Mutex<RefCell<VecDeque<T>>>,
 }

@@ -3,7 +3,7 @@ use core::cell::RefCell;
 use critical_section::Mutex;
 use esp32c3_hal::{
     clock::Clocks,
-    gpio::{Gpio2, Gpio3, Unknown},
+    gpio::{Gpio3, Unknown, Gpio1},
     uart::{
         config::{Config, DataBits, Parity, StopBits},
         TxRxPins,
@@ -13,6 +13,7 @@ use esp32c3_hal::{
 use esp32c3_hal::{interrupt, peripherals};
 use esp32c3_hal::{peripherals::UART0, Uart};
 use esp32c3_hal::{peripherals::UART1, prelude::*};
+use esp_println::print;
 
 use crate::channel::{self, Receiver, Sender};
 use crate::interrupt::which_priority;
@@ -37,7 +38,7 @@ pub fn configure0(uart: UART0) -> Receiver<char> {
 
 pub fn configure1(
     uart: UART1,
-    tx: Gpio2<Unknown>,
+    tx: Gpio1<Unknown>,
     rx: Gpio3<Unknown>,
     clocks: &Clocks,
 ) -> Receiver<u8> {
@@ -173,9 +174,10 @@ fn UART0() {
 #[interrupt]
 fn UART1() {
     critical_section::with(|cs| {
+        print!("x");
         if let Some(uart_transmitter) = SENDER1.borrow_ref_mut(cs).as_mut() {
             while let nb::Result::Ok(c) = uart_transmitter.serial.read() {
-                // print!("{}", c as char);
+                // print!(".");
                 uart_transmitter.tx.send(c);
             }
             uart_transmitter.serial.reset_rx_fifo_full_interrupt();

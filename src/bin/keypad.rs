@@ -16,7 +16,9 @@ use esp32c3_hal::timer::TimerGroup;
 use esp32c3_hal::{clock::ClockControl, peripherals::Peripherals};
 use esp32c3_hal::{Rtc, IO};
 use esp_println::{print, println};
-use vgaterm::usb_keyboard::{KeyEvent, Parse, USBKeyboardDevice, US_ENGLISH};
+use vgaterm::{
+    usb_keyboard::{KeyEvent, Parse, USBKeyboardDevice, US_ENGLISH}, keyboard::Keyboard,
+};
 
 core::arch::global_asm!(".global _heap_size; _heap_size = 0x8000");
 
@@ -87,8 +89,8 @@ fn main() -> ! {
 
     vgaterm::configure_timer0(peripherals.TIMG0, &clocks);
     // let mut usb_report_channel0 = vgaterm::uart::configure0(peripherals.UART0);
-    let mut usb_report_channel1 =
-        vgaterm::uart::configure1(peripherals.UART1, io.pins.gpio2, io.pins.gpio3, &clocks);
+    let usb_report_channel1 =
+        vgaterm::uart::configure1(peripherals.UART1, io.pins.gpio1, io.pins.gpio3, &clocks);
 
     unsafe {
         riscv::interrupt::enable();
@@ -98,50 +100,58 @@ fn main() -> ! {
 
     println!("Hello World");
 
-    vgaterm::gpio::interrupt_enable(Priority::Priority1);
+    // vgaterm::gpio::interrupt_enable(Priority::Priority1);
+    // vgaterm::keyboard::configure(io.pins.gpio1, io.pins.gpio3, peripherals.UART1, &clocks);
     vgaterm::uart::interrupt_enable1(Priority::Priority5);
 
-    let mut keyboard = USBKeyboardDevice::new(US_ENGLISH);
+    let mut kb = Keyboard::new(US_ENGLISH, usb_report_channel1);
+    // vgaterm::keyboard::configure2(kb);
 
     loop {
-        'message: loop {
-            while let Some(k) = usb_report_channel1.recv() {
-                if let Parse::Finished(r) = keyboard.next_report_byte(k) {
-                    match r {
-                        Ok(m) => {
-                            let events = keyboard.next_report(&m.message);
-                            println!(
-                                "Events: {:?}",
-                                events
-                                    .iter()
-                                    .map(|c| {
-                                        match c {
-                                            KeyEvent::Pressed(k) => {
-                                                KeyEvent::Pressed(keyboard.translate_keycode(*k))
-                                            }
-                                            KeyEvent::Released(k) => {
-                                                KeyEvent::Released(keyboard.translate_keycode(*k))
-                                            }
-                                        }
-                                    })
-                                    .collect::<Vec<_>>()
-                            );
-                        }
-                        Err(e) => {
-                            println!("Error: {:?}", e);
-                        }
-                    }
-                    break 'message;
-                }
-            }
-            unsafe {
-                riscv::asm::wfi();
-            }
-        }
+        // 'message: loop {
+        //     while let Some(k) = usb_report_channel1.recv() {
+        //         if let Parse::Finished(r) = keyboard.next_report_byte(k) {
+        //             match r {
+        //                 Ok(m) => {
+        //                     let events = keyboard.next_report(&m.message);
+        //                     println!(
+        //                         "Events: {:?}",
+        //                         events
+        //                             .iter()
+        //                             .map(|c| {
+        //                                 match c {
+        //                                     KeyEvent::Pressed(k) => {
+        //                                         KeyEvent::Pressed(keyboard.translate_keycode(*k))
+        //                                     }
+        //                                     KeyEvent::Released(k) => {
+        //                                         KeyEvent::Released(keyboard.translate_keycode(*k))
+        //                                     }
+        //                                 }
+        //                             })
+        //                             .collect::<Vec<_>>()
+        //                     );
+        //                 }
+        //                 Err(e) => {
+        //                     println!("Error: {:?}", e);
+        //                 }
+        //             }
+        //             break 'message;
+        //         }
+        //     }
+        //     unsafe {
+        //         riscv::asm::wfi();
+        //     }
+        // }
 
-        unsafe {
-            riscv::asm::wfi();
-        }
+        // Works, but uses external keyboard object
+        let ke = vgaterm::keyboard::next_event2(&mut kb);
+        // Interrupting loop forever of some kind
+        // let ke = vgaterm::keyboard::next_event();
+        println!("Event: {:?}", ke);
+
+        // unsafe {
+        //     riscv::asm::wfi();
+        // }
     }
 
     // let mut report = Vec::new();

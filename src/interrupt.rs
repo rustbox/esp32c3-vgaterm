@@ -6,6 +6,7 @@ pub mod peripherals {
 }
 
 pub use esp32c3_hal::interrupt::{CpuInterrupt, InterruptKind, Priority};
+use esp32c3_hal::peripherals::{Interrupt, Peripherals};
 // pub use esp32c3_hal::{
 //     interrupt,
 //     peripherals::{
@@ -91,19 +92,19 @@ pub fn which_priority(priority: &Priority) -> Priority {
 //     interrupt::disable(Cpu::ProCpu, source);
 // }
 
-// pub fn source() -> Option<Interrupt> {
-//     riscv::interrupt::free(|| unsafe {
-//         let periphs = Peripherals::steal();
-//         let status0 = &periphs.INTERRUPT_CORE0.intr_status_reg_0.read().bits();
-//         let int_num = if *status0 & 0x7FFF == 0 {
-//             // this checks if the status0 register has anything set. If nothing set
-//             // Then let's check the status1 register
-//             // We zero out bits 0-14 since those are reserved (aka first int starts at 15)
-//             let status1 = &periphs.INTERRUPT_CORE0.intr_status_reg_1.read().bits();
-//             31 - status1.leading_zeros() + 32
-//         } else {
-//             31 - status0.leading_zeros()
-//         };
-//         Interrupt::try_from(int_num as u8).ok()
-//     })
-// }
+pub fn source() -> Option<Interrupt> {
+    riscv::interrupt::free(|| unsafe {
+        let periphs = Peripherals::steal();
+        let status0 = &periphs.INTERRUPT_CORE0.intr_status_reg_0.read().bits();
+        let int_num = if *status0 & 0x7FFF == 0 {
+            // this checks if the status0 register has anything set. If nothing set
+            // Then let's check the status1 register
+            // We zero out bits 0-14 since those are reserved (aka first int starts at 15)
+            let status1 = &periphs.INTERRUPT_CORE0.intr_status_reg_1.read().bits();
+            31 - status1.leading_zeros() + 32
+        } else {
+            31 - status0.leading_zeros()
+        };
+        Interrupt::try_from(int_num as u8).ok()
+    })
+}

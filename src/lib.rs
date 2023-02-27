@@ -12,6 +12,7 @@ pub mod ansi;
 pub mod channel;
 pub mod color;
 pub mod display;
+pub mod keyboard;
 pub mod spi;
 pub mod terminal;
 pub mod text;
