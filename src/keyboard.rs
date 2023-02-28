@@ -1,96 +1,102 @@
-use core::cell::RefCell;
+use core::{cell::RefCell, hint::black_box};
 
 use alloc::collections::VecDeque;
 use critical_section::Mutex;
-use esp32c3_hal::{gpio::{Gpio1, Gpio3, Unknown}, peripherals::UART1, clock::Clocks, interrupt::{Priority}};
+use esp32c3_hal::{prelude::*, Cpu, interrupt::CpuInterrupt, Uart};
+use esp32c3_hal::{gpio::{Gpio1, Gpio3, Unknown}, peripherals::UART1, clock::Clocks, interrupt, interrupt::{Priority}, systimer::SystemTimer};
 use esp_println::{print, println};
 
-use crate::{usb_keyboard::{Key, KeyEvent, USBKeyboardDevice, Parse, US_ENGLISH}, uart, channel::Receiver, interrupt};
+use crate::{usb_keyboard::{Key, KeyEvent, USBKeyboardDevice, Parse, US_ENGLISH, self}, uart::{self, UartTransmitter}, channel::Receiver};
 
 static KEYBOARD: Mutex<RefCell<Option<Keyboard>>> = Mutex::new(RefCell::new(None));
 
 pub fn configure(tx: Gpio1<Unknown>, rx: Gpio3<Unknown>, uart: UART1, clocks: &Clocks) {
-    let rx = uart::configure1(uart, tx, rx, clocks);
-    uart::interrupt_enable1(Priority::Priority5);
+    let uart = uart::make_uart1(uart, tx, rx, clocks);
 
-    let keyboard = Keyboard::new(US_ENGLISH, rx);
+    interrupt::enable(esp32c3_hal::peripherals::Interrupt::UART1, Priority::Priority4).unwrap();
+    interrupt::set_kind(
+        Cpu::ProCpu,
+        CpuInterrupt::Interrupt4,
+        interrupt::InterruptKind::Edge,
+    );
+
+    let keyboard = Keyboard::new(US_ENGLISH, uart);
     critical_section::with(|cs| {
         KEYBOARD.borrow_ref_mut(cs).replace(keyboard);
     });
 }
 
-pub fn configure2(kb: Keyboard) {
-    critical_section::with(|cs| {
-        KEYBOARD.borrow_ref_mut(cs).replace(kb);
-    });
-}
-
 pub fn next_event() -> KeyEvent<Key> {
-    println!("pre cs");
-    critical_section::with(|cs| {
-        println!("in cs");
-        let mut kb = KEYBOARD.borrow_ref_mut(cs);
-        println!("getting the kb instance {:?}", kb);
-        kb.as_mut().expect("Keyboard must be configured before key events can be detected").next_event()
-    })
+    loop {
+        let ke = critical_section::with(|cs| {
+            let mut kb = KEYBOARD.borrow_ref_mut(cs);
+            let ke = kb.as_mut().expect("Keyboard must be configured before key events can be detected").next_event();
+            ke
+        });
+
+
+        if let Some(k) = ke {
+            return k;
+        } else {
+            unsafe {
+                riscv::asm::wfi();
+            }
+        }
+    }
 }
 
-pub fn next_event2(kb: &mut Keyboard) -> KeyEvent<Key> {
-    kb.next_event()
-}
-
-#[derive(Debug)]
-pub struct Keyboard {
+pub struct Keyboard<'a> {
     device: USBKeyboardDevice,
     key_events: VecDeque<KeyEvent<Key>>,
-    rx: Receiver<u8>,
+    uart: Uart<'a, UART1>,
 }
 
-impl Keyboard {
-    pub fn new(layout: &'static [Key], rx: Receiver<u8>) -> Keyboard {
+impl<'a> Keyboard<'a> {
+    pub fn new(layout: &'static [Key], uart: Uart<'a, UART1>) -> Keyboard<'a> {
+        let mut uart = uart;
+        uart.set_rx_fifo_full_threshold(1);
+        uart.listen_rx_fifo_full();
+
         Keyboard {
             device: USBKeyboardDevice::new(layout),
             key_events: VecDeque::new(),
-            rx
+            uart
         }
     }
 
-    pub fn next_event(&mut self) -> KeyEvent<Key> {
-        loop {
-            // First receive any transaction bytes and attempt to parse
-            while let Some(k) = self.rx.recv() {
+
+    pub fn next_event(&mut self) -> Option<KeyEvent<Key>> {
+        
+        // First receive any transaction bytes and attempt to parse
+        self.key_events.pop_back()
+    }
+
+    fn parse_next_byte(&mut self, b: u8) -> Parse {
+        self.device.next_report_byte(b)
+    }
+}
+
+#[interrupt]
+fn UART1() {
+    critical_section::with(|cs| {
+        if let Some(keyboard) = KEYBOARD.borrow_ref_mut(cs).as_mut() {
+            while let nb::Result::Ok(c) = keyboard.uart.read() {
                 // print!(".");
-                if let Parse::Finished(r) = self.device.next_report_byte(k) {
-                    match r {
+                if let Parse::Finished(message) = keyboard.parse_next_byte(c) {
+                    match message {
                         Ok(m) => {
-                            let events = self.device.next_report(&m.message);
-                            for e in events {
-                                let ke = self.device.code_event_into_key(e);
-                                self.key_events.push_front(ke);
+                            let events = keyboard.device.next_report(&m.message);
+                            for k in events {
+                                keyboard.key_events.push_front(keyboard.device.code_event_into_key(k));
                             }
                         },
-                        Err(e) => {
-                            println!("Error: {:?}", e);
-                        }
+                        Err(e) => {println!("Error: {:?}", e);}
                     }
                 }
             }
-
-            // Grab the next item off the queue. But if there are none,
-            // Then we should wait for the next byte coming along rx, and
-            // start from 'transaction again
-            if let Some(k) = self.key_events.pop_back() {
-                return k;
-            } else {
-                println!("wfi");
-                unsafe {
-                    riscv::asm::wfi();
-                }
-                println!("{:?}", interrupt::source());
-                println!("awakened");
-            }
+            keyboard.uart.reset_rx_fifo_full_interrupt();
         }
-
-
-    }
+    });
 }
+
+

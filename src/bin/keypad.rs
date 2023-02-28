@@ -89,8 +89,8 @@ fn main() -> ! {
 
     vgaterm::configure_timer0(peripherals.TIMG0, &clocks);
     // let mut usb_report_channel0 = vgaterm::uart::configure0(peripherals.UART0);
-    let usb_report_channel1 =
-        vgaterm::uart::configure1(peripherals.UART1, io.pins.gpio1, io.pins.gpio3, &clocks);
+    // let usb_report_channel1 =
+    //     vgaterm::uart::configure1(peripherals.UART1, io.pins.gpio1, io.pins.gpio3, &clocks);
 
     unsafe {
         riscv::interrupt::enable();
@@ -101,10 +101,10 @@ fn main() -> ! {
     println!("Hello World");
 
     // vgaterm::gpio::interrupt_enable(Priority::Priority1);
-    // vgaterm::keyboard::configure(io.pins.gpio1, io.pins.gpio3, peripherals.UART1, &clocks);
-    vgaterm::uart::interrupt_enable1(Priority::Priority5);
+    vgaterm::keyboard::configure(io.pins.gpio1, io.pins.gpio3, peripherals.UART1, &clocks);
+    // vgaterm::uart::interrupt_enable1(Priority::Priority5);
 
-    let mut kb = Keyboard::new(US_ENGLISH, usb_report_channel1);
+    // let mut kb = Keyboard::new(US_ENGLISH, usb_report_channel1);
     // vgaterm::keyboard::configure2(kb);
 
     loop {
@@ -144,9 +144,9 @@ fn main() -> ! {
         // }
 
         // Works, but uses external keyboard object
-        let ke = vgaterm::keyboard::next_event2(&mut kb);
+        // let ke = vgaterm::keyboard::next_event2(&mut kb);
         // Interrupting loop forever of some kind
-        // let ke = vgaterm::keyboard::next_event();
+        let ke = vgaterm::keyboard::next_event();
         println!("Event: {:?}", ke);
 
         // unsafe {
