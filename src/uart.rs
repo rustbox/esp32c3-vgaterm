@@ -3,17 +3,16 @@ use core::cell::RefCell;
 use critical_section::Mutex;
 use esp32c3_hal::{
     clock::Clocks,
-    gpio::{Gpio3, Unknown, Gpio1},
+    gpio::{Gpio1, Gpio3, Unknown},
     uart::{
         config::{Config, DataBits, Parity, StopBits},
         TxRxPins,
     },
-    Cpu, system::Peripheral,
+    Cpu,
 };
 use esp32c3_hal::{interrupt, peripherals};
 use esp32c3_hal::{peripherals::UART0, Uart};
 use esp32c3_hal::{peripherals::UART1, prelude::*};
-use esp_println::print;
 
 use crate::channel::{self, Receiver, Sender};
 use crate::interrupt::which_priority;
@@ -67,8 +66,8 @@ pub fn make_uart1<'a>(
     uart: UART1,
     tx: Gpio1<Unknown>,
     rx: Gpio3<Unknown>,
-    clocks: &Clocks,) -> Uart<'a, UART1> {
-    
+    clocks: &Clocks,
+) -> Uart<'a, UART1> {
     let config = Config {
         baudrate: 400_000,
         data_bits: DataBits::DataBits8,

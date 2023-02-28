@@ -530,7 +530,7 @@ impl USBKeyboardDevice {
     pub fn code_event_into_key(&self, event: KeyEvent<u8>) -> KeyEvent<Key> {
         match event {
             KeyEvent::Pressed(k) => KeyEvent::Pressed(self.translate_keycode(k)),
-            KeyEvent::Released(k) => KeyEvent::Released(self.translate_keycode(k))
+            KeyEvent::Released(k) => KeyEvent::Released(self.translate_keycode(k)),
         }
     }
 

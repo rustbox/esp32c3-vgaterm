@@ -1,19 +1,32 @@
-use core::{cell::RefCell, hint::black_box};
+use core::cell::RefCell;
 
 use alloc::collections::VecDeque;
 use critical_section::Mutex;
-use esp32c3_hal::{prelude::*, Cpu, interrupt::CpuInterrupt, Uart};
-use esp32c3_hal::{gpio::{Gpio1, Gpio3, Unknown}, peripherals::UART1, clock::Clocks, interrupt, interrupt::{Priority}, systimer::SystemTimer};
-use esp_println::{print, println};
+use esp32c3_hal::{
+    clock::Clocks,
+    gpio::{Gpio1, Gpio3, Unknown},
+    interrupt,
+    interrupt::Priority,
+    peripherals::UART1,
+};
+use esp32c3_hal::{interrupt::CpuInterrupt, prelude::*, Cpu, Uart};
+use esp_println::println;
 
-use crate::{usb_keyboard::{Key, KeyEvent, USBKeyboardDevice, Parse, US_ENGLISH, self}, uart::{self, UartTransmitter}, channel::Receiver};
+use crate::{
+    uart::{self},
+    usb_keyboard::{Key, KeyEvent, Parse, USBKeyboardDevice, US_ENGLISH},
+};
 
 static KEYBOARD: Mutex<RefCell<Option<Keyboard>>> = Mutex::new(RefCell::new(None));
 
 pub fn configure(tx: Gpio1<Unknown>, rx: Gpio3<Unknown>, uart: UART1, clocks: &Clocks) {
     let uart = uart::make_uart1(uart, tx, rx, clocks);
 
-    interrupt::enable(esp32c3_hal::peripherals::Interrupt::UART1, Priority::Priority4).unwrap();
+    interrupt::enable(
+        esp32c3_hal::peripherals::Interrupt::UART1,
+        Priority::Priority4,
+    )
+    .unwrap();
     interrupt::set_kind(
         Cpu::ProCpu,
         CpuInterrupt::Interrupt4,
@@ -30,10 +43,12 @@ pub fn next_event() -> KeyEvent<Key> {
     loop {
         let ke = critical_section::with(|cs| {
             let mut kb = KEYBOARD.borrow_ref_mut(cs);
-            let ke = kb.as_mut().expect("Keyboard must be configured before key events can be detected").next_event();
+            let ke = kb
+                .as_mut()
+                .expect("Keyboard must be configured before key events can be detected")
+                .next_event();
             ke
         });
-
 
         if let Some(k) = ke {
             return k;
@@ -60,13 +75,11 @@ impl<'a> Keyboard<'a> {
         Keyboard {
             device: USBKeyboardDevice::new(layout),
             key_events: VecDeque::new(),
-            uart
+            uart,
         }
     }
 
-
     pub fn next_event(&mut self) -> Option<KeyEvent<Key>> {
-        
         // First receive any transaction bytes and attempt to parse
         self.key_events.pop_back()
     }
@@ -87,10 +100,14 @@ fn UART1() {
                         Ok(m) => {
                             let events = keyboard.device.next_report(&m.message);
                             for k in events {
-                                keyboard.key_events.push_front(keyboard.device.code_event_into_key(k));
+                                keyboard
+                                    .key_events
+                                    .push_front(keyboard.device.code_event_into_key(k));
                             }
-                        },
-                        Err(e) => {println!("Error: {:?}", e);}
+                        }
+                        Err(e) => {
+                            println!("Error: {:?}", e);
+                        }
                     }
                 }
             }
@@ -98,5 +115,3 @@ fn UART1() {
         }
     });
 }
-
-
