@@ -12,12 +12,12 @@ pub mod ansi;
 pub mod channel;
 pub mod color;
 pub mod display;
-pub mod keyboard;
 pub mod spi;
 pub mod terminal;
 pub mod text;
 mod timer;
 pub mod uart;
+pub mod usb_keyboard;
 pub mod video;
 
 /// This is required for the #[interrupt] macro on interrupt handler functions to work properly.

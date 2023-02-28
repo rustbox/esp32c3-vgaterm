@@ -4,6 +4,7 @@
 
 extern crate alloc;
 
+use alloc::vec::Vec;
 use esp32c3_hal::clock::CpuClock;
 use esp32c3_hal::interrupt::Priority;
 use esp32c3_hal::prelude::*;
@@ -11,7 +12,8 @@ use esp32c3_hal::timer::TimerGroup;
 use esp32c3_hal::{clock::ClockControl, peripherals::Peripherals};
 use esp32c3_hal::{Rtc, IO};
 use esp_println::{print, println};
-use vgaterm::keyboard;
+use riscv_rt::entry;
+use vgaterm::usb_keyboard::{KeyEvent, Parse, USBKeyboardDevice, US_ENGLISH};
 
 core::arch::global_asm!(".global _heap_size; _heap_size = 0x8000");
 
@@ -81,6 +83,9 @@ fn main() -> ! {
     init_heap();
 
     vgaterm::configure_timer0(peripherals.TIMG0, &clocks);
+    // let mut usb_report_channel0 = vgaterm::uart::configure0(peripherals.UART0);
+    let mut usb_report_channel1 =
+        vgaterm::uart::configure1(peripherals.UART1, io.pins.gpio2, io.pins.gpio3, &clocks);
 
     unsafe {
         riscv::interrupt::enable();
@@ -91,14 +96,85 @@ fn main() -> ! {
     println!("Hello World");
 
     vgaterm::gpio::interrupt_enable(Priority::Priority1);
+    vgaterm::uart::interrupt_enable1(Priority::Priority5);
 
-    keyboard::configure(io.pins.gpio8.into(), io.pins.gpio6.into());
-
-    keyboard::send_reset();
+    let mut keyboard = USBKeyboardDevice::new(US_ENGLISH);
 
     loop {
+        'message: loop {
+            while let Some(k) = usb_report_channel1.recv() {
+                if let Parse::Finished(r) = keyboard.next_report_byte(k) {
+                    match r {
+                        Ok(m) => {
+                            let events = keyboard.next_report(&m.message);
+                            println!(
+                                "Events: {:?}",
+                                events
+                                    .iter()
+                                    .map(|c| {
+                                        match c {
+                                            KeyEvent::Pressed(k) => {
+                                                KeyEvent::Pressed(keyboard.translate_keycode(*k))
+                                            }
+                                            KeyEvent::Released(k) => {
+                                                KeyEvent::Released(keyboard.translate_keycode(*k))
+                                            }
+                                        }
+                                    })
+                                    .collect::<Vec<_>>()
+                            );
+                        }
+                        Err(e) => {
+                            println!("Error: {:?}", e);
+                        }
+                    }
+                    break 'message;
+                }
+            }
+            unsafe {
+                riscv::asm::wfi();
+            }
+        }
+
         unsafe {
             riscv::asm::wfi();
         }
     }
+
+    // let mut report = Vec::new();
+    //     let mut collecting_report = false;
+    //     'report: loop {
+    //         while let Some(k) = usb_report_channel1.recv() {
+    //             if k == START && !collecting_report {
+    //                 print!("*");
+    //                 collecting_report = true;
+    //             }
+    //             if collecting_report {
+    //                 report.push(k);
+    //                 print!(".");
+    //             }
+    //             if k == END {
+    //                 print!("|");
+    //                 break 'report;
+    //             }
+    //         }
+    //         unsafe {
+    //             print!("#");
+    //             riscv::asm::wfi();
+    //         }
+    //     }
+
+    //     if !report.is_empty() {
+    //         match usb_keyboard::ReportHeader::from_bytes(report.as_slice()) {
+    //             Ok(r) => {
+    //                 let keys_pressed = keyboard.next_report(&r.message);
+    //                 println!("Pressed {:?}", keys_pressed);
+    //             }
+    //             Err(s) => {
+    //                 println!("ERROR: {:?}", s);
+    //             }
+    //         }
+    //     }
+
+    //     println!("Wfi");
 }

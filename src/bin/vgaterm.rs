@@ -84,10 +84,10 @@ fn main() -> ! {
     configure_counter_for_cpu_cycles();
 
     vgaterm::configure_timer0(peripherals.TIMG0, &clocks);
-    let mut char_reciever = vgaterm::uart::configure(peripherals.UART0);
+    let mut char_reciever = vgaterm::uart::configure0(peripherals.UART0);
     vgaterm::enable_timer0_interrupt(Priority::Priority1);
     vgaterm::gpio::interrupt_enable(Priority::Priority2);
-    vgaterm::uart::interrupt_enable(Priority::Priority3);
+    vgaterm::uart::interrupt_enable0(Priority::Priority3);
 
     unsafe {
         riscv::interrupt::enable();

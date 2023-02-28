@@ -48,17 +48,17 @@
 //! [Op(name), [Param(value)]]
 //!
 
-struct Color {
-    fg: u8,
-    bg: u8,
-}
+// struct Color {
+//     fg: u8,
+//     bg: u8,
+// }
 
-enum TextMode {
-    Bright,
-    Dim,
-    Italic,
-    Underline,
-    Blink,
-    Inverse,
-    Strikethrough,
-}
+// enum TextMode {
+//     Bright,
+//     Dim,
+//     Italic,
+//     Underline,
+//     Blink,
+//     Inverse,
+//     Strikethrough,
+// }
