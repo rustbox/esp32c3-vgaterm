@@ -97,6 +97,8 @@ pub fn configure(
 /// Transmit data, a slice of u8, if the qspi instance has been configured.
 /// The buffer should be a length divisible by 4, and no longer than 32,768.
 ///
+// #[ram]
+#[link_section = ".rwtext"] // #[ram] without #[inline(never)]
 pub fn transmit(data: &'static mut [u8]) {
     static mut RECV: [u8; 0] = [];
     unsafe {
@@ -509,7 +511,7 @@ impl<I: QuadInstance> QSpi<I> {
 }
 
 impl QuadInstance for esp32c3_hal::peripherals::SPI2 {
-    #[inline]
+    #[inline(always)]
     fn register_block(&self) -> &SPI2 {
         self
     }

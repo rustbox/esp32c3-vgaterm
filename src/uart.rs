@@ -17,16 +17,15 @@ use esp32c3_hal::{peripherals::UART1, prelude::*};
 use crate::channel::{self, Receiver, Sender};
 use crate::interrupt::which_priority;
 
-static SENDER0: Mutex<RefCell<Option<UartTransmitter<UART0, char>>>> =
-    Mutex::new(RefCell::new(None));
+static mut SENDER0: Option<UartTransmitter<UART0, char>> = None;
 static SENDER1: Mutex<RefCell<Option<UartTransmitter<UART1, u8>>>> = Mutex::new(RefCell::new(None));
 
 pub fn configure0(uart: UART0) -> Receiver<char> {
     let serial0 = Uart::new(uart);
     let (tx, rx) = channel::channel();
 
-    critical_section::with(|cs| {
-        SENDER0.borrow_ref_mut(cs).replace(UartTransmitter {
+    critical_section::with(|_cs| {
+        unsafe { &mut SENDER0 }.replace(UartTransmitter {
             serial: serial0,
             tx,
         })
@@ -106,8 +105,8 @@ pub fn interrupt_enable0(priority: interrupt::Priority) {
         interrupt::InterruptKind::Edge,
     );
 
-    critical_section::with(|cs| {
-        if let Some(sender) = SENDER0.borrow_ref_mut(cs).as_mut() {
+    critical_section::with(|_cs| {
+        if let Some(sender) = unsafe { &mut SENDER0 } {
             sender.serial.set_rx_fifo_full_threshold(1);
             sender.serial.listen_rx_fifo_full();
         }
@@ -141,7 +140,7 @@ pub fn interrupt_enable1(priority: interrupt::Priority) {
     interrupt::set_kind(
         Cpu::ProCpu,
         cpu_int, // Interrupt x handles priority x interrupts
-        interrupt::InterruptKind::Edge,
+        interrupt::InterruptKind::Level,
     );
 
     critical_section::with(|cs| {

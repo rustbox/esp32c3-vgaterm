@@ -13,7 +13,7 @@ pub static mut BUFFER: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];
 /// here we break apart the frame buffer into eight parts, each to
 /// be sent one by one in order.
 ///
-#[inline]
+#[inline(always)]
 pub fn transmit_frame() {
     riscv::interrupt::free(|| unsafe {
         spi::transmit(&mut BUFFER[0..32000]);

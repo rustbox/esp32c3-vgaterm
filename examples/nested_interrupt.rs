@@ -4,10 +4,9 @@
 
 extern crate alloc;
 
-use core::{borrow::Borrow, cell::RefCell};
+use core::cell::RefCell;
 
 use critical_section::Mutex;
-use esp_println::println;
 
 use esp32c3_hal::{
     clock::ClockControl,

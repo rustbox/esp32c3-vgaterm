@@ -86,8 +86,8 @@ fn main() -> ! {
     vgaterm::configure_timer0(peripherals.TIMG0, &clocks);
     let mut char_reciever = vgaterm::uart::configure0(peripherals.UART0);
     vgaterm::enable_timer0_interrupt(Priority::Priority1);
-    vgaterm::gpio::interrupt_enable(Priority::Priority2);
-    vgaterm::uart::interrupt_enable0(Priority::Priority3);
+    vgaterm::uart::interrupt_enable0(Priority::Priority2);
+    vgaterm::gpio::interrupt_enable(Priority::max());
 
     unsafe {
         riscv::interrupt::enable();
@@ -147,7 +147,7 @@ fn main() -> ! {
     loop {
         // Get the pressed chars
         while let Some(t) = char_reciever.recv() {
-            println!("got: {}", t.escape_default());
+            // println!("got: {}", t.escape_default());
             terminal.type_next(t);
         }
         // Draw the characters on the frame
