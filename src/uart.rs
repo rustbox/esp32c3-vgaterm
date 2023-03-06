@@ -159,37 +159,17 @@ struct UartTransmitter<'a, S, Tx> {
 #[link_section = ".rwtext"] // #[ram] without #[inline(never)]
 #[interrupt]
 fn UART0() {
-    let intr = unsafe { &*peripherals::INTERRUPT_CORE0::PTR };
-    let threshold = intr.cpu_int_thresh.read().cpu_int_thresh().bits();
-
-    let cpu_interrupt_number = riscv::register::mcause::read().code() as isize;
-    let intr_prio_base = intr.cpu_int_pri_0.as_ptr();
-
-    let prio = unsafe { intr_prio_base.offset(cpu_interrupt_number).read_volatile() };
-
-    intr.cpu_int_thresh
-        .write(|w| w.cpu_int_thresh().variant(((prio & 0b1111) + 1) as u8));
-
-    // SAFETY: we've set the priority to one greater than our own, above, so we're not re-entrant
-    // and this is the ~only thing that will touch SENDER0 (assuming nothing reconfigures the priority lol)
-    unsafe {
-        riscv::interrupt::enable();
-    }
-
-    if let Some(uart_transmitter) = unsafe { &mut SENDER0 } {
-        while let nb::Result::Ok(c) = uart_transmitter.serial.read() {
-            // print!("{}", c as char);
-            uart_transmitter.tx.send(c as char);
+    crate::interrupt::theshold_mask(|| {
+        // SAFETY: we've set the priority to one greater than our own, in threshold_mask, so we're not concurrently modifying SENDER0
+        // (this code is not re-entrant), assuming nothing reconfigures the priority lol
+        if let Some(uart_transmitter) = unsafe { &mut SENDER0 } {
+            while let nb::Result::Ok(c) = uart_transmitter.serial.read() {
+                // print!("{}", c as char);
+                uart_transmitter.tx.send(c as char);
+            }
+            uart_transmitter.serial.reset_rx_fifo_full_interrupt();
         }
-        uart_transmitter.serial.reset_rx_fifo_full_interrupt();
-    }
-
-    unsafe {
-        riscv::interrupt::disable();
-    }
-
-    intr.cpu_int_thresh
-        .write(|w| w.cpu_int_thresh().variant(threshold));
+    });
 }
 
 #[interrupt]

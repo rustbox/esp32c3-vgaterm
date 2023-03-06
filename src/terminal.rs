@@ -4,7 +4,6 @@ use crate::{
 };
 use embedded_graphics::prelude::DrawTarget;
 use esp32c3_hal::systimer::SystemTimer;
-use esp_println::println;
 
 pub const IROWS: isize = display::ROWS as isize;
 pub const ICOLS: isize = display::COLUMNS as isize;

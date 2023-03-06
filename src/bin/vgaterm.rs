@@ -156,6 +156,7 @@ fn main() -> ! {
         display.flush();
 
         unsafe {
+            // this will fire no less often than once per frame
             riscv::asm::wfi();
         }
     }
