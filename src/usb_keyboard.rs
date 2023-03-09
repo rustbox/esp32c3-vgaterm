@@ -90,6 +90,18 @@ pub enum DeviceType {
     Keyboard = 0x6,
 }
 
+#[derive(Debug, Clone, Copy, Ord, Eq, PartialEq, PartialOrd)]
+pub enum Mod {
+    LeftCtrl,
+    LeftShift,
+    LeftAlt,
+    LeftGui,
+    RightCtrl,
+    RightShift,
+    RightAlt,
+    RightGui,
+}
+
 ///
 /// Each kind of keyboard key.
 ///
@@ -111,7 +123,7 @@ pub enum DeviceType {
 /// will be selected on the numpad and when not set the Home, Page Down, etc keys are selected.
 ///
 /// These cases must be handled individually with the Num Lock state when matching on a Key
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Ord, Eq, PartialEq, PartialOrd)]
 pub enum Key {
     Printable(char, char),
     Lockable(char, char),
@@ -136,14 +148,7 @@ pub enum Key {
     Tab,
     CapsLock,
     Enter,
-    LeftShift,
-    RightShift,
-    LeftCtrl,
-    LeftGui,
-    LeftAlt,
-    RightAlt,
-    RightGui,
-    RightCtrl,
+    Mod(Mod),
     Application,
     UpArrow,
     LeftArrow,
@@ -179,25 +184,25 @@ pub enum Key {
     UndefinedError,
     UndefinedKey(u8),
 }
-
-pub const LEFT_CTRL: (usize, Key) = (0xE0, Key::LeftCtrl);
-pub const LEFT_SHIFT: (usize, Key) = (0xE1, Key::LeftShift);
-pub const LEFT_ALT: (usize, Key) = (0xE2, Key::LeftAlt);
-pub const LEFT_GUI: (usize, Key) = (0xE3, Key::LeftGui);
-pub const RIGHT_CTRL: (usize, Key) = (0xE4, Key::RightCtrl);
-pub const RIGHT_SHIFT: (usize, Key) = (0xE5, Key::RightShift);
-pub const RIGHT_ALT: (usize, Key) = (0xE6, Key::RightAlt);
-pub const RIGHT_GUI: (usize, Key) = (0xE7, Key::RightGui);
+use Mod::*;
+pub const LEFT_CTRL: (usize, Key) = (0xE0, Key::Mod(LeftCtrl));
+pub const LEFT_SHIFT: (usize, Key) = (0xE1, Key::Mod(LeftShift));
+pub const LEFT_ALT: (usize, Key) = (0xE2, Key::Mod(LeftAlt));
+pub const LEFT_GUI: (usize, Key) = (0xE3, Key::Mod(LeftGui));
+pub const RIGHT_CTRL: (usize, Key) = (0xE4, Key::Mod(RightCtrl));
+pub const RIGHT_SHIFT: (usize, Key) = (0xE5, Key::Mod(RightShift));
+pub const RIGHT_ALT: (usize, Key) = (0xE6, Key::Mod(RightAlt));
+pub const RIGHT_GUI: (usize, Key) = (0xE7, Key::Mod(RightGui));
 
 pub const MOD_KEYS: [Key; 8] = [
-    Key::LeftCtrl,
-    Key::LeftShift,
-    Key::LeftAlt,
-    Key::LeftGui,
-    Key::RightCtrl,
-    Key::RightShift,
-    Key::RightAlt,
-    Key::RightGui,
+    Key::Mod(LeftCtrl),
+    Key::Mod(LeftShift),
+    Key::Mod(LeftAlt),
+    Key::Mod(LeftGui),
+    Key::Mod(RightCtrl),
+    Key::Mod(RightShift),
+    Key::Mod(RightAlt),
+    Key::Mod(RightGui),
 ];
 
 pub const MOD_KEY_OFFSET: usize = 0xE0;

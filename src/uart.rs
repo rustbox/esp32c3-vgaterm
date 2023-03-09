@@ -13,6 +13,7 @@ use esp32c3_hal::{
 use esp32c3_hal::{interrupt, peripherals};
 use esp32c3_hal::{peripherals::UART0, Uart};
 use esp32c3_hal::{peripherals::UART1, prelude::*};
+use esp_println::print;
 
 use crate::channel::{self, Receiver, Sender};
 use crate::interrupt::which_priority;
@@ -159,7 +160,7 @@ pub fn interrupt_enable1(priority: interrupt::Priority) {
     interrupt::set_kind(
         Cpu::ProCpu,
         cpu_int, // Interrupt x handles priority x interrupts
-        interrupt::InterruptKind::Edge,
+        interrupt::InterruptKind::Level,
     );
 
     critical_section::with(|cs| {
@@ -188,15 +189,15 @@ fn UART0() {
     });
 }
 
-// #[interrupt]
-// fn UART1() {
-//     critical_section::with(|cs| {
-//         if let Some(uart_transmitter) = SENDER1.borrow_ref_mut(cs).as_mut() {
-//             while let nb::Result::Ok(c) = uart_transmitter.serial.read() {
-//                 // print!(".");
-//                 uart_transmitter.tx.send(c);
-//             }
-//             uart_transmitter.serial.reset_rx_fifo_full_interrupt();
-//         }
-//     });
-// }
+#[interrupt]
+fn UART1() {
+    // print!(".");
+    critical_section::with(|cs| {
+        if let Some(uart_transmitter) = SENDER1.borrow_ref_mut(cs).as_mut() {
+            while let nb::Result::Ok(c) = uart_transmitter.serial.read() {
+                uart_transmitter.tx.send(c);
+            }
+            uart_transmitter.serial.reset_rx_fifo_full_interrupt();
+        }
+    });
+}
