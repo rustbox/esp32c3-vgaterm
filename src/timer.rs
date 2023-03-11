@@ -108,7 +108,7 @@ pub fn delay(us: u64) {
 
 /// 16MHz timer clock
 /// (16,000,000 cycles / sec) * (1 sec / 1,000,000 us) => 16 cycles / us
-/// 
+///
 /// Return the SystemTimer clock value that is `delta` microseconds
 /// from now. When SystemTimer::now() is equal to the value output
 /// by `deadline` then `delta` microseconds have elapsed.

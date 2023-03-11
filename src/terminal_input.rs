@@ -1,14 +1,20 @@
 use alloc::{
+    borrow::ToOwned,
     collections::{BTreeMap, BTreeSet},
     string::String,
+    vec::Vec,
 };
 use esp32c3_hal::systimer::SystemTimer;
 use lazy_static::lazy_static;
 
-use crate::{keyboard::PressedSet, timer, usb_keyboard::Key};
+use crate::{
+    keyboard::PressedSet,
+    timer,
+    usb_keyboard::{Key, Mod},
+};
 
 // const ESC: char = '\u{27}';
-const ESC: &str = "\u{27}";
+const ESC: &str = "\u{1B}";
 // static ESCS: String = String::from_str(ESCH).unwrap();
 
 fn join(c: &str, tail: &str) -> String {
@@ -47,13 +53,216 @@ lazy_static! {
         map.insert(Key::Pause, join(ESC, "[P"));
         map
     };
-
-    static ref KEY_COMBINATION: BTreeMap<KeyCombo, String> = {
-        let mut map = BTreeMap::new();
-        // map.insert(KeyCombo::new([Key::Mod(LeftCtrl, Key::Lockable('a', 'A')]), String::from("\u{01}"));
-        // map.insert(KeyCombo::new([Key::RightCtrl, Key::Lockable('a', 'A')]), String::from("\u{01}"));
-        // map.insert(KeyCombo::new([Key::LeftCtrl, Key::Lockable('b', 'B')]), String::from("\u{02}"));
-        // map.insert(KeyCombo::new([Key::RightCtrl, Key::Lockable('b', 'B')]), String::from("\u{02}"));
+    static ref KEY_COMBINATION: Vec<(&'static [Key], String)> = {
+        let mut map = Vec::new();
+        map.push((
+            &[Key::Mod(Mod::LeftCtrl), Key::Lockable('a', 'A')] as &[_],
+            String::from("\u{01}"),
+        ));
+        map.push((
+            &[Key::Mod(Mod::RightCtrl), Key::Lockable('a', 'A')] as &[_],
+            String::from("\u{01}"),
+        ));
+        map.push((
+            &[Key::Mod(Mod::LeftCtrl), Key::Lockable('b', 'B')] as &[_],
+            String::from("\u{02}"),
+        ));
+        map.push((
+            &[Key::Mod(Mod::RightCtrl), Key::Lockable('b', 'B')] as &[_],
+            String::from("\u{02}"),
+        ));
+        map.push((
+            &[Key::Mod(Mod::LeftCtrl), Key::Lockable('c', 'C')] as &[_],
+            String::from("\u{03}"),
+        ));
+        map.push((
+            &[Key::Mod(Mod::RightCtrl), Key::Lockable('c', 'C')] as &[_],
+            String::from("\u{03}"),
+        ));
+        map.push((
+            &[Key::Mod(Mod::LeftCtrl), Key::Lockable('d', 'D')] as &[_],
+            String::from("\u{04}"),
+        ));
+        map.push((
+            &[Key::Mod(Mod::RightCtrl), Key::Lockable('d', 'D')] as &[_],
+            String::from("\u{04}"),
+        ));
+        map.push((
+            &[Key::Mod(Mod::LeftCtrl), Key::Lockable('e', 'E')] as &[_],
+            String::from("\u{05}"),
+        ));
+        map.push((
+            &[Key::Mod(Mod::RightCtrl), Key::Lockable('e', 'E')] as &[_],
+            String::from("\u{05}"),
+        ));
+        map.push((
+            &[Key::Mod(Mod::LeftCtrl), Key::Lockable('f', 'F')] as &[_],
+            String::from("\u{06}"),
+        ));
+        map.push((
+            &[Key::Mod(Mod::RightCtrl), Key::Lockable('f', 'F')] as &[_],
+            String::from("\u{06}"),
+        ));
+        map.push((
+            &[Key::Mod(Mod::LeftCtrl), Key::Lockable('g', 'G')] as &[_],
+            String::from("\u{07}"),
+        ));
+        map.push((
+            &[Key::Mod(Mod::RightCtrl), Key::Lockable('g', 'G')] as &[_],
+            String::from("\u{07}"),
+        ));
+        map.push((
+            &[Key::Mod(Mod::LeftCtrl), Key::Lockable('h', 'H')] as &[_],
+            String::from("\u{08}"),
+        ));
+        map.push((
+            &[Key::Mod(Mod::RightCtrl), Key::Lockable('h', 'H')] as &[_],
+            String::from("\u{08}"),
+        ));
+        map.push((
+            &[Key::Mod(Mod::LeftCtrl), Key::Lockable('i', 'I')] as &[_],
+            String::from("\u{09}"),
+        ));
+        map.push((
+            &[Key::Mod(Mod::RightCtrl), Key::Lockable('i', 'I')] as &[_],
+            String::from("\u{09}"),
+        ));
+        map.push((
+            &[Key::Mod(Mod::LeftCtrl), Key::Lockable('j', 'J')] as &[_],
+            String::from("\u{0A}"),
+        ));
+        map.push((
+            &[Key::Mod(Mod::RightCtrl), Key::Lockable('j', 'J')] as &[_],
+            String::from("\u{0A}"),
+        ));
+        map.push((
+            &[Key::Mod(Mod::LeftCtrl), Key::Lockable('k', 'K')] as &[_],
+            String::from("\u{0B}"),
+        ));
+        map.push((
+            &[Key::Mod(Mod::RightCtrl), Key::Lockable('k', 'K')] as &[_],
+            String::from("\u{0B}"),
+        ));
+        map.push((
+            &[Key::Mod(Mod::LeftCtrl), Key::Lockable('l', 'L')] as &[_],
+            String::from("\u{0C}"),
+        ));
+        map.push((
+            &[Key::Mod(Mod::RightCtrl), Key::Lockable('l', 'L')] as &[_],
+            String::from("\u{0C}"),
+        ));
+        map.push((
+            &[Key::Mod(Mod::LeftCtrl), Key::Lockable('m', 'M')] as &[_],
+            String::from("\u{0D}"),
+        ));
+        map.push((
+            &[Key::Mod(Mod::RightCtrl), Key::Lockable('m', 'M')] as &[_],
+            String::from("\u{0D}"),
+        ));
+        map.push((
+            &[Key::Mod(Mod::LeftCtrl), Key::Lockable('n', 'N')] as &[_],
+            String::from("\u{0E}"),
+        ));
+        map.push((
+            &[Key::Mod(Mod::RightCtrl), Key::Lockable('n', 'N')] as &[_],
+            String::from("\u{0E}"),
+        ));
+        map.push((
+            &[Key::Mod(Mod::LeftCtrl), Key::Lockable('o', 'O')] as &[_],
+            String::from("\u{0F}"),
+        ));
+        map.push((
+            &[Key::Mod(Mod::RightCtrl), Key::Lockable('o', 'O')] as &[_],
+            String::from("\u{0F}"),
+        ));
+        map.push((
+            &[Key::Mod(Mod::LeftCtrl), Key::Lockable('p', 'P')] as &[_],
+            String::from("\u{10}"),
+        ));
+        map.push((
+            &[Key::Mod(Mod::RightCtrl), Key::Lockable('p', 'P')] as &[_],
+            String::from("\u{10}"),
+        ));
+        map.push((
+            &[Key::Mod(Mod::LeftCtrl), Key::Lockable('q', 'Q')] as &[_],
+            String::from("\u{11}"),
+        ));
+        map.push((
+            &[Key::Mod(Mod::RightCtrl), Key::Lockable('q', 'Q')] as &[_],
+            String::from("\u{11}"),
+        ));
+        map.push((
+            &[Key::Mod(Mod::LeftCtrl), Key::Lockable('r', 'R')] as &[_],
+            String::from("\u{12}"),
+        ));
+        map.push((
+            &[Key::Mod(Mod::RightCtrl), Key::Lockable('r', 'R')] as &[_],
+            String::from("\u{12}"),
+        ));
+        map.push((
+            &[Key::Mod(Mod::LeftCtrl), Key::Lockable('s', 'S')] as &[_],
+            String::from("\u{13}"),
+        ));
+        map.push((
+            &[Key::Mod(Mod::RightCtrl), Key::Lockable('s', 'S')] as &[_],
+            String::from("\u{13}"),
+        ));
+        map.push((
+            &[Key::Mod(Mod::LeftCtrl), Key::Lockable('t', 'T')] as &[_],
+            String::from("\u{14}"),
+        ));
+        map.push((
+            &[Key::Mod(Mod::RightCtrl), Key::Lockable('t', 'T')] as &[_],
+            String::from("\u{14}"),
+        ));
+        map.push((
+            &[Key::Mod(Mod::LeftCtrl), Key::Lockable('u', 'U')] as &[_],
+            String::from("\u{15}"),
+        ));
+        map.push((
+            &[Key::Mod(Mod::RightCtrl), Key::Lockable('u', 'U')] as &[_],
+            String::from("\u{15}"),
+        ));
+        map.push((
+            &[Key::Mod(Mod::LeftCtrl), Key::Lockable('v', 'V')] as &[_],
+            String::from("\u{16}"),
+        ));
+        map.push((
+            &[Key::Mod(Mod::RightCtrl), Key::Lockable('v', 'V')] as &[_],
+            String::from("\u{16}"),
+        ));
+        map.push((
+            &[Key::Mod(Mod::LeftCtrl), Key::Lockable('w', 'W')] as &[_],
+            String::from("\u{17}"),
+        ));
+        map.push((
+            &[Key::Mod(Mod::RightCtrl), Key::Lockable('w', 'W')] as &[_],
+            String::from("\u{17}"),
+        ));
+        map.push((
+            &[Key::Mod(Mod::LeftCtrl), Key::Lockable('x', 'X')] as &[_],
+            String::from("\u{18}"),
+        ));
+        map.push((
+            &[Key::Mod(Mod::RightCtrl), Key::Lockable('x', 'X')] as &[_],
+            String::from("\u{18}"),
+        ));
+        map.push((
+            &[Key::Mod(Mod::LeftCtrl), Key::Lockable('y', 'Y')] as &[_],
+            String::from("\u{19}"),
+        ));
+        map.push((
+            &[Key::Mod(Mod::RightCtrl), Key::Lockable('y', 'Y')] as &[_],
+            String::from("\u{19}"),
+        ));
+        map.push((
+            &[Key::Mod(Mod::LeftCtrl), Key::Lockable('z', 'Z')] as &[_],
+            String::from("\u{1A}"),
+        ));
+        map.push((
+            &[Key::Mod(Mod::RightCtrl), Key::Lockable('z', 'Z')] as &[_],
+            String::from("\u{1A}"),
+        ));
         map
     };
 }
@@ -80,6 +289,7 @@ impl KeyCombo {
         for k in key.into_iter() {
             combo.insert(k);
         }
+
         KeyCombo { keys: combo }
     }
 }
@@ -125,105 +335,129 @@ impl TerminalInput {
         out_key
     }
 
-    pub fn key_char(&mut self, pressed: &PressedSet) -> Option<char> {
+    fn combo(&self, pressed: &PressedSet) -> Option<String> {
+        for (combo, s) in KEY_COMBINATION.iter() {
+            if pressed.matches_combo(combo) {
+                return Some(s.to_owned());
+            }
+        }
+        None
+    }
+
+    pub fn key_char(&mut self, pressed: &PressedSet) -> String {
+        if let Some(s) = self.combo(pressed) {
+            return s;
+        }
         if let Some(k) = self.key(pressed) {
-            // println!("{:?}", k);
             match k {
                 Key::Lockable(low, up) => {
                     let shifted = pressed.caps_lock ^ pressed.shift();
                     if shifted {
-                        Some(up)
+                        String::from(up)
                     } else {
-                        Some(low)
+                        String::from(low)
                     }
                 }
                 Key::Printable(low, up) => {
                     if pressed.shift() {
-                        Some(up)
+                        String::from(up)
                     } else {
-                        Some(low)
+                        String::from(low)
                     }
                 }
                 Key::Keypad0Insert => {
                     if pressed.num_lock {
-                        Some('0')
+                        String::from('0')
                     } else {
-                        None
+                        KEY_TERMINAL_SEQUENCES[&Key::Insert].to_owned()
                     }
                 }
                 Key::Keypad1End => {
                     if pressed.num_lock {
-                        Some('1')
+                        String::from('1')
                     } else {
-                        None
+                        KEY_TERMINAL_SEQUENCES[&Key::End].to_owned()
                     }
                 }
                 Key::Keypad2Down => {
                     if pressed.num_lock {
-                        Some('2')
+                        String::from('2')
                     } else {
-                        None
+                        KEY_TERMINAL_SEQUENCES[&Key::DownArrow].to_owned()
                     }
                 }
                 Key::Keypad3PageDown => {
                     if pressed.num_lock {
-                        Some('3')
+                        String::from('3')
                     } else {
-                        None
+                        KEY_TERMINAL_SEQUENCES[&Key::PageDown].to_owned()
                     }
                 }
                 Key::Keypad4Left => {
                     if pressed.num_lock {
-                        Some('4')
+                        String::from('4')
                     } else {
-                        None
+                        KEY_TERMINAL_SEQUENCES[&Key::LeftArrow].to_owned()
                     }
                 }
-                Key::Keypad5 => Some('5'),
+                Key::Keypad5 => {
+                    if pressed.num_lock {
+                        String::from('5')
+                    } else {
+                        String::new()
+                    }
+                }
                 Key::Keypad6Right => {
                     if pressed.num_lock {
-                        Some('6')
+                        String::from('6')
                     } else {
-                        None
+                        KEY_TERMINAL_SEQUENCES[&Key::RightArrow].to_owned()
                     }
                 }
                 Key::Keypad7Home => {
                     if pressed.num_lock {
-                        Some('7')
+                        String::from('7')
                     } else {
-                        None
+                        KEY_TERMINAL_SEQUENCES[&Key::Home].to_owned()
                     }
                 }
                 Key::Keypad8Up => {
                     if pressed.num_lock {
-                        Some('8')
+                        String::from('8')
                     } else {
-                        None
+                        KEY_TERMINAL_SEQUENCES[&Key::UpArrow].to_owned()
                     }
                 }
                 Key::Keypad9PageUp => {
                     if pressed.num_lock {
-                        Some('9')
+                        String::from('9')
                     } else {
-                        None
+                        KEY_TERMINAL_SEQUENCES[&Key::PageUp].to_owned()
                     }
                 }
                 Key::KeypadPeriodDelete => {
                     if pressed.num_lock {
-                        Some('.')
+                        String::from('.')
                     } else {
-                        None
+                        KEY_TERMINAL_SEQUENCES[&Key::Delete].to_owned()
                     }
                 }
-                Key::KeypadSlash => Some('/'),
-                Key::KeypadAsterisk => Some('*'),
-                Key::KeypadDash => Some('-'),
-                Key::KeypadPlus => Some('+'),
-                Key::Spacebar => Some(' '),
-                _ => None,
+                Key::KeypadEnter => String::from('\n'),
+                Key::KeypadSlash => String::from('/'),
+                Key::KeypadAsterisk => String::from('*'),
+                Key::KeypadDash => String::from('-'),
+                Key::KeypadPlus => String::from('+'),
+                Key::Spacebar => String::from(' '),
+                Key::Backspace => String::from('\u{08}'),
+                Key::Enter => String::from('\n'),
+                Key::Tab => String::from('\u{09}'),
+                _ => KEY_TERMINAL_SEQUENCES
+                    .get(&k)
+                    .unwrap_or(&String::new())
+                    .to_owned(),
             }
         } else {
-            None
+            String::new()
         }
     }
 
@@ -238,48 +472,9 @@ impl TerminalInput {
             },
             HeldState::LongDelay(p, deadline) => match key {
                 None => (HeldState::Waiting, None),
-                Some(k) => {
-                    if p == k {
-                        let ticks = SystemTimer::now();
-                        if ticks >= deadline {
-                            (
-                                HeldState::ShortDelay(
-                                    k,
-                                    timer::deadline((self.repeat_delay_ms * 1000) as u64),
-                                ),
-                                Some(k),
-                            )
-                        } else {
-                            (HeldState::LongDelay(k, deadline), None)
-                        }
-                    } else {
-                        (
-                            HeldState::LongDelay(
-                                k,
-                                timer::deadline((self.key_delay_ms * 1000) as u64),
-                            ),
-                            Some(k),
-                        )
-                    }
-                }
-            },
-            HeldState::ShortDelay(p, deadline) => match key {
-                None => (HeldState::Waiting, None),
-                Some(k) => {
-                    if p == k {
-                        let ticks = SystemTimer::now();
-                        if ticks >= deadline {
-                            (
-                                HeldState::ShortDelay(
-                                    k,
-                                    timer::deadline((self.repeat_delay_ms * 1000) as u64),
-                                ),
-                                Some(k),
-                            )
-                        } else {
-                            (HeldState::LongDelay(k, deadline), None)
-                        }
-                    } else {
+                Some(k) if p == k => {
+                    let ticks = SystemTimer::now();
+                    if ticks >= deadline {
                         (
                             HeldState::ShortDelay(
                                 k,
@@ -287,8 +482,35 @@ impl TerminalInput {
                             ),
                             Some(k),
                         )
+                    } else {
+                        (HeldState::LongDelay(k, deadline), None)
                     }
                 }
+                Some(k) => (
+                    HeldState::LongDelay(k, timer::deadline((self.key_delay_ms * 1000) as u64)),
+                    Some(k),
+                ),
+            },
+            HeldState::ShortDelay(p, deadline) => match key {
+                None => (HeldState::Waiting, None),
+                Some(k) if p == k => {
+                    let ticks = SystemTimer::now();
+                    if ticks >= deadline {
+                        (
+                            HeldState::ShortDelay(
+                                k,
+                                timer::deadline((self.repeat_delay_ms * 1000) as u64),
+                            ),
+                            Some(k),
+                        )
+                    } else {
+                        (HeldState::LongDelay(k, deadline), None)
+                    }
+                }
+                Some(k) => (
+                    HeldState::ShortDelay(k, timer::deadline((self.repeat_delay_ms * 1000) as u64)),
+                    Some(k),
+                ),
             },
         }
     }
@@ -296,6 +518,6 @@ impl TerminalInput {
 
 impl Default for TerminalInput {
     fn default() -> Self {
-        TerminalInput::new(300, 80)
+        TerminalInput::new(300, 40)
     }
 }

@@ -1,4 +1,4 @@
-use core::{cell::RefCell};
+use core::cell::RefCell;
 
 use alloc::{collections::VecDeque, sync::Arc, vec::Vec};
 use critical_section::Mutex;
@@ -71,7 +71,7 @@ impl<T> Recv<T> {
     pub fn new(contents: Vec<T>) -> Recv<T> {
         Recv { contents }
     }
-} 
+}
 
 impl<T> Iterator for Recv<T> {
     type Item = T;

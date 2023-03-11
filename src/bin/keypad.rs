@@ -15,7 +15,6 @@ use esp32c3_hal::{clock::ClockControl, peripherals::Peripherals};
 use esp32c3_hal::{Rtc, IO};
 use esp_println::{print, println};
 use vgaterm::{
-    display::{Display, TextDisplay},
     interrupt::Priority,
     timer,
     usb_keyboard::US_ENGLISH,
@@ -133,10 +132,8 @@ fn main() -> ! {
         // terminal.draw(&mut display);
         // display.flush();
         keyboard.update();
-        if let Some(c) = input.key_char(keyboard.current()) {
-            print!("{}", c);
-            // print!("a");
-        }
+        let c = input.key_char(keyboard.current());
+        print!("{}", c);
         unsafe {
             riscv::asm::wfi();
         }

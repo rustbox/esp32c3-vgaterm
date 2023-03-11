@@ -1,4 +1,4 @@
-use alloc::{collections::VecDeque, vec::Vec, borrow::ToOwned};
+use alloc::{collections::VecDeque, vec::Vec};
 use esp32c3_hal::{
     clock::Clocks,
     gpio::{Gpio1, Gpio3, Unknown},
@@ -10,7 +10,7 @@ use esp_println::println;
 use crate::{
     channel::Receiver,
     uart::{self},
-    usb_keyboard::{Key, KeyEvent, Parse, USBKeyboardDevice, Mod},
+    usb_keyboard::{Key, KeyEvent, KeyLayout, Mod, Parse, USBKeyboardDevice},
 };
 
 pub struct Keyboard {
@@ -21,17 +21,17 @@ pub struct Keyboard {
 }
 
 impl Keyboard {
-    pub fn new(layout: &'static [Key], rx: Receiver<u8>) -> Keyboard {
+    fn new(layout: KeyLayout, rx: Receiver<u8>) -> Keyboard {
         Keyboard {
             device: USBKeyboardDevice::new(layout),
             key_events: VecDeque::new(),
             rx,
-            pressed: PressedSet::new()
+            pressed: PressedSet::new(),
         }
     }
 
     pub fn from_peripherals(
-        layout: &'static [Key],
+        layout: KeyLayout,
         tx: Gpio1<Unknown>,
         rx: Gpio3<Unknown>,
         uart: UART1,
@@ -42,18 +42,9 @@ impl Keyboard {
         Keyboard::new(layout, receiver)
     }
 
-    pub fn next_event(&mut self) -> KeyEvent<Key> {
-        loop {
-            self.flush_and_parse();
-            if self.pressed.recent().is_none() {
-                // Block while there are no key presses
-                unsafe {
-                    riscv::asm::wfi();
-                }
-            } else {
-                return self.key_events.pop_back().unwrap();
-            }
-        }
+    pub fn next_event(&mut self) -> Option<KeyEvent<Key>> {
+        self.flush_and_parse();
+        self.key_events.pop_back()
     }
 
     pub fn current(&self) -> &PressedSet {
@@ -92,7 +83,7 @@ impl Keyboard {
                                     Key::RollOverError
                                     | Key::UndefinedError
                                     | Key::UndefinedKey(_) => {
-                                        println!("Key Error: {:?}", key_event);
+                                        // println!("Key Error: {:?}", key_event);
                                         None
                                     }
                                     Key::Reserved => None,
@@ -120,47 +111,39 @@ pub struct PressedSet {
 
 impl PressedSet {
     fn new() -> PressedSet {
-        PressedSet { pressed: Vec::new(), modifiers: Vec::new(), caps_lock: false, num_lock: false }
+        PressedSet {
+            pressed: Vec::new(),
+            modifiers: Vec::new(),
+            caps_lock: false,
+            num_lock: false,
+        }
     }
 
     fn push(&mut self, event: KeyEvent<Key>) {
         match event {
-            KeyEvent::Pressed(k) => {
-                match k {
-                    Key::Mod(_) => {
-                        if !self.modifiers.contains(&k) {
-                            self.modifiers.push(k);
-                        }
-                    },
-                    Key::CapsLock => {
-                        self.caps_lock = !self.caps_lock;
-                    },
-                    Key::Numlock => {
-                        self.num_lock = !self.num_lock;
-                    },
-                    _ => {
-                        if !self.pressed.contains(&k) {
-                            self.pressed.push(k);
-                        }
+            KeyEvent::Pressed(k) => match k {
+                Key::Mod(_) => {
+                    if !self.modifiers.contains(&k) {
+                        self.modifiers.push(k);
                     }
                 }
-                
+                Key::CapsLock => {
+                    self.caps_lock = !self.caps_lock;
+                }
+                Key::Numlock => {
+                    self.num_lock = !self.num_lock;
+                }
+                _ => {
+                    if !self.pressed.contains(&k) {
+                        self.pressed.push(k);
+                    }
+                }
             },
             KeyEvent::Released(k) => {
                 if let Key::Mod(_) = k {
-                    for (i, c) in self.modifiers.iter().enumerate() {
-                        if *c == k {
-                            self.modifiers.remove(i);
-                            break;
-                        }
-                    }
+                    self.modifiers.retain(|&c| c != k);
                 } else {
-                    for (i, c) in self.pressed.iter().enumerate() {
-                        if *c == k {
-                            self.pressed.remove(i);
-                            break;
-                        }
-                    }
+                    self.pressed.retain(|&c| c != k);
                 }
             }
         }
@@ -175,17 +158,19 @@ impl PressedSet {
     }
 
     pub fn shift(&self) -> bool {
-        self.modifiers.contains(&Key::Mod(Mod::LeftShift)) || self.modifiers.contains(&Key::Mod(Mod::RightShift))
+        self.modifiers.contains(&Key::Mod(Mod::LeftShift))
+            || self.modifiers.contains(&Key::Mod(Mod::RightShift))
     }
 
     pub fn matches_combo(&self, combo: &[Key]) -> bool {
-        if combo.len() == self.pressed.len() {
+        if combo.len() == self.pressed.len() + self.modifiers.len() {
             // check if all keys in the combo are in the contents
-            combo.iter().all(|k| self.pressed.contains(k))
+            combo.iter().all(|k| match k {
+                &Key::Mod(_) => self.modifiers.contains(k),
+                _ => self.pressed.contains(k),
+            })
         } else {
             false
         }
     }
-
 }
-
