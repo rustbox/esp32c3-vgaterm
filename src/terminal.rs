@@ -4,7 +4,6 @@ use crate::{
 };
 use embedded_graphics::prelude::DrawTarget;
 use esp32c3_hal::systimer::SystemTimer;
-use esp_println::println;
 
 pub const IROWS: isize = display::ROWS as isize;
 pub const ICOLS: isize = display::COLUMNS as isize;
@@ -142,7 +141,7 @@ impl TextField {
     pub fn move_cursor(&mut self, r: isize, c: isize) {
         // self.text.write(self.cursor.pos.0, self.cursor.pos.1, self.cursor.character.char());
         let moved = self.cursor.offset(r, c);
-        println!("Cursor moving to ({}, {})", r, c);
+        // println!("Cursor moving to ({}, {})", r, c);
         let c = self.text.read_char(moved.0, moved.1).char();
         self.cursor.set_char(c);
     }

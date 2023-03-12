@@ -10,5 +10,11 @@ rustflags = [
   "link-arg=-Tlinkall.x",
 ]
 
+[profile.release]
+debug = true
+
+[target.riscv32imac-unknown-none-elf]
+runner = "espflash flash --format direct-boot --monitor"
+
 [unstable]
 build-std = ["alloc", "core"]

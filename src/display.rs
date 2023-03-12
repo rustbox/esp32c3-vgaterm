@@ -37,9 +37,9 @@ impl Display {
 
     pub fn flush(&mut self) {
         while let Some((pos, px)) = self.local_buffer.pop_back() {
-            riscv::interrupt::free(|| unsafe {
-                video::BUFFER[pos] = px;
-            });
+            // riscv::interrupt::free(|| unsafe {
+            *unsafe { &mut video::BUFFER[pos] } = px;
+            // });
         }
     }
 

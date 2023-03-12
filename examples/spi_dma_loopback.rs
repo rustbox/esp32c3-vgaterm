@@ -30,8 +30,6 @@ use esp32c3_hal::{
 };
 use esp_backtrace as _;
 
-use riscv_rt::entry;
-
 #[entry]
 fn main() -> ! {
     let peripherals = Peripherals::take();
