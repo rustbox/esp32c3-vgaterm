@@ -22,13 +22,6 @@ pub mod uart;
 pub mod usb_keyboard;
 pub mod video;
 
-/// This is required for the #[interrupt] macro on interrupt handler functions to work properly.
-/// Such as gpio::GPIO() interrupt handler. This is due to how the esp32c3_hal crate implmented
-/// this macro, it expects `peripherals::Interrupt` to be available.
-pub mod peripherals {
-    pub use esp32c3_hal::peripherals::Interrupt;
-}
-
 // pub use println::configure;
 pub use timer::{
     clear_timer0, configure_timer0, deadline, delay, enable_timer0_interrupt, start_timer0,
