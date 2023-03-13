@@ -1,4 +1,4 @@
-use alloc::{collections::VecDeque, vec::Vec};
+use alloc::vec::Vec;
 use esp32c3_hal::{
     clock::Clocks,
     gpio::{Gpio1, Gpio3, Unknown},
@@ -15,18 +15,14 @@ use crate::{
 
 pub struct Keyboard {
     device: USBKeyboardDevice,
-    key_events: VecDeque<KeyEvent<Key>>,
     rx: Receiver<u8>,
-    pressed: PressedSet,
 }
 
 impl Keyboard {
     fn new(layout: KeyLayout, rx: Receiver<u8>) -> Keyboard {
         Keyboard {
             device: USBKeyboardDevice::new(layout),
-            key_events: VecDeque::new(),
             rx,
-            pressed: PressedSet::new(),
         }
     }
 
@@ -42,28 +38,11 @@ impl Keyboard {
         Keyboard::new(layout, receiver)
     }
 
-    pub fn next_event(&mut self) -> Option<KeyEvent<Key>> {
-        self.flush_and_parse();
-        self.key_events.pop_back()
-    }
-
-    pub fn current(&self) -> &PressedSet {
-        &self.pressed
-    }
-
-    /// Update the key event queue from parsed uart bytes. Then dequeue one
-    /// element from the queue and push it into the pressed
-    pub fn update(&mut self) {
-        // This will update the key_event queue
-        self.flush_and_parse();
-        if let Some(event) = self.key_events.pop_back() {
-            self.pressed.push(event);
-        }
-    }
-
     /// Read all the bytes currently in the Receiver and parse them
     /// into KeyEvents, placing them onto the queue
-    pub fn flush_and_parse(&mut self) {
+    pub fn flush_and_parse(&mut self) -> Vec<KeyEvent<Key>> {
+        let mut ret = Vec::new();
+
         while let Some(b) = self.rx.recv() {
             if let Parse::Finished(m) = self.device.next_report_byte(b) {
                 match m {
@@ -91,7 +70,7 @@ impl Keyboard {
                                 }
                                 // Put each event on the event queue
                             })
-                            .for_each(|event| self.key_events.push_front(event));
+                            .collect_into(&mut ret);
                     }
                     Err(e) => {
                         println!("Parse error: {:?}", e);
@@ -99,9 +78,12 @@ impl Keyboard {
                 }
             }
         }
+
+        ret
     }
 }
 
+#[derive(Default)]
 pub struct PressedSet {
     pressed: Vec<Key>,
     modifiers: Vec<Key>,
@@ -110,16 +92,11 @@ pub struct PressedSet {
 }
 
 impl PressedSet {
-    fn new() -> PressedSet {
-        PressedSet {
-            pressed: Vec::new(),
-            modifiers: Vec::new(),
-            caps_lock: false,
-            num_lock: false,
-        }
+    pub fn new() -> PressedSet {
+        Default::default()
     }
 
-    fn push(&mut self, event: KeyEvent<Key>) {
+    pub fn push(&mut self, event: KeyEvent<Key>) {
         match event {
             KeyEvent::Pressed(k) => match k {
                 Key::Mod(_) => {

@@ -4,6 +4,7 @@
 
 extern crate alloc;
 
+use alloc::collections::VecDeque;
 use esp32c3_hal::clock::CpuClock;
 use esp32c3_hal::interrupt::Priority;
 use esp32c3_hal::prelude::*;
@@ -99,6 +100,9 @@ fn main() -> ! {
         &clocks,
     );
 
+    let mut kevents = VecDeque::new();
+    let mut key_state = vgaterm::keyboard::PressedSet::new();
+
     let mut input = vgaterm::terminal_input::TerminalInput::new(300, 40);
 
     timer::enable_timer0_interrupt(Priority::Priority5);
@@ -124,9 +128,20 @@ fn main() -> ! {
         // terminal.send(host_in);
         // terminal.draw(&mut display);
         // display.flush();
-        keyboard.update();
-        let c = input.key_char(keyboard.current());
+        kevents.extend(keyboard.flush_and_parse());
+
+        if let Some(kevent) = kevents.pop_front() {
+            key_state.push(kevent);
+        }
+
+        let c = input.key_char(&key_state);
         print!("{}", c);
+
+        if !kevents.is_empty() {
+            // don't sleep while there's work to do
+            continue;
+        }
+
         unsafe {
             riscv::asm::wfi();
         }
