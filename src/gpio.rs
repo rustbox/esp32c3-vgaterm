@@ -49,6 +49,7 @@ impl<T> Irq for PinInterrupt<T>
 where
     T: Pin + 'static,
 {
+    #[inline(always)]
     fn apply(&mut self) {
         (self.callback)(&mut self.pin);
         self.pin.clear_interrupt();
@@ -210,13 +211,11 @@ pub fn pin_resume<T: Pin + 'static>(pin: &mut PinRef<T>) {
     });
 }
 
+#[inline(always)]
 fn check_gpio_source() -> u32 {
-    riscv::interrupt::free(|| unsafe {
-        let periphs = peripherals::Peripherals::steal();
+    let intr = unsafe { &*esp32c3_hal::peripherals::GPIO::PTR };
 
-        let gpio_status = periphs.GPIO.status.read().bits();
-        31 - gpio_status.leading_zeros()
-    })
+    31 - intr.status.read().bits().leading_zeros()
 }
 
 ///
@@ -313,13 +312,12 @@ pub fn read_low() -> u8 {
     }
 }
 
+#[link_section = ".rwtext"] // #[ram] without #[inline(never)]
 #[interrupt]
 fn GPIO() {
     // sprint!("-");
-    riscv::interrupt::free(|| {
-        let source = check_gpio_source() as usize;
-        if let Some(ref mut irq) = unsafe { &mut INTERRUPTS[source] } {
-            irq.apply();
-        };
-    });
+    let source = check_gpio_source() as usize;
+    if let Some(ref mut irq) = unsafe { &mut INTERRUPTS[source] } {
+        irq.apply();
+    };
 }

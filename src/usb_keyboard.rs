@@ -1,5 +1,3 @@
-use core::alloc::Layout;
-
 use alloc::vec::Vec;
 
 ///

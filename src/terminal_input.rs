@@ -53,218 +53,220 @@ lazy_static! {
         map.insert(Key::Pause, join(ESC, "[P"));
         map
     };
-    static ref KEY_COMBINATION: Vec<(&'static [Key], String)> = {
-        let mut map = Vec::new();
-        map.push((
-            &[Key::Mod(Mod::LeftCtrl), Key::Lockable('a', 'A')] as &[_],
-            String::from("\u{01}"),
-        ));
-        map.push((
-            &[Key::Mod(Mod::RightCtrl), Key::Lockable('a', 'A')] as &[_],
-            String::from("\u{01}"),
-        ));
-        map.push((
-            &[Key::Mod(Mod::LeftCtrl), Key::Lockable('b', 'B')] as &[_],
-            String::from("\u{02}"),
-        ));
-        map.push((
-            &[Key::Mod(Mod::RightCtrl), Key::Lockable('b', 'B')] as &[_],
-            String::from("\u{02}"),
-        ));
-        map.push((
-            &[Key::Mod(Mod::LeftCtrl), Key::Lockable('c', 'C')] as &[_],
-            String::from("\u{03}"),
-        ));
-        map.push((
-            &[Key::Mod(Mod::RightCtrl), Key::Lockable('c', 'C')] as &[_],
-            String::from("\u{03}"),
-        ));
-        map.push((
-            &[Key::Mod(Mod::LeftCtrl), Key::Lockable('d', 'D')] as &[_],
-            String::from("\u{04}"),
-        ));
-        map.push((
-            &[Key::Mod(Mod::RightCtrl), Key::Lockable('d', 'D')] as &[_],
-            String::from("\u{04}"),
-        ));
-        map.push((
-            &[Key::Mod(Mod::LeftCtrl), Key::Lockable('e', 'E')] as &[_],
-            String::from("\u{05}"),
-        ));
-        map.push((
-            &[Key::Mod(Mod::RightCtrl), Key::Lockable('e', 'E')] as &[_],
-            String::from("\u{05}"),
-        ));
-        map.push((
-            &[Key::Mod(Mod::LeftCtrl), Key::Lockable('f', 'F')] as &[_],
-            String::from("\u{06}"),
-        ));
-        map.push((
-            &[Key::Mod(Mod::RightCtrl), Key::Lockable('f', 'F')] as &[_],
-            String::from("\u{06}"),
-        ));
-        map.push((
-            &[Key::Mod(Mod::LeftCtrl), Key::Lockable('g', 'G')] as &[_],
-            String::from("\u{07}"),
-        ));
-        map.push((
-            &[Key::Mod(Mod::RightCtrl), Key::Lockable('g', 'G')] as &[_],
-            String::from("\u{07}"),
-        ));
-        map.push((
-            &[Key::Mod(Mod::LeftCtrl), Key::Lockable('h', 'H')] as &[_],
-            String::from("\u{08}"),
-        ));
-        map.push((
-            &[Key::Mod(Mod::RightCtrl), Key::Lockable('h', 'H')] as &[_],
-            String::from("\u{08}"),
-        ));
-        map.push((
-            &[Key::Mod(Mod::LeftCtrl), Key::Lockable('i', 'I')] as &[_],
-            String::from("\u{09}"),
-        ));
-        map.push((
-            &[Key::Mod(Mod::RightCtrl), Key::Lockable('i', 'I')] as &[_],
-            String::from("\u{09}"),
-        ));
-        map.push((
-            &[Key::Mod(Mod::LeftCtrl), Key::Lockable('j', 'J')] as &[_],
-            String::from("\u{0A}"),
-        ));
-        map.push((
-            &[Key::Mod(Mod::RightCtrl), Key::Lockable('j', 'J')] as &[_],
-            String::from("\u{0A}"),
-        ));
-        map.push((
-            &[Key::Mod(Mod::LeftCtrl), Key::Lockable('k', 'K')] as &[_],
-            String::from("\u{0B}"),
-        ));
-        map.push((
-            &[Key::Mod(Mod::RightCtrl), Key::Lockable('k', 'K')] as &[_],
-            String::from("\u{0B}"),
-        ));
-        map.push((
-            &[Key::Mod(Mod::LeftCtrl), Key::Lockable('l', 'L')] as &[_],
-            String::from("\u{0C}"),
-        ));
-        map.push((
-            &[Key::Mod(Mod::RightCtrl), Key::Lockable('l', 'L')] as &[_],
-            String::from("\u{0C}"),
-        ));
-        map.push((
-            &[Key::Mod(Mod::LeftCtrl), Key::Lockable('m', 'M')] as &[_],
-            String::from("\u{0D}"),
-        ));
-        map.push((
-            &[Key::Mod(Mod::RightCtrl), Key::Lockable('m', 'M')] as &[_],
-            String::from("\u{0D}"),
-        ));
-        map.push((
-            &[Key::Mod(Mod::LeftCtrl), Key::Lockable('n', 'N')] as &[_],
-            String::from("\u{0E}"),
-        ));
-        map.push((
-            &[Key::Mod(Mod::RightCtrl), Key::Lockable('n', 'N')] as &[_],
-            String::from("\u{0E}"),
-        ));
-        map.push((
-            &[Key::Mod(Mod::LeftCtrl), Key::Lockable('o', 'O')] as &[_],
-            String::from("\u{0F}"),
-        ));
-        map.push((
-            &[Key::Mod(Mod::RightCtrl), Key::Lockable('o', 'O')] as &[_],
-            String::from("\u{0F}"),
-        ));
-        map.push((
-            &[Key::Mod(Mod::LeftCtrl), Key::Lockable('p', 'P')] as &[_],
-            String::from("\u{10}"),
-        ));
-        map.push((
-            &[Key::Mod(Mod::RightCtrl), Key::Lockable('p', 'P')] as &[_],
-            String::from("\u{10}"),
-        ));
-        map.push((
-            &[Key::Mod(Mod::LeftCtrl), Key::Lockable('q', 'Q')] as &[_],
-            String::from("\u{11}"),
-        ));
-        map.push((
-            &[Key::Mod(Mod::RightCtrl), Key::Lockable('q', 'Q')] as &[_],
-            String::from("\u{11}"),
-        ));
-        map.push((
-            &[Key::Mod(Mod::LeftCtrl), Key::Lockable('r', 'R')] as &[_],
-            String::from("\u{12}"),
-        ));
-        map.push((
-            &[Key::Mod(Mod::RightCtrl), Key::Lockable('r', 'R')] as &[_],
-            String::from("\u{12}"),
-        ));
-        map.push((
-            &[Key::Mod(Mod::LeftCtrl), Key::Lockable('s', 'S')] as &[_],
-            String::from("\u{13}"),
-        ));
-        map.push((
-            &[Key::Mod(Mod::RightCtrl), Key::Lockable('s', 'S')] as &[_],
-            String::from("\u{13}"),
-        ));
-        map.push((
-            &[Key::Mod(Mod::LeftCtrl), Key::Lockable('t', 'T')] as &[_],
-            String::from("\u{14}"),
-        ));
-        map.push((
-            &[Key::Mod(Mod::RightCtrl), Key::Lockable('t', 'T')] as &[_],
-            String::from("\u{14}"),
-        ));
-        map.push((
-            &[Key::Mod(Mod::LeftCtrl), Key::Lockable('u', 'U')] as &[_],
-            String::from("\u{15}"),
-        ));
-        map.push((
-            &[Key::Mod(Mod::RightCtrl), Key::Lockable('u', 'U')] as &[_],
-            String::from("\u{15}"),
-        ));
-        map.push((
-            &[Key::Mod(Mod::LeftCtrl), Key::Lockable('v', 'V')] as &[_],
-            String::from("\u{16}"),
-        ));
-        map.push((
-            &[Key::Mod(Mod::RightCtrl), Key::Lockable('v', 'V')] as &[_],
-            String::from("\u{16}"),
-        ));
-        map.push((
-            &[Key::Mod(Mod::LeftCtrl), Key::Lockable('w', 'W')] as &[_],
-            String::from("\u{17}"),
-        ));
-        map.push((
-            &[Key::Mod(Mod::RightCtrl), Key::Lockable('w', 'W')] as &[_],
-            String::from("\u{17}"),
-        ));
-        map.push((
-            &[Key::Mod(Mod::LeftCtrl), Key::Lockable('x', 'X')] as &[_],
-            String::from("\u{18}"),
-        ));
-        map.push((
-            &[Key::Mod(Mod::RightCtrl), Key::Lockable('x', 'X')] as &[_],
-            String::from("\u{18}"),
-        ));
-        map.push((
-            &[Key::Mod(Mod::LeftCtrl), Key::Lockable('y', 'Y')] as &[_],
-            String::from("\u{19}"),
-        ));
-        map.push((
-            &[Key::Mod(Mod::RightCtrl), Key::Lockable('y', 'Y')] as &[_],
-            String::from("\u{19}"),
-        ));
-        map.push((
-            &[Key::Mod(Mod::LeftCtrl), Key::Lockable('z', 'Z')] as &[_],
-            String::from("\u{1A}"),
-        ));
-        map.push((
-            &[Key::Mod(Mod::RightCtrl), Key::Lockable('z', 'Z')] as &[_],
-            String::from("\u{1A}"),
-        ));
-        map
-    };
+    static ref KEY_COMBINATION: Vec<(&'static [Key], String)> =
+        #[allow(clippy::vec_init_then_push)]
+        {
+            let mut map = Vec::new();
+            map.push((
+                &[Key::Mod(Mod::LeftCtrl), Key::Lockable('a', 'A')] as &[_],
+                String::from("\u{01}"),
+            ));
+            map.push((
+                &[Key::Mod(Mod::RightCtrl), Key::Lockable('a', 'A')] as &[_],
+                String::from("\u{01}"),
+            ));
+            map.push((
+                &[Key::Mod(Mod::LeftCtrl), Key::Lockable('b', 'B')] as &[_],
+                String::from("\u{02}"),
+            ));
+            map.push((
+                &[Key::Mod(Mod::RightCtrl), Key::Lockable('b', 'B')] as &[_],
+                String::from("\u{02}"),
+            ));
+            map.push((
+                &[Key::Mod(Mod::LeftCtrl), Key::Lockable('c', 'C')] as &[_],
+                String::from("\u{03}"),
+            ));
+            map.push((
+                &[Key::Mod(Mod::RightCtrl), Key::Lockable('c', 'C')] as &[_],
+                String::from("\u{03}"),
+            ));
+            map.push((
+                &[Key::Mod(Mod::LeftCtrl), Key::Lockable('d', 'D')] as &[_],
+                String::from("\u{04}"),
+            ));
+            map.push((
+                &[Key::Mod(Mod::RightCtrl), Key::Lockable('d', 'D')] as &[_],
+                String::from("\u{04}"),
+            ));
+            map.push((
+                &[Key::Mod(Mod::LeftCtrl), Key::Lockable('e', 'E')] as &[_],
+                String::from("\u{05}"),
+            ));
+            map.push((
+                &[Key::Mod(Mod::RightCtrl), Key::Lockable('e', 'E')] as &[_],
+                String::from("\u{05}"),
+            ));
+            map.push((
+                &[Key::Mod(Mod::LeftCtrl), Key::Lockable('f', 'F')] as &[_],
+                String::from("\u{06}"),
+            ));
+            map.push((
+                &[Key::Mod(Mod::RightCtrl), Key::Lockable('f', 'F')] as &[_],
+                String::from("\u{06}"),
+            ));
+            map.push((
+                &[Key::Mod(Mod::LeftCtrl), Key::Lockable('g', 'G')] as &[_],
+                String::from("\u{07}"),
+            ));
+            map.push((
+                &[Key::Mod(Mod::RightCtrl), Key::Lockable('g', 'G')] as &[_],
+                String::from("\u{07}"),
+            ));
+            map.push((
+                &[Key::Mod(Mod::LeftCtrl), Key::Lockable('h', 'H')] as &[_],
+                String::from("\u{08}"),
+            ));
+            map.push((
+                &[Key::Mod(Mod::RightCtrl), Key::Lockable('h', 'H')] as &[_],
+                String::from("\u{08}"),
+            ));
+            map.push((
+                &[Key::Mod(Mod::LeftCtrl), Key::Lockable('i', 'I')] as &[_],
+                String::from("\u{09}"),
+            ));
+            map.push((
+                &[Key::Mod(Mod::RightCtrl), Key::Lockable('i', 'I')] as &[_],
+                String::from("\u{09}"),
+            ));
+            map.push((
+                &[Key::Mod(Mod::LeftCtrl), Key::Lockable('j', 'J')] as &[_],
+                String::from("\u{0A}"),
+            ));
+            map.push((
+                &[Key::Mod(Mod::RightCtrl), Key::Lockable('j', 'J')] as &[_],
+                String::from("\u{0A}"),
+            ));
+            map.push((
+                &[Key::Mod(Mod::LeftCtrl), Key::Lockable('k', 'K')] as &[_],
+                String::from("\u{0B}"),
+            ));
+            map.push((
+                &[Key::Mod(Mod::RightCtrl), Key::Lockable('k', 'K')] as &[_],
+                String::from("\u{0B}"),
+            ));
+            map.push((
+                &[Key::Mod(Mod::LeftCtrl), Key::Lockable('l', 'L')] as &[_],
+                String::from("\u{0C}"),
+            ));
+            map.push((
+                &[Key::Mod(Mod::RightCtrl), Key::Lockable('l', 'L')] as &[_],
+                String::from("\u{0C}"),
+            ));
+            map.push((
+                &[Key::Mod(Mod::LeftCtrl), Key::Lockable('m', 'M')] as &[_],
+                String::from("\u{0D}"),
+            ));
+            map.push((
+                &[Key::Mod(Mod::RightCtrl), Key::Lockable('m', 'M')] as &[_],
+                String::from("\u{0D}"),
+            ));
+            map.push((
+                &[Key::Mod(Mod::LeftCtrl), Key::Lockable('n', 'N')] as &[_],
+                String::from("\u{0E}"),
+            ));
+            map.push((
+                &[Key::Mod(Mod::RightCtrl), Key::Lockable('n', 'N')] as &[_],
+                String::from("\u{0E}"),
+            ));
+            map.push((
+                &[Key::Mod(Mod::LeftCtrl), Key::Lockable('o', 'O')] as &[_],
+                String::from("\u{0F}"),
+            ));
+            map.push((
+                &[Key::Mod(Mod::RightCtrl), Key::Lockable('o', 'O')] as &[_],
+                String::from("\u{0F}"),
+            ));
+            map.push((
+                &[Key::Mod(Mod::LeftCtrl), Key::Lockable('p', 'P')] as &[_],
+                String::from("\u{10}"),
+            ));
+            map.push((
+                &[Key::Mod(Mod::RightCtrl), Key::Lockable('p', 'P')] as &[_],
+                String::from("\u{10}"),
+            ));
+            map.push((
+                &[Key::Mod(Mod::LeftCtrl), Key::Lockable('q', 'Q')] as &[_],
+                String::from("\u{11}"),
+            ));
+            map.push((
+                &[Key::Mod(Mod::RightCtrl), Key::Lockable('q', 'Q')] as &[_],
+                String::from("\u{11}"),
+            ));
+            map.push((
+                &[Key::Mod(Mod::LeftCtrl), Key::Lockable('r', 'R')] as &[_],
+                String::from("\u{12}"),
+            ));
+            map.push((
+                &[Key::Mod(Mod::RightCtrl), Key::Lockable('r', 'R')] as &[_],
+                String::from("\u{12}"),
+            ));
+            map.push((
+                &[Key::Mod(Mod::LeftCtrl), Key::Lockable('s', 'S')] as &[_],
+                String::from("\u{13}"),
+            ));
+            map.push((
+                &[Key::Mod(Mod::RightCtrl), Key::Lockable('s', 'S')] as &[_],
+                String::from("\u{13}"),
+            ));
+            map.push((
+                &[Key::Mod(Mod::LeftCtrl), Key::Lockable('t', 'T')] as &[_],
+                String::from("\u{14}"),
+            ));
+            map.push((
+                &[Key::Mod(Mod::RightCtrl), Key::Lockable('t', 'T')] as &[_],
+                String::from("\u{14}"),
+            ));
+            map.push((
+                &[Key::Mod(Mod::LeftCtrl), Key::Lockable('u', 'U')] as &[_],
+                String::from("\u{15}"),
+            ));
+            map.push((
+                &[Key::Mod(Mod::RightCtrl), Key::Lockable('u', 'U')] as &[_],
+                String::from("\u{15}"),
+            ));
+            map.push((
+                &[Key::Mod(Mod::LeftCtrl), Key::Lockable('v', 'V')] as &[_],
+                String::from("\u{16}"),
+            ));
+            map.push((
+                &[Key::Mod(Mod::RightCtrl), Key::Lockable('v', 'V')] as &[_],
+                String::from("\u{16}"),
+            ));
+            map.push((
+                &[Key::Mod(Mod::LeftCtrl), Key::Lockable('w', 'W')] as &[_],
+                String::from("\u{17}"),
+            ));
+            map.push((
+                &[Key::Mod(Mod::RightCtrl), Key::Lockable('w', 'W')] as &[_],
+                String::from("\u{17}"),
+            ));
+            map.push((
+                &[Key::Mod(Mod::LeftCtrl), Key::Lockable('x', 'X')] as &[_],
+                String::from("\u{18}"),
+            ));
+            map.push((
+                &[Key::Mod(Mod::RightCtrl), Key::Lockable('x', 'X')] as &[_],
+                String::from("\u{18}"),
+            ));
+            map.push((
+                &[Key::Mod(Mod::LeftCtrl), Key::Lockable('y', 'Y')] as &[_],
+                String::from("\u{19}"),
+            ));
+            map.push((
+                &[Key::Mod(Mod::RightCtrl), Key::Lockable('y', 'Y')] as &[_],
+                String::from("\u{19}"),
+            ));
+            map.push((
+                &[Key::Mod(Mod::LeftCtrl), Key::Lockable('z', 'Z')] as &[_],
+                String::from("\u{1A}"),
+            ));
+            map.push((
+                &[Key::Mod(Mod::RightCtrl), Key::Lockable('z', 'Z')] as &[_],
+                String::from("\u{1A}"),
+            ));
+            map
+        };
 }
 
 // #[derive(PartialEq, Eq, PartialOrd, Ord)]
@@ -278,7 +280,7 @@ lazy_static! {
 // }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord)]
-struct KeyCombo {
+pub struct KeyCombo {
     // pub mods: BTreeSet<Mod>,
     pub keys: BTreeSet<Key>,
 }

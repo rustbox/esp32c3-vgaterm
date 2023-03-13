@@ -4,21 +4,14 @@
 
 extern crate alloc;
 
-use riscv_rt::entry;
-
 use esp32c3_hal::clock::CpuClock;
-
+use esp32c3_hal::interrupt::Priority;
 use esp32c3_hal::prelude::*;
-
 use esp32c3_hal::timer::TimerGroup;
 use esp32c3_hal::{clock::ClockControl, peripherals::Peripherals};
 use esp32c3_hal::{Rtc, IO};
 use esp_println::{print, println};
-use vgaterm::{
-    interrupt::Priority,
-    timer,
-    usb_keyboard::US_ENGLISH,
-};
+use vgaterm::{timer, usb_keyboard::US_ENGLISH};
 
 core::arch::global_asm!(".global _heap_size; _heap_size = 0x8000");
 

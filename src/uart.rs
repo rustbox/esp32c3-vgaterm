@@ -13,21 +13,19 @@ use esp32c3_hal::{
 use esp32c3_hal::{interrupt, peripherals};
 use esp32c3_hal::{peripherals::UART0, Uart};
 use esp32c3_hal::{peripherals::UART1, prelude::*};
-use esp_println::print;
 
 use crate::channel::{self, Receiver, Sender};
 use crate::interrupt::which_priority;
 
-static SENDER0: Mutex<RefCell<Option<UartTransmitter<UART0, char>>>> =
-    Mutex::new(RefCell::new(None));
+static mut SENDER0: Option<UartTransmitter<UART0, char>> = None;
 static SENDER1: Mutex<RefCell<Option<UartTransmitter<UART1, u8>>>> = Mutex::new(RefCell::new(None));
 
 pub fn configure0(uart: UART0) -> Receiver<char> {
     let serial0 = Uart::new(uart);
     let (tx, rx) = channel::channel();
 
-    critical_section::with(|cs| {
-        SENDER0.borrow_ref_mut(cs).replace(UartTransmitter {
+    critical_section::with(|_cs| {
+        unsafe { &mut SENDER0 }.replace(UartTransmitter {
             serial: serial0,
             tx,
         })
@@ -125,8 +123,8 @@ pub fn interrupt_enable0(priority: interrupt::Priority) {
         interrupt::InterruptKind::Edge,
     );
 
-    critical_section::with(|cs| {
-        if let Some(sender) = SENDER0.borrow_ref_mut(cs).as_mut() {
+    critical_section::with(|_cs| {
+        if let Some(sender) = unsafe { &mut SENDER0 } {
             sender.serial.set_rx_fifo_full_threshold(1);
             sender.serial.listen_rx_fifo_full();
         }
@@ -176,10 +174,13 @@ pub struct UartTransmitter<'a, S, Tx> {
     tx: Sender<Tx>,
 }
 
+#[link_section = ".rwtext"] // #[ram] without #[inline(never)]
 #[interrupt]
 fn UART0() {
-    critical_section::with(|cs| {
-        if let Some(uart_transmitter) = SENDER0.borrow_ref_mut(cs).as_mut() {
+    crate::interrupt::theshold_mask(|| {
+        // SAFETY: we've set the priority to one greater than our own, in threshold_mask, so we're not concurrently modifying SENDER0
+        // (this code is not re-entrant), assuming nothing reconfigures the priority lol
+        if let Some(uart_transmitter) = unsafe { &mut SENDER0 } {
             while let nb::Result::Ok(c) = uart_transmitter.serial.read() {
                 // print!("{}", c as char);
                 uart_transmitter.tx.send(c as char);

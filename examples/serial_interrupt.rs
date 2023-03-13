@@ -19,7 +19,6 @@ use esp32c3_hal::{
 use esp_backtrace as _;
 use esp_println::println;
 use nb::block;
-use riscv_rt::entry;
 
 static SERIAL: Mutex<RefCell<Option<Uart<UART0>>>> = Mutex::new(RefCell::new(None));
 

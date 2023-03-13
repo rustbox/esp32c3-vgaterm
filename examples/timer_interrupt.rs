@@ -17,7 +17,6 @@ use esp32c3_hal::{
     Rtc,
 };
 use esp_backtrace as _;
-use riscv_rt::entry;
 
 static TIMER0: Mutex<RefCell<Option<Timer<Timer0<TIMG0>>>>> = Mutex::new(RefCell::new(None));
 static TIMER1: Mutex<RefCell<Option<Timer<Timer0<TIMG1>>>>> = Mutex::new(RefCell::new(None));

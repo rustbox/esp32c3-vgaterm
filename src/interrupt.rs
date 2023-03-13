@@ -108,3 +108,44 @@ pub fn source() -> Option<Interrupt> {
         Interrupt::try_from(int_num as u8).ok()
     })
 }
+
+/// Masks the current interrupt by raising the threshold to be higher than the current priority,
+///  then re-enables interrupts for the duration of `f`
+///
+/// Panics: if current priority is 15 (can't be raised)
+#[inline(always)]
+pub fn theshold_mask<R>(f: impl FnOnce() -> R) -> R {
+    let intr = unsafe { &*esp32c3_hal::peripherals::INTERRUPT_CORE0::PTR };
+    let threshold = intr.cpu_int_thresh.read().cpu_int_thresh().bits();
+
+    // TODO: would be cooler to take the trap frame and read that, instead
+    let cpu_interrupt_number = riscv::register::mcause::read().code() as isize;
+    let intr_prio_base = intr.cpu_int_pri_0.as_ptr();
+
+    let prio = unsafe { intr_prio_base.offset(cpu_interrupt_number).read_volatile() };
+
+    if prio >= 15 {
+        panic!(
+            "interrupt priority too high: can't mask priority {} by raising the threshold",
+            prio
+        );
+    }
+
+    intr.cpu_int_thresh
+        .write(|w| w.cpu_int_thresh().variant(((prio & 0b1111) + 1) as u8));
+
+    unsafe {
+        riscv::interrupt::enable();
+    }
+
+    let r = f();
+
+    unsafe {
+        riscv::interrupt::disable();
+    }
+
+    intr.cpu_int_thresh
+        .write(|w| w.cpu_int_thresh().variant(threshold));
+
+    r
+}
