@@ -1,3 +1,5 @@
+use core::fmt::Display;
+
 use alloc::{
     borrow::ToOwned,
     collections::{BTreeMap, BTreeSet},
@@ -9,7 +11,7 @@ use lazy_static::lazy_static;
 
 use crate::{
     keyboard::PressedSet,
-    timer,
+    timer::{self, TimerInstant},
     usb_keyboard::{Key, Mod},
 };
 
@@ -307,9 +309,14 @@ impl KeyCombo {
 /// When a Key is released we return to the Waiting state.
 /// When a different key is pressed, we move to the LongState.
 enum HeldState {
-    LongDelay(Key, u64),
-    ShortDelay(Key, u64),
+    LongDelay(Key, TimerInstant),
+    ShortDelay(Key, TimerInstant),
     Waiting,
+}
+
+pub enum Error {
+    WouldBlock,
+    WouldBlockUntil(TimerInstant),
 }
 
 /// Processes Keyboard input and converts the keyboard state
@@ -346,12 +353,12 @@ impl TerminalInput {
         None
     }
 
-    pub fn key_char(&mut self, pressed: &PressedSet) -> String {
+    pub fn key_char(&mut self, pressed: &PressedSet) -> Result<impl Display, Error> {
         if let Some(s) = self.combo(pressed) {
-            return s;
+            return Ok(s);
         }
         if let Some(k) = self.key(pressed) {
-            match k {
+            Ok(match k {
                 Key::Lockable(low, up) => {
                     let shifted = pressed.caps_lock ^ pressed.shift();
                     if shifted {
@@ -457,9 +464,14 @@ impl TerminalInput {
                     .get(&k)
                     .unwrap_or(&String::new())
                     .to_owned(),
-            }
+            })
         } else {
-            String::new()
+            match self.state {
+                HeldState::LongDelay(_, inst) | HeldState::ShortDelay(_, inst) => {
+                    Err(Error::WouldBlockUntil(inst))
+                }
+                HeldState::Waiting => Err(Error::WouldBlock),
+            }
         }
     }
 

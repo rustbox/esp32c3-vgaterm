@@ -5,14 +5,17 @@
 extern crate alloc;
 
 use alloc::collections::VecDeque;
-use esp32c3_hal::clock::CpuClock;
-use esp32c3_hal::interrupt::Priority;
 use esp32c3_hal::prelude::*;
 use esp32c3_hal::timer::TimerGroup;
 use esp32c3_hal::{clock::ClockControl, peripherals::Peripherals};
+use esp32c3_hal::{clock::CpuClock, systimer::SystemTimer};
+use esp32c3_hal::{
+    interrupt::{self, Priority},
+    systimer::Alarm,
+};
 use esp32c3_hal::{Rtc, IO};
 use esp_println::{print, println};
-use vgaterm::{timer, usb_keyboard::US_ENGLISH};
+use vgaterm::usb_keyboard::US_ENGLISH;
 
 core::arch::global_asm!(".global _heap_size; _heap_size = 0x8000");
 
@@ -100,14 +103,23 @@ fn main() -> ! {
         &clocks,
     );
 
+    let alarm0 = SystemTimer::new(peripherals.SYSTIMER).alarm0;
+
+    alarm0.interrupt_enable(true);
+    interrupt::enable(
+        esp32c3_hal::peripherals::Interrupt::SYSTIMER_TARGET0,
+        Priority::Priority4,
+    )
+    .unwrap();
+
     let mut kevents = VecDeque::new();
     let mut key_state = vgaterm::keyboard::PressedSet::new();
 
     let mut input = vgaterm::terminal_input::TerminalInput::new(300, 40);
 
-    timer::enable_timer0_interrupt(Priority::Priority5);
     // Setup a timer interrupt every 16 ms
-    timer::start_repeat_timer0_callback(16 * 1000, || {});
+    // vgaterm::timer::enable_timer0_interrupt(Priority::Priority5);
+    // vgaterm::timer::start_repeat_timer0_callback(16 * 1000, || {});
 
     // let (_, mut key_input_rx) = vgaterm::channel::channel::<u8>();
     // let (mut host_tx, mut host_rcv) = vgaterm::channel::channel::<u8>();
@@ -134,10 +146,20 @@ fn main() -> ! {
             key_state.push(kevent);
         }
 
-        let c = input.key_char(&key_state);
-        print!("{}", c);
+        let last_char = input.key_char(&key_state);
+        {
+            use vgaterm::terminal_input::Error::*;
+            match last_char {
+                Ok(ref c) => print!("{}", c),
+                Err(WouldBlock) => {
+                    println!("\nwaiting for keyboard....");
+                    alarm0.set_target(u64::MAX) /* wait for keyboard input */
+                }
+                Err(WouldBlockUntil(inst)) => alarm0.set_target(inst),
+            }
+        }
 
-        if !kevents.is_empty() {
+        if !kevents.is_empty() || last_char.is_ok() {
             // don't sleep while there's work to do
             continue;
         }
@@ -146,4 +168,12 @@ fn main() -> ! {
             riscv::asm::wfi();
         }
     }
+}
+
+#[interrupt]
+fn SYSTIMER_TARGET0() {
+    use esp32c3_hal::systimer::Target;
+    let hax: Alarm<Target, 0> = unsafe { core::mem::transmute(()) };
+
+    hax.clear_interrupt();
 }

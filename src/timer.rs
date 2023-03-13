@@ -106,13 +106,16 @@ pub fn delay(us: u64) {
 //     }
 // }
 
+// Would fugit::TimerInstant be useful ? It's not obvious how to convert bases
+pub type TimerInstant = u64; // micros
+
 /// 16MHz timer clock
 /// (16,000,000 cycles / sec) * (1 sec / 1,000,000 us) => 16 cycles / us
 ///
 /// Return the SystemTimer clock value that is `delta` microseconds
 /// from now. When SystemTimer::now() is equal to the value output
 /// by `deadline` then `delta` microseconds have elapsed.
-pub fn deadline(delta: u64) -> u64 {
+pub fn deadline(delta: u64) -> TimerInstant {
     unsafe {
         match DELAY {
             Some(delay) => delay.deadline(delta),
