@@ -21,6 +21,6 @@ jobs:
     - if: steps.changes.outputs.Cargo.toml != 'true'
       # https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#setting-a-warning-message
       run: |
-        echo ::warning file=Cargo.toml,line=1,endLine=1,col=1,endColumn=1,title=Cargo.lock changed!::Cargo.lock changed without observing a corresponding update to Cargo.toml. Try pinning a dependency?
+        echo ::warning file=Cargo.toml,title=Cargo.lock changed!::Cargo.lock changed without observing a corresponding update to Cargo.toml.
 
         /usr/bin/false
