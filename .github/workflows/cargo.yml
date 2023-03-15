@@ -17,7 +17,7 @@ jobs:
       with:
         filters: |
           Cargo.toml:
-            - 'src/**'
+            - './Cargo.toml'
     - if: steps.changes.outputs.Cargo.toml != 'true'
       # https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#setting-a-warning-message
       run: |
