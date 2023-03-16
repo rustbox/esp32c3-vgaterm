@@ -1,5 +1,3 @@
-use core::fmt::Display;
-
 use alloc::{
     borrow::ToOwned,
     collections::{BTreeMap, BTreeSet},
@@ -13,6 +11,7 @@ use crate::{
     keyboard::PressedSet,
     timer::{self, TimerInstant},
     usb_keyboard::{Key, Mod},
+    Work,
 };
 
 // const ESC: char = '\u{27}';
@@ -314,11 +313,6 @@ enum HeldState {
     Waiting,
 }
 
-pub enum Error {
-    WouldBlock,
-    WouldBlockUntil(TimerInstant),
-}
-
 /// Processes Keyboard input and converts the keyboard state
 /// into a character stream into a terminal
 pub struct TerminalInput {
@@ -353,12 +347,12 @@ impl TerminalInput {
         None
     }
 
-    pub fn key_char(&mut self, pressed: &PressedSet) -> Result<impl Display, Error> {
+    pub fn key_char(&mut self, pressed: &PressedSet) -> Work<String> {
         if let Some(s) = self.combo(pressed) {
-            return Ok(s);
+            return Work::Item(s);
         }
         if let Some(k) = self.key(pressed) {
-            Ok(match k {
+            Work::Item(match k {
                 Key::Lockable(low, up) => {
                     let shifted = pressed.caps_lock ^ pressed.shift();
                     if shifted {
@@ -468,9 +462,9 @@ impl TerminalInput {
         } else {
             match self.state {
                 HeldState::LongDelay(_, inst) | HeldState::ShortDelay(_, inst) => {
-                    Err(Error::WouldBlockUntil(inst))
+                    Work::WouldBlockUntil(inst)
                 }
-                HeldState::Waiting => Err(Error::WouldBlock),
+                HeldState::Waiting => Work::WouldBlock,
             }
         }
     }

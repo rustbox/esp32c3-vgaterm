@@ -146,20 +146,19 @@ fn main() -> ! {
             key_state.push(kevent);
         }
 
+        use vgaterm::Work::*;
         let last_char = input.key_char(&key_state);
-        {
-            use vgaterm::terminal_input::Error::*;
-            match last_char {
-                Ok(ref c) => print!("{}", c),
-                Err(WouldBlock) => {
-                    println!("\nwaiting for keyboard....");
-                    alarm0.set_target(u64::MAX) /* wait for keyboard input */
-                }
-                Err(WouldBlockUntil(inst)) => alarm0.set_target(inst),
+
+        match last_char {
+            Item(ref c) => print!("{}", c),
+            WouldBlock => {
+                println!("\nwaiting for keyboard....");
+                alarm0.set_target(u64::MAX) /* wait for keyboard input */
             }
+            WouldBlockUntil(inst) => alarm0.set_target(inst),
         }
 
-        if !kevents.is_empty() || last_char.is_ok() {
+        if !kevents.is_empty() || !matches!(last_char, WouldBlock | WouldBlockUntil(_)) {
             // don't sleep while there's work to do
             continue;
         }

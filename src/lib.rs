@@ -30,6 +30,13 @@ pub use timer::{
 
 use core::arch::asm;
 
+pub enum Work<T> {
+    Item(T), // implicilty: awaken immediately
+
+    WouldBlock, // indefinitely
+    WouldBlockUntil(u64),
+}
+
 pub fn hello() -> &'static str {
     "hello"
 }
