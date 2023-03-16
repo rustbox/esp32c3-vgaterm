@@ -4,15 +4,18 @@
 
 extern crate alloc;
 
-use alloc::vec::Vec;
-use esp32c3_hal::clock::CpuClock;
-use esp32c3_hal::interrupt::Priority;
+use alloc::collections::VecDeque;
 use esp32c3_hal::prelude::*;
 use esp32c3_hal::timer::TimerGroup;
 use esp32c3_hal::{clock::ClockControl, peripherals::Peripherals};
+use esp32c3_hal::{clock::CpuClock, systimer::SystemTimer};
+use esp32c3_hal::{
+    interrupt::{self, Priority},
+    systimer::Alarm,
+};
 use esp32c3_hal::{Rtc, IO};
 use esp_println::{print, println};
-use vgaterm::usb_keyboard::{KeyEvent, Parse, USBKeyboardDevice, US_ENGLISH};
+use vgaterm::usb_keyboard::US_ENGLISH;
 
 core::arch::global_asm!(".global _heap_size; _heap_size = 0x8000");
 
@@ -82,9 +85,6 @@ fn main() -> ! {
     init_heap();
 
     vgaterm::configure_timer0(peripherals.TIMG0, &clocks);
-    // let mut usb_report_channel0 = vgaterm::uart::configure0(peripherals.UART0);
-    let mut usb_report_channel1 =
-        vgaterm::uart::configure1(peripherals.UART1, io.pins.gpio2, io.pins.gpio3, &clocks);
 
     unsafe {
         riscv::interrupt::enable();
@@ -94,86 +94,85 @@ fn main() -> ! {
 
     println!("Hello World");
 
-    vgaterm::gpio::interrupt_enable(Priority::Priority1);
-    vgaterm::uart::interrupt_enable1(Priority::Priority5);
+    // // vgaterm::gpio::interrupt_enable(Priority::Priority1);
+    let mut keyboard = vgaterm::keyboard::Keyboard::from_peripherals(
+        US_ENGLISH,
+        io.pins.gpio1,
+        io.pins.gpio3,
+        peripherals.UART1,
+        &clocks,
+    );
 
-    let mut keyboard = USBKeyboardDevice::new(US_ENGLISH);
+    let alarm0 = SystemTimer::new(peripherals.SYSTIMER).alarm0;
 
+    alarm0.interrupt_enable(true);
+    interrupt::enable(
+        esp32c3_hal::peripherals::Interrupt::SYSTIMER_TARGET0,
+        Priority::Priority4,
+    )
+    .unwrap();
+
+    let mut kevents = VecDeque::new();
+    let mut key_state = vgaterm::keyboard::PressedSet::new();
+
+    let mut input = vgaterm::terminal_input::TerminalInput::new(300, 40);
+
+    // Setup a timer interrupt every 16 ms
+    // vgaterm::timer::enable_timer0_interrupt(Priority::Priority5);
+    // vgaterm::timer::start_repeat_timer0_callback(16 * 1000, || {});
+
+    // let (_, mut key_input_rx) = vgaterm::channel::channel::<u8>();
+    // let (mut host_tx, mut host_rcv) = vgaterm::channel::channel::<u8>();
+
+    // let mut terminal = vgaterm::terminal::TextField::new();
+    // let mut display = Display::new();
+    // print!(".");
     loop {
-        'message: loop {
-            while let Some(k) = usb_report_channel1.recv() {
-                if let Parse::Finished(r) = keyboard.next_report_byte(k) {
-                    match r {
-                        Ok(m) => {
-                            let events = keyboard.next_report(&m.message);
-                            println!(
-                                "Events: {:?}",
-                                events
-                                    .iter()
-                                    .map(|c| {
-                                        match c {
-                                            KeyEvent::Pressed(k) => {
-                                                KeyEvent::Pressed(keyboard.translate_keycode(*k))
-                                            }
-                                            KeyEvent::Released(k) => {
-                                                KeyEvent::Released(keyboard.translate_keycode(*k))
-                                            }
-                                        }
-                                    })
-                                    .collect::<Vec<_>>()
-                            );
-                        }
-                        Err(e) => {
-                            println!("Error: {:?}", e);
-                        }
-                    }
-                    break 'message;
-                }
+        // // Get characters from keyboard input
+        // let key_in = key_input_rx.recv_all();
+        // // Get characters from host
+        // let host_in = host_rcv.recv_all();
+
+        // // Send all characters from keyboard to the host
+        // host_tx.send_all(key_in);
+
+        // // Update terminal with the host output
+        // terminal.send(host_in);
+        // terminal.draw(&mut display);
+        // display.flush();
+        kevents.extend(keyboard.flush_and_parse());
+
+        if let Some(kevent) = kevents.pop_front() {
+            key_state.push(kevent);
+        }
+
+        use vgaterm::Work::*;
+        let last_char = input.key_char(&key_state);
+
+        match last_char {
+            Item(ref c) => print!("{}", c),
+            WouldBlock => {
+                println!("\nwaiting for keyboard....");
+                alarm0.set_target(u64::MAX) /* wait for keyboard input */
             }
-            unsafe {
-                riscv::asm::wfi();
-            }
+            WouldBlockUntil(inst) => alarm0.set_target(inst),
+        }
+
+        if !kevents.is_empty() || !matches!(last_char, WouldBlock | WouldBlockUntil(_)) {
+            // don't sleep while there's work to do
+            continue;
         }
 
         unsafe {
             riscv::asm::wfi();
         }
     }
+}
 
-    // let mut report = Vec::new();
-    //     let mut collecting_report = false;
-    //     'report: loop {
-    //         while let Some(k) = usb_report_channel1.recv() {
-    //             if k == START && !collecting_report {
-    //                 print!("*");
-    //                 collecting_report = true;
-    //             }
-    //             if collecting_report {
-    //                 report.push(k);
-    //                 print!(".");
-    //             }
-    //             if k == END {
-    //                 print!("|");
-    //                 break 'report;
-    //             }
-    //         }
-    //         unsafe {
-    //             print!("#");
-    //             riscv::asm::wfi();
-    //         }
-    //     }
+#[interrupt]
+fn SYSTIMER_TARGET0() {
+    use esp32c3_hal::systimer::Target;
+    let hax: Alarm<Target, 0> = unsafe { core::mem::transmute(()) };
 
-    //     if !report.is_empty() {
-    //         match usb_keyboard::ReportHeader::from_bytes(report.as_slice()) {
-    //             Ok(r) => {
-    //                 let keys_pressed = keyboard.next_report(&r.message);
-    //                 println!("Pressed {:?}", keys_pressed);
-    //             }
-    //             Err(s) => {
-    //                 println!("ERROR: {:?}", s);
-    //             }
-    //         }
-    //     }
-
-    //     println!("Wfi");
+    hax.clear_interrupt();
 }

@@ -90,6 +90,18 @@ pub enum DeviceType {
     Keyboard = 0x6,
 }
 
+#[derive(Debug, Clone, Copy, Ord, Eq, PartialEq, PartialOrd)]
+pub enum Mod {
+    LeftCtrl,
+    LeftShift,
+    LeftAlt,
+    LeftGui,
+    RightCtrl,
+    RightShift,
+    RightAlt,
+    RightGui,
+}
+
 ///
 /// Each kind of keyboard key.
 ///
@@ -111,7 +123,7 @@ pub enum DeviceType {
 /// will be selected on the numpad and when not set the Home, Page Down, etc keys are selected.
 ///
 /// These cases must be handled individually with the Num Lock state when matching on a Key
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Ord, Eq, PartialEq, PartialOrd)]
 pub enum Key {
     Printable(char, char),
     Lockable(char, char),
@@ -136,14 +148,7 @@ pub enum Key {
     Tab,
     CapsLock,
     Enter,
-    LeftShift,
-    RightShift,
-    LeftCtrl,
-    LeftGui,
-    LeftAlt,
-    RightAlt,
-    RightGui,
-    RightCtrl,
+    Mod(Mod),
     Application,
     UpArrow,
     LeftArrow,
@@ -180,24 +185,27 @@ pub enum Key {
     UndefinedKey(u8),
 }
 
-pub const LEFT_CTRL: (usize, Key) = (0xE0, Key::LeftCtrl);
-pub const LEFT_SHIFT: (usize, Key) = (0xE1, Key::LeftShift);
-pub const LEFT_ALT: (usize, Key) = (0xE2, Key::LeftAlt);
-pub const LEFT_GUI: (usize, Key) = (0xE3, Key::LeftGui);
-pub const RIGHT_CTRL: (usize, Key) = (0xE4, Key::RightCtrl);
-pub const RIGHT_SHIFT: (usize, Key) = (0xE5, Key::RightShift);
-pub const RIGHT_ALT: (usize, Key) = (0xE6, Key::RightAlt);
-pub const RIGHT_GUI: (usize, Key) = (0xE7, Key::RightGui);
+pub type KeyLayout = &'static [Key];
+
+use Mod::*;
+pub const LEFT_CTRL: (usize, Key) = (0xE0, Key::Mod(LeftCtrl));
+pub const LEFT_SHIFT: (usize, Key) = (0xE1, Key::Mod(LeftShift));
+pub const LEFT_ALT: (usize, Key) = (0xE2, Key::Mod(LeftAlt));
+pub const LEFT_GUI: (usize, Key) = (0xE3, Key::Mod(LeftGui));
+pub const RIGHT_CTRL: (usize, Key) = (0xE4, Key::Mod(RightCtrl));
+pub const RIGHT_SHIFT: (usize, Key) = (0xE5, Key::Mod(RightShift));
+pub const RIGHT_ALT: (usize, Key) = (0xE6, Key::Mod(RightAlt));
+pub const RIGHT_GUI: (usize, Key) = (0xE7, Key::Mod(RightGui));
 
 pub const MOD_KEYS: [Key; 8] = [
-    Key::LeftCtrl,
-    Key::LeftShift,
-    Key::LeftAlt,
-    Key::LeftGui,
-    Key::RightCtrl,
-    Key::RightShift,
-    Key::RightAlt,
-    Key::RightGui,
+    Key::Mod(LeftCtrl),
+    Key::Mod(LeftShift),
+    Key::Mod(LeftAlt),
+    Key::Mod(LeftGui),
+    Key::Mod(RightCtrl),
+    Key::Mod(RightShift),
+    Key::Mod(RightAlt),
+    Key::Mod(RightGui),
 ];
 
 pub const MOD_KEY_OFFSET: usize = 0xE0;
@@ -214,9 +222,9 @@ pub const MOD_KEY_OFFSET: usize = 0xE0;
 /// let key = &US_ENGLISH[key_code as usize];
 /// assert_eq!(key  Key::Lockable('h', 'H'));
 /// ```
-pub static US_ENGLISH: &[Key] = {
+pub static US_ENGLISH: KeyLayout = {
     use Key::*;
-    &[
+    let layout: &'static [Key] = &[
         Reserved,
         RollOverError,
         PostFail,
@@ -319,7 +327,8 @@ pub static US_ENGLISH: &[Key] = {
         KeypadPeriodDelete,
         Printable('\\', '|'),
         Application,
-    ]
+    ];
+    layout
 };
 
 #[derive(Debug)]
@@ -349,6 +358,7 @@ pub enum Parse<'a> {
 /// ReportStarted indicates that the Header is recognized and parsing
 /// has begun. Once the Header is parsed the state transitions to
 /// MessageStarted.
+#[derive(Debug)]
 enum ParseState {
     Waiting,
     ReportStarted,
@@ -374,8 +384,9 @@ enum ParseState {
 /// Each keycode can be mapped to actual Keys using the layout internal to the USBKeyboardDevice using
 /// `translate_keycode`, which would allow you to make the events list above contain Keys instead of
 /// keycodes.
+#[derive(Debug)]
 pub struct USBKeyboardDevice {
-    layout: &'static [Key],
+    layout: KeyLayout,
     last_keys: Vec<u8>,
     parse_state: ParseState,
     report_buffer: Vec<u8>,
@@ -384,7 +395,7 @@ pub struct USBKeyboardDevice {
 
 impl USBKeyboardDevice {
     /// Create a new Keyboard Device with the given layout
-    pub fn new(layout: &'static [Key]) -> USBKeyboardDevice {
+    pub fn new(layout: KeyLayout) -> USBKeyboardDevice {
         USBKeyboardDevice {
             layout,
             last_keys: Vec::new(),
@@ -525,166 +536,10 @@ impl USBKeyboardDevice {
         }
     }
 
-    // pub fn report_message(&mut self, message: &[u8]) -> Vec<KeyValue> {
-    //     let shift = message[0] & 0b0010_0010 != 0;
-    //     let mut vs = Vec::new();
-    //     for m in &message[2..] {
-    //         let k = if (*m as usize) < self.layout.len() {
-    //             &self.layout[*m as usize]
-    //         } else {
-    //             &Key::UndefinedKey()
-    //         };
-    //         let kv = match k {
-    //             Key::Printable(lower, upper) => {
-    //                 if shift {
-    //                     KeyValue::Printable(*upper)
-    //                 } else {
-    //                     KeyValue::Printable(*lower)
-    //                 }
-    //             }
-    //             Key::Lockable(lower, upper) => {
-    //                 let shifted = shift ^ self.caps_lock;
-    //                 if shifted {
-    //                     KeyValue::Printable(*upper)
-    //                 } else {
-    //                     KeyValue::Printable(*lower)
-    //                 }
-    //             }
-    //             Key::Keypad0Insert => {
-    //                 if self.num_lock {
-    //                     KeyValue::Printable('0')
-    //                 } else {
-    //                     KeyValue::Action(Key::Insert)
-    //                 }
-    //             }
-    //             Key::Keypad1End => {
-    //                 if self.num_lock {
-    //                     KeyValue::Printable('1')
-    //                 } else {
-    //                     KeyValue::Action(Key::End)
-    //                 }
-    //             }
-    //             Key::Keypad2Down => {
-    //                 if self.num_lock {
-    //                     KeyValue::Printable('2')
-    //                 } else {
-    //                     KeyValue::Action(Key::DownArrow)
-    //                 }
-    //             }
-    //             Key::Keypad3PageDown => {
-    //                 if self.num_lock {
-    //                     KeyValue::Printable('3')
-    //                 } else {
-    //                     KeyValue::Action(Key::PageDown)
-    //                 }
-    //             }
-    //             Key::Keypad4Left => {
-    //                 if self.num_lock {
-    //                     KeyValue::Printable('4')
-    //                 } else {
-    //                     KeyValue::Action(Key::LeftArrow)
-    //                 }
-    //             }
-    //             Key::Keypad6Right => {
-    //                 if self.num_lock {
-    //                     KeyValue::Printable('6')
-    //                 } else {
-    //                     KeyValue::Action(Key::RightArrow)
-    //                 }
-    //             }
-    //             Key::Keypad7Home => {
-    //                 if self.num_lock {
-    //                     KeyValue::Printable('7')
-    //                 } else {
-    //                     KeyValue::Action(Key::Home)
-    //                 }
-    //             }
-    //             Key::Keypad8Up => {
-    //                 if self.num_lock {
-    //                     KeyValue::Printable('8')
-    //                 } else {
-    //                     KeyValue::Action(Key::UpArrow)
-    //                 }
-    //             }
-    //             Key::Keypad9PageUp => {
-    //                 if self.num_lock {
-    //                     KeyValue::Printable('9')
-    //                 } else {
-    //                     KeyValue::Action(Key::PageUp)
-    //                 }
-    //             }
-    //             Key::KeypadPeriodDelete => {
-    //                 if self.num_lock {
-    //                     KeyValue::Printable('.')
-    //                 } else {
-    //                     KeyValue::Action(Key::Delete)
-    //                 }
-    //             }
-    //             Key::KeypadSlash => KeyValue::Printable('/'),
-    //             Key::KeypadAsterisk => KeyValue::Printable('*'),
-    //             Key::KeypadDash => KeyValue::Printable('-'),
-    //             Key::KeypadPlus => KeyValue::Printable('+'),
-    //             Key::KeypadEnter => KeyValue::Action(Key::Enter),
-    //             Key::Reserved => KeyValue::Nothing,
-    //             Key::Numlock => {
-    //                 self.num_lock = !self.num_lock;
-    //                 KeyValue::Nothing
-    //             }
-    //             Key::CapsLock => {
-    //                 self.caps_lock = !self.caps_lock;
-    //                 KeyValue::Nothing
-    //             }
-    //             k => KeyValue::Action(*k),
-    //         };
-    //         match kv {
-    //             KeyValue::Nothing => {}
-    //             _ => vs.push(kv),
-    //         }
-    //     }
-    //     vs
-    // }
+    pub fn code_event_into_key(&self, event: KeyEvent<u8>) -> KeyEvent<Key> {
+        match event {
+            KeyEvent::Pressed(k) => KeyEvent::Pressed(self.translate_keycode(k)),
+            KeyEvent::Released(k) => KeyEvent::Released(self.translate_keycode(k)),
+        }
+    }
 }
-
-// enum KeyState {
-//     Pressed,
-//     Released,
-// }
-
-// struct Keyboard {
-//     device: USBKeyboardDevice,
-//     caps_lock: bool,
-//     shift: bool,
-//     num_lock: bool,
-//     live_key: Option<KeyValue>
-// }
-
-// pub fn foo() {
-//     let layout = &keymap::US_ENGLISH;
-
-//     let keycode = 0x2c; // Spacebar
-//     let c = layout.keycodes[keycode];
-//     println!("Code 0x2c yields {}", c);
-//     println!("`{:?}`", char::from_u32(c as u32));
-
-//     let keycode = 0x0b; // h
-//     let c = layout.keycodes[keycode];
-//     println!("Code 0x0b yields {}", c);
-//     println!("`{:?}`", char::from_u32(c as u32));
-// }
-
-// fn keycode_for_unicode(layout: &Layout, unicode: u16) -> Keycode {
-//     match unicode {
-//         u if u == UNICODE_ENTER => Keycode::RegularKey(ENTER_KEYCODE & layout.keycode_mask),
-//         u if u == UNICODE_TAB => Keycode::RegularKey(TAB_KEYCODE & layout.keycode_mask),
-//         u if u < UNICODE_FIRST_ASCII => {
-//             let idx = ((u + CONTROL_CHARACTER_OFFSET) - UNICODE_FIRST_ASCII) as usize;
-//             let keycodes = vec![layout.keycodes[idx]];
-//             Keycode::ModifierKeySequence(RIGHT_CTRL_MODIFIER, keycodes)
-//         }
-//         u if u >= UNICODE_FIRST_ASCII && u <= UNICODE_LAST_ASCII => {
-//             let idx = (u - UNICODE_FIRST_ASCII) as usize;
-//             Keycode::RegularKey(layout.keycodes[idx])
-//         }
-//         _ => Keycode::InvalidCharacter,
-//     }
-// }

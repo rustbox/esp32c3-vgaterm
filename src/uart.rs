@@ -3,7 +3,7 @@ use core::cell::RefCell;
 use critical_section::Mutex;
 use esp32c3_hal::{
     clock::Clocks,
-    gpio::{Gpio2, Gpio3, Unknown},
+    gpio::{Gpio1, Gpio3, Unknown},
     uart::{
         config::{Config, DataBits, Parity, StopBits},
         TxRxPins,
@@ -36,7 +36,7 @@ pub fn configure0(uart: UART0) -> Receiver<char> {
 
 pub fn configure1(
     uart: UART1,
-    tx: Gpio2<Unknown>,
+    tx: Gpio1<Unknown>,
     rx: Gpio3<Unknown>,
     clocks: &Clocks,
 ) -> Receiver<u8> {
@@ -59,6 +59,24 @@ pub fn configure1(
     });
 
     rx
+}
+
+pub fn make_uart1<'a>(
+    uart: UART1,
+    tx: Gpio1<Unknown>,
+    rx: Gpio3<Unknown>,
+    clocks: &Clocks,
+) -> Uart<'a, UART1> {
+    let config = Config {
+        baudrate: 400_000,
+        data_bits: DataBits::DataBits8,
+        parity: Parity::ParityNone,
+        stop_bits: StopBits::STOP1,
+    };
+    let pins = TxRxPins::new_tx_rx(tx.into_push_pull_output(), rx.into_floating_input());
+    let serial1 = Uart::new_with_config(uart, Some(config), Some(pins), clocks);
+
+    serial1
 }
 
 // pub fn start_uart_poll_timer(interval_us: u64) {
@@ -151,7 +169,7 @@ pub fn interrupt_enable1(priority: interrupt::Priority) {
     });
 }
 
-struct UartTransmitter<'a, S, Tx> {
+pub struct UartTransmitter<'a, S, Tx> {
     serial: Uart<'a, S>,
     tx: Sender<Tx>,
 }
@@ -174,10 +192,10 @@ fn UART0() {
 
 #[interrupt]
 fn UART1() {
+    // print!(".");
     critical_section::with(|cs| {
         if let Some(uart_transmitter) = SENDER1.borrow_ref_mut(cs).as_mut() {
             while let nb::Result::Ok(c) = uart_transmitter.serial.read() {
-                // print!("{}", c as char);
                 uart_transmitter.tx.send(c);
             }
             uart_transmitter.serial.reset_rx_fifo_full_interrupt();

@@ -81,6 +81,11 @@ impl Delay {
     pub fn wait_until(&self, deadline: u64) {
         while SystemTimer::now() <= deadline {}
     }
+
+    // pub fn now(&self) -> u64 {
+    //    let f = self.freq.raw();
+
+    // }
 }
 
 #[inline]
@@ -92,14 +97,30 @@ pub fn delay(us: u64) {
     }
 }
 
+/// Current time in microseconds
+// pub fn now() -> u64 {
+//     unsafe {
+//         if let Some(delay) = DELAY {
+//             delay.
+//         }
+//     }
+// }
+
+// Would fugit::TimerInstant be useful ? It's not obvious how to convert bases
+pub type TimerInstant = u64; // micros
+
 /// 16MHz timer clock
 /// (16,000,000 cycles / sec) * (1 sec / 1,000,000 us) => 16 cycles / us
-pub fn deadline(us: u64) -> u64 {
+///
+/// Return the SystemTimer clock value that is `delta` microseconds
+/// from now. When SystemTimer::now() is equal to the value output
+/// by `deadline` then `delta` microseconds have elapsed.
+pub fn deadline(delta: u64) -> TimerInstant {
     unsafe {
         match DELAY {
-            Some(delay) => delay.deadline(us),
+            Some(delay) => delay.deadline(delta),
             // Assume 16MHz for the clock if we haven't made one I guess
-            None => SystemTimer::now().wrapping_add(us * 16),
+            None => SystemTimer::now().wrapping_add(delta * 16),
         }
     }
 }
@@ -150,15 +171,15 @@ pub fn start_timer0_callback(t: u64, callback: impl FnMut() + 'static) {
 }
 
 #[allow(dead_code)]
-pub fn start_repeat_timer0_callback(t: u64, mut callback: impl FnMut() + 'static) {
+pub fn start_repeat_timer0_callback(t_us: u64, mut callback: impl FnMut() + 'static) {
     critical_section::with(|cs| {
         if let Some(timer) = TIMER0.borrow(cs).borrow_mut().as_mut() {
-            timer.start(t.micros())
+            timer.start(t_us.micros())
         }
 
         let f = move || {
             callback();
-            start_timer0(t);
+            start_timer0(t_us);
         };
 
         unsafe {

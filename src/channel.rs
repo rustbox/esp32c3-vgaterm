@@ -1,6 +1,6 @@
 use core::cell::RefCell;
 
-use alloc::{collections::VecDeque, sync::Arc};
+use alloc::{collections::VecDeque, sync::Arc, vec::Vec};
 use critical_section::Mutex;
 
 pub struct Sender<T> {
@@ -14,6 +14,15 @@ impl<T> Sender<T> {
             q.push_front(s);
         });
     }
+
+    pub fn send_all<I: IntoIterator<Item = T>>(&mut self, contents: I) {
+        critical_section::with(|cs| {
+            let mut q = self.inner.queue.borrow(cs).borrow_mut();
+            for i in contents.into_iter() {
+                q.push_front(i);
+            }
+        })
+    }
 }
 
 impl<T> Clone for Sender<T> {
@@ -24,6 +33,7 @@ impl<T> Clone for Sender<T> {
     }
 }
 
+#[derive(Debug)]
 pub struct Receiver<T> {
     inner: Arc<Inner<T>>,
 }
@@ -35,10 +45,40 @@ impl<T> Receiver<T> {
             q.pop_back()
         })
     }
+
+    pub fn recv_all(&mut self) -> Recv<T> {
+        critical_section::with(|cs| {
+            let mut q = self.inner.queue.borrow(cs).borrow_mut();
+            let mut v = Vec::new();
+            while let Some(i) = q.pop_back() {
+                v.push(i);
+            }
+            Recv::new(v)
+        })
+    }
 }
 
+#[derive(Debug)]
 struct Inner<T> {
     queue: Mutex<RefCell<VecDeque<T>>>,
+}
+
+pub struct Recv<T> {
+    contents: Vec<T>,
+}
+
+impl<T> Recv<T> {
+    pub fn new(contents: Vec<T>) -> Recv<T> {
+        Recv { contents }
+    }
+}
+
+impl<T> Iterator for Recv<T> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.contents.pop()
+    }
 }
 
 pub fn channel<T>() -> (Sender<T>, Receiver<T>) {

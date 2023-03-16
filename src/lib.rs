@@ -1,6 +1,7 @@
 #![no_std]
 #![feature(array_chunks)]
 #![feature(const_trait_impl)]
+#![feature(iter_collect_into)]
 
 extern crate alloc;
 
@@ -11,20 +12,15 @@ pub mod display;
 pub mod gpio;
 pub mod interrupt;
 pub mod kernel;
+pub mod keyboard;
 pub mod spi;
 pub mod terminal;
+pub mod terminal_input;
 pub mod text;
-mod timer;
+pub mod timer;
 pub mod uart;
 pub mod usb_keyboard;
 pub mod video;
-
-/// This is required for the #[interrupt] macro on interrupt handler functions to work properly.
-/// Such as gpio::GPIO() interrupt handler. This is due to how the esp32c3_hal crate implmented
-/// this macro, it expects `peripherals::Interrupt` to be available.
-pub mod peripherals {
-    pub use esp32c3_hal::peripherals::Interrupt;
-}
 
 // pub use println::configure;
 pub use timer::{
@@ -33,6 +29,13 @@ pub use timer::{
 };
 
 use core::arch::asm;
+
+pub enum Work<T> {
+    Item(T), // implicilty: awaken immediately
+
+    WouldBlock, // indefinitely
+    WouldBlockUntil(u64),
+}
 
 pub fn hello() -> &'static str {
     "hello"
