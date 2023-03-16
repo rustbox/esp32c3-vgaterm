@@ -1,0 +1,26 @@
+name: Check Cargo.lock
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+    - Cargo.lock
+
+jobs:
+  job:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    steps:
+    - uses: dorny/paths-filter@v2
+      id: changes
+      with:
+        filters: |
+          Cargo.toml:
+            - './Cargo.toml'
+    - if: steps.changes.outputs["Cargo.toml"] != 'true'
+      # https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#setting-a-warning-message
+      run: |
+        echo ::warning file=Cargo.toml,title=Cargo.lock changed!::Cargo.lock changed without observing a corresponding update to Cargo.toml.
+
+        /usr/bin/false
