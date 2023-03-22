@@ -2,6 +2,7 @@
 #![feature(array_chunks)]
 #![feature(const_trait_impl)]
 #![feature(iter_collect_into)]
+#![feature(trait_alias)]
 
 extern crate alloc;
 

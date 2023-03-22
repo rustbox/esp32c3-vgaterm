@@ -3,7 +3,7 @@ use core::cell::RefCell;
 use critical_section::Mutex;
 use esp32c3_hal::{
     clock::Clocks,
-    gpio::{Gpio1, Gpio3, Unknown},
+    gpio::{Gpio1, Gpio3, Unknown, Gpio10, Gpio0},
     uart::{
         config::{Config, DataBits, Parity, StopBits},
         TxRxPins,
@@ -37,7 +37,7 @@ pub fn configure0(uart: UART0) -> Receiver<char> {
 pub fn configure1(
     uart: UART1,
     tx: Gpio1<Unknown>,
-    rx: Gpio3<Unknown>,
+    rx: Gpio0<Unknown>,
     clocks: &Clocks,
 ) -> Receiver<u8> {
     let config = Config {

@@ -4,13 +4,14 @@
 
 extern crate alloc;
 
+use alloc::collections::VecDeque;
 use esp32c3_hal::clock::{ClockControl, CpuClock};
 use esp32c3_hal::interrupt::Priority;
 use esp32c3_hal::prelude::*;
 use esp32c3_hal::timer::TimerGroup;
 use esp32c3_hal::{gpio::IO, peripherals::Peripherals, Rtc};
 use esp_println::{print, println};
-use vgaterm::Delay;
+use vgaterm::{Delay, usb_keyboard::US_ENGLISH, Work};
 use vgaterm::{self, video};
 
 use core::arch::asm;
@@ -144,16 +145,43 @@ fn main() -> ! {
 
     // let mut cursor = (0, 0);
     // terminal
+    let mut keyboard = vgaterm::keyboard::Keyboard::from_peripherals(
+        US_ENGLISH,
+        io.pins.gpio1,
+        io.pins.gpio0,
+        peripherals.UART1,
+        &clocks,
+    );
+
+    let mut keyvents = VecDeque::new();
+    let mut key_state = vgaterm::keyboard::PressedSet::new();
+    let mut input = vgaterm::terminal_input::TerminalInput::new(300, 40);
+
     loop {
-        // Get the pressed chars
-        while let Some(t) = char_reciever.recv() {
-            // println!("got: {}", t.escape_default());
-            terminal.type_next(t);
+        keyvents.extend(keyboard.flush_and_parse());
+        if let Some(kevent) = keyvents.pop_front() {
+            key_state.push(kevent);
         }
+
+        let last_char = input.key_char(&key_state);
+        match last_char {
+            Work::Item(ref c) => {
+                for c in c.chars() {
+                    terminal.type_next(c);
+                }
+            },
+            Work::WouldBlock => {},
+            Work::WouldBlockUntil(_) => {}
+        }
+
         // Draw the characters on the frame
         terminal.draw(&mut display);
         // Flush the Display to the BUFFER
         display.flush();
+
+        if !keyvents.is_empty() || matches!(last_char, Work::WouldBlock | Work::WouldBlockUntil(_)) {
+            continue;
+        }
 
         unsafe {
             // this will fire no less often than once per frame

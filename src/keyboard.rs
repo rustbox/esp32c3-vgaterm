@@ -1,7 +1,7 @@
 use alloc::vec::Vec;
 use esp32c3_hal::{
     clock::Clocks,
-    gpio::{Gpio1, Gpio3, Unknown},
+    gpio::{Gpio1, Gpio3, Unknown, Gpio10, Gpio0},
     interrupt::Priority,
     peripherals::UART1,
 };
@@ -29,7 +29,7 @@ impl Keyboard {
     pub fn from_peripherals(
         layout: KeyLayout,
         tx: Gpio1<Unknown>,
-        rx: Gpio3<Unknown>,
+        rx: Gpio0<Unknown>,
         uart: UART1,
         clocks: &Clocks,
     ) -> Keyboard {

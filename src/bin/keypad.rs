@@ -98,7 +98,7 @@ fn main() -> ! {
     let mut keyboard = vgaterm::keyboard::Keyboard::from_peripherals(
         US_ENGLISH,
         io.pins.gpio1,
-        io.pins.gpio3,
+        io.pins.gpio0,
         peripherals.UART1,
         &clocks,
     );
