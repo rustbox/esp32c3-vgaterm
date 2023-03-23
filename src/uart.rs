@@ -20,6 +20,7 @@ use crate::interrupt::which_priority;
 static mut SENDER0: Option<UartTransmitter<UART0, char>> = None;
 static SENDER1: Mutex<RefCell<Option<UartTransmitter<UART1, u8>>>> = Mutex::new(RefCell::new(None));
 
+#[must_use]
 pub fn configure0(uart: UART0) -> Receiver<char> {
     let serial0 = Uart::new(uart);
     let (tx, rx) = channel::channel();

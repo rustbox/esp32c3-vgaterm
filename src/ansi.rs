@@ -54,7 +54,8 @@ use nom::{IResult, Parser};
 
 const ESC: char = '\u{1B}';
 
-enum Op {
+#[derive(Debug)]
+pub enum Op {
     MoveCursorDelta { dx: isize, dy: isize },
     MoveCursorAbs { x: usize, y: usize },
     MoveCursorBeginningAndLine { dy: isize },
@@ -66,7 +67,8 @@ enum Op {
     TextOp(Vec<TextOp>),
 }
 
-enum TextOp {
+#[derive(Debug)]
+pub enum TextOp {
     SetColorBasic { fg: u8, bg: u8 },
     SetFGColor256 { fg: u8 },
     SetBGColor256 { bg: u8 },
@@ -74,7 +76,8 @@ enum TextOp {
     SetTextMode(SetUnset, Style),
 }
 
-enum Style {
+#[derive(Debug)]
+pub enum Style {
     Bold,
     Dim,
     Italic,
@@ -84,12 +87,14 @@ enum Style {
     Inverse,
 }
 
-enum SetUnset {
+#[derive(Debug)]
+pub enum SetUnset {
     Set,
     Unset,
 }
 
-enum EraseMode {
+#[derive(Debug)]
+pub enum EraseMode {
     FromCursor,
     ToCursor,
     All,
@@ -425,12 +430,13 @@ fn parse(input: &str) -> OpResult {
         cursor_right_col,
         cursor_beginning_down,
         cursor_beginning_up,
+        request_cursor_postion,
         set_text_mode,
     )));
     nom::branch::alt((csi_seq, save_cursor_position, restore_cursor_position))(input)
 }
 
-enum OpChar {
+pub enum OpChar {
     Char(char),
     Op(Op),
 }
@@ -441,16 +447,16 @@ impl From<char> for OpChar {
     }
 }
 
-struct TerminalEsc {
+pub struct TerminalEsc {
     buffer: String,
 }
 
 impl TerminalEsc {
-    fn new() -> TerminalEsc {
+    pub fn new() -> TerminalEsc {
         TerminalEsc { buffer: String::new() }
     }
 
-    fn push(&mut self, c: char) -> Option<OpChar> {
+    pub fn push(&mut self, c: char) -> Option<OpChar> {
         self.buffer.push(c);
 
         let seq = self.buffer.as_str();
