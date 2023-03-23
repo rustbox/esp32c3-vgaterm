@@ -69,7 +69,8 @@ pub enum Op {
 
 #[derive(Debug)]
 pub enum TextOp {
-    SetColorBasic { fg: u8, bg: u8 },
+    SetBGBasic { bg: u8 },
+    SetFGBasic { fg: u8 },
     SetFGColor256 { fg: u8 },
     SetBGColor256 { bg: u8 },
     ResetColors,
@@ -333,20 +334,14 @@ fn erase_line(input: &str) -> OpResult {
 
 //  <fg>;<bg>;   => Set fg color between 30-37; 90-97. bg color between 40-47, 100-107
 fn set_basic_color_atom(input: &str) -> TextOpResult {
-    let params = dual_int_parameter_sequence::<u8>('m');
-    nom::combinator::map_opt(params, |(a, b)| {
-        match a {
-            30..=37 => Some(a),
-            90..=97 => Some(a),
-            _ => None,
-        }
-        .and_then(|a| match b {
-            40..=47 => Some((a, b)),
-            100..=107 => Some((a, b)),
-            _ => None,
-        })
+    let params = single_int_parameter_atom::<u8>();
+    nom::combinator::map_opt(params, |a| match a {
+        30..=37 => Some(TextOp::SetFGBasic { fg: a }),
+        90..=97 => Some(TextOp::SetFGBasic { fg: a }),
+        40..=47 => Some(TextOp::SetBGBasic { bg: a }),
+        100..=107 => Some(TextOp::SetBGBasic { bg: a }),
+        _ => None,
     })(input)
-    .map(|(rest, (fg, bg))| (rest, TextOp::SetColorBasic { fg, bg }))
 }
 
 // 38; 5; <c> m  => Set fg color to c where c is a color index of 256 colors
@@ -430,6 +425,8 @@ fn parse(input: &str) -> OpResult {
         cursor_right_col,
         cursor_beginning_down,
         cursor_beginning_up,
+        erase_screen,
+        erase_line,
         request_cursor_postion,
         set_text_mode,
     )));
@@ -453,7 +450,9 @@ pub struct TerminalEsc {
 
 impl TerminalEsc {
     pub fn new() -> TerminalEsc {
-        TerminalEsc { buffer: String::new() }
+        TerminalEsc {
+            buffer: String::new(),
+        }
     }
 
     pub fn push(&mut self, c: char) -> Option<OpChar> {
@@ -461,17 +460,17 @@ impl TerminalEsc {
 
         let seq = self.buffer.as_str();
         match parse(seq) {
-            Err(nom::Err::Incomplete(e)) => {
+            Err(nom::Err::Incomplete(_)) => {
                 // If we are incomplete, then do nothing
                 None
-            },
+            }
             Err(_) => {
                 // If error, then we aren't in an escape sequence, so return the last char
                 // And clear the buffer
                 let out = self.buffer.pop();
                 self.buffer.clear();
                 out.map(|v| v.into())
-            },
+            }
             Ok((_, op)) => {
                 // If we parsed an escape sequence, then clear the buffer and return the Op
                 self.buffer.clear();
@@ -486,4 +485,3 @@ impl Default for TerminalEsc {
         TerminalEsc::new()
     }
 }
-
