@@ -160,7 +160,7 @@ where
     }
 }
 
-// This will parse ''|<n> <ending> and return n, with a default of 0
+// This will parse ''|<n> <ending> and return n, with a default
 fn optional_int_param_sequence<N: FromStr + Copy>(
     ending: char,
     default: N,
