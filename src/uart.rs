@@ -3,7 +3,7 @@ use core::cell::RefCell;
 use critical_section::Mutex;
 use esp32c3_hal::{
     clock::Clocks,
-    gpio::{Gpio1, Gpio3, Unknown, Gpio10, Gpio0},
+    gpio::{Gpio1, Gpio3, Unknown, Gpio0},
     uart::{
         config::{Config, DataBits, Parity, StopBits},
         TxRxPins,

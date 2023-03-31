@@ -16,7 +16,7 @@ use vgaterm::{self, video};
 
 use core::arch::asm;
 
-core::arch::global_asm!(".global _heap_size; _heap_size = 0x8000");
+core::arch::global_asm!(".global _heap_size; _heap_size = 0x10000");
 
 #[global_allocator]
 static ALLOCATOR: esp_alloc::EspHeap = esp_alloc::EspHeap::empty();
@@ -81,11 +81,13 @@ fn main() -> ! {
 
     let io = IO::new(peripherals.GPIO, peripherals.IO_MUX);
 
+    io.pins.gpio20.into_floating_input();
+
     init_heap();
     configure_counter_for_cpu_cycles();
 
     vgaterm::configure_timer0(peripherals.TIMG0, &clocks);
-    let mut char_reciever = vgaterm::uart::configure0(peripherals.UART0);
+    let mut host_recv = vgaterm::uart::configure0(peripherals.UART0);
     vgaterm::enable_timer0_interrupt(Priority::Priority1);
     vgaterm::uart::interrupt_enable0(Priority::Priority2);
     vgaterm::gpio::interrupt_enable(Priority::max());
@@ -132,8 +134,8 @@ fn main() -> ! {
 
     let mut display = vgaterm::display::Display::new();
 
-    println!("Done");
-    println!("Clock speed: {} Hz", measure_clock(delay));
+    // println!("Done");
+    // println!("Clock speed: {} Hz", measure_clock(delay));
     vgaterm::kernel::start(io.pins.gpio3);
 
     // let mut text_display = vgaterm::display::TextDisplay::new();
@@ -163,11 +165,15 @@ fn main() -> ! {
             key_state.push(kevent);
         }
 
+        while let Some(r) = host_recv.recv() {
+            terminal.type_next(r);
+        }
+
         let last_char = input.key_char(&key_state);
         match last_char {
             Work::Item(ref c) => {
                 for c in c.chars() {
-                    terminal.type_next(c);
+                    print!("{}", c);
                 }
             },
             Work::WouldBlock => {},

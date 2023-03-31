@@ -1,6 +1,6 @@
 use crate::{
     color::Rgb3,
-    display::{self, Character, Inverse, TextDisplay},
+    display::{self, Character, Inverse, TextDisplay}, ansi::{TerminalEsc, OpChar, Op, EraseMode},
 };
 use embedded_graphics::prelude::DrawTarget;
 use esp32c3_hal::systimer::SystemTimer;
@@ -45,6 +45,14 @@ impl CursorPos {
         let rows = (rows + IROWS) % IROWS; // (-IROWS, IROWS) -> [0, IROWS)
 
         CursorPos(rows as usize, cols as usize)
+    }
+
+    pub fn row(&self) -> Row {
+        self.0
+    }
+
+    pub fn col(&self) -> Col {
+        self.1
     }
 }
 
@@ -126,6 +134,7 @@ impl Default for Cursor {
 pub struct TextField {
     text: TextDisplay,
     cursor: Cursor,
+    escape: TerminalEsc,
 }
 
 impl TextField {
@@ -133,6 +142,7 @@ impl TextField {
         TextField {
             text: TextDisplay::new(),
             cursor: Cursor::default(),
+            escape: TerminalEsc::default(),
         }
     }
 
@@ -147,36 +157,124 @@ impl TextField {
     }
 
     pub fn type_next(&mut self, t: char) {
-        #[allow(unused)] // used for \r and \n below
-        let icursor = (self.cursor.pos.0 as isize, self.cursor.pos.1 as isize);
+        // #[allow(unused)] // used for \r and \n below
+        // let icursor = (self.cursor.pos.0 as isize, self.cursor.pos.1 as isize);
 
-        match t {
-            '\u{08}' | '\u{7f}' => {
-                // backspace
-                let curs_char = self.cursor.character.char();
-                self.text
-                    .write(self.cursor.pos.0, self.cursor.pos.1, curs_char);
-                self.move_cursor(0, -1);
-                // self.cursor.set_char(' ');
-                self.text.write(self.cursor.pos.0, self.cursor.pos.1, ' ');
-            }
+        match self.escape.push(t) {
+            None => {
 
-            // these two don't work so hot yet, because of terminal <-> serial interaction reasons
-            // '\r' => self.cursor.offset(0, -icursor.1),
-            // '\n' => self.cursor.offset(1, -icursor.1),
-
-            // taken from char::escape_default (below)
-            '\\' | '\'' | '"' => {
-                self.text.write(self.cursor.pos.0, self.cursor.pos.1, t);
-                self.move_cursor(0, 1);
-            }
-            _ => {
-                for c in t.escape_default() {
-                    self.text.write(self.cursor.pos.0, self.cursor.pos.1, c);
-                    self.move_cursor(0, 1);
+            },
+            Some(OpChar::Char(t)) => {
+                match t {
+                    '\u{08}' | '\u{7f}' => {
+                        // backspace
+                        let curs_char = self.cursor.character.char();
+                        self.text
+                            .write(self.cursor.pos.0, self.cursor.pos.1, curs_char);
+                        self.move_cursor(0, -1);
+                        // self.cursor.set_char(' ');
+                        self.text.write(self.cursor.pos.0, self.cursor.pos.1, ' ');
+                    }
+        
+                    // these two don't work so hot yet, because of terminal <-> serial interaction reasons
+                    // '\r' => self.cursor.offset(0, -icursor.1),
+                    // '\n' => self.cursor.offset(1, -icursor.1),
+        
+                    // taken from char::escape_default (below)
+                    '\\' | '\'' | '"' => {
+                        self.text.write(self.cursor.pos.row(), self.cursor.pos.col(), t);
+                        self.move_cursor(0, 1);
+                    }
+                    '\n' => {
+                        self.move_cursor(1, -(self.cursor.pos.col() as isize))
+                    }
+                    '\r' => {
+                        self.move_cursor(0, -(self.cursor.pos.col() as isize))
+                    }
+                    _ => {
+                        for c in t.escape_default() {
+                            self.text.write(self.cursor.pos.0, self.cursor.pos.1, c);
+                            self.move_cursor(0, 1);
+                        }
+                    }
+                }
+            },
+            Some(OpChar::Op(op)) => {
+                use Op::*;
+                match op {
+                    MoveCursorAbs { x, y } => {
+                        self.move_cursor(y.saturating_sub(1) as isize - self.cursor.pos.row() as isize, x.saturating_sub(1) as isize - self.cursor.pos.col() as isize);
+                    },
+                    MoveCursorAbsCol { x } => {
+                        self.move_cursor(0, x.saturating_sub(1) as isize - self.cursor.pos.col() as isize);
+                    },
+                    MoveCursorDelta { dx, dy } => {
+                        self.move_cursor(dy, dx);
+                    },
+                    MoveCursorBeginningAndLine { dy } => {
+                        self.move_cursor(dy, -(self.cursor.pos.col() as isize));
+                    },
+                    RequstCursorPos => {},
+                    SaveCursorPos => {},
+                    RestoreCursorPos => {},
+                    EraseScreen(erase) => {
+                        match erase {
+                            EraseMode::All => {
+                                self.text.clear();
+                            },
+                            EraseMode::FromCursor => {
+                                // Line the cursor is on
+                                for c in self.cursor.pos.col()..display::COLUMNS {
+                                    self.text.write(self.cursor.pos.row(), c, ' ');
+                                }
+                                // Rest of the screen
+                                for r in self.cursor.pos.row()..display::ROWS {
+                                    for c in 0..display::COLUMNS {
+                                        self.text.write(r, c, ' ');
+                                    }
+                                }
+                            },
+                            EraseMode::ToCursor => {
+                                // All lines up to the cursor
+                                for r in 0..self.cursor.pos.row() {
+                                    for c in 0..display::COLUMNS {
+                                        self.text.write(r, c, ' ');
+                                    }
+                                }
+                                // Characters up to the cursor
+                                for c in 0..self.cursor.pos.col() {
+                                    self.text.write(self.cursor.pos.row(), c, ' ');
+                                }
+                            }
+                        }
+                    },
+                    EraseLine(erase) => {
+                        match erase {
+                            EraseMode::All => {
+                                for c in 0..display::COLUMNS {
+                                    self.text.write(self.cursor.pos.row(), c, ' ');
+                                }
+                            },
+                            EraseMode::FromCursor => {
+                                for c in self.cursor.pos.col()..display::COLUMNS {
+                                    self.text.write(self.cursor.pos.row(), c, ' ');
+                                }
+                            },
+                            EraseMode::ToCursor => {
+                                for c in 0..self.cursor.pos.col() {
+                                    self.text.write(self.cursor.pos.row(), c, ' ');
+                                }
+                            }
+                        }
+                    },
+                    TextOp(_ops) => {},
+                    InPlaceDelete => {
+                        self.text.write(self.cursor.pos.0, self.cursor.pos.1, ' ')
+                    },
                 }
             }
-        };
+        }
+
     }
 
     pub fn draw<D>(&mut self, target: &mut D)

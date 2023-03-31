@@ -92,7 +92,9 @@ fn main() -> ! {
     loop {
         while let Some(c) = rx.recv() {
             match escape.push(c) {
-                None => print!("{}", c.escape_default()),
+                None => {
+                    // print!("{}", c.escape_default())
+                },
                 Some(OpChar::Char(h)) => println!("> {}", h),
                 Some(OpChar::Op(p)) => println!("\nOp: {:?}", p),
             }
