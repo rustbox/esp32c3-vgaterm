@@ -22,9 +22,9 @@ checksum = "dc827186963e592360843fb5ba4b973e145841266c1357f7180c43526f2e5b61"
 
 [[package]]
 name = "bitflags"
-version = "2.0.0"
+version = "2.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f4f6e5df9abedba5099a01a6567c6086a6fbcff57af07c360d356737f9e0c644"
+checksum = "487f1e0fcbe47deb8b0574e646def1c903389d95241dd1bbcc6ce4a715dfc0c1"
 
 [[package]]
 name = "bitmap-font"
@@ -152,7 +152,7 @@ dependencies = [
 [[package]]
 name = "esp-hal-common"
 version = "0.7.1"
-source = "git+https://github.com/rustbox/esp-hal?rev=716934cd#716934cda698d43a4611def6854c6cb5866f966b"
+source = "git+https://github.com/rustbox/esp-hal?rev=72aefcc#72aefccdf449019a5bbca649274cd1835238d1b0"
 dependencies = [
  "cfg-if",
  "critical-section",
@@ -172,7 +172,7 @@ dependencies = [
 [[package]]
 name = "esp-hal-procmacros"
 version = "0.4.0"
-source = "git+https://github.com/rustbox/esp-hal?rev=716934cd#716934cda698d43a4611def6854c6cb5866f966b"
+source = "git+https://github.com/rustbox/esp-hal?rev=72aefcc#72aefccdf449019a5bbca649274cd1835238d1b0"
 dependencies = [
  "darling",
  "proc-macro-crate",
@@ -187,9 +187,6 @@ name = "esp-println"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c33a9d1eb60882ec910021bda7b67ce789dd0d6325b886e6739ef9d8f495ae22"
-dependencies = [
- "critical-section",
-]
 
 [[package]]
 name = "esp-riscv-rt"
@@ -215,7 +212,7 @@ dependencies = [
 [[package]]
 name = "esp32c3-hal"
 version = "0.7.0"
-source = "git+https://github.com/rustbox/esp-hal?rev=716934cd#716934cda698d43a4611def6854c6cb5866f966b"
+source = "git+https://github.com/rustbox/esp-hal?rev=72aefcc#72aefccdf449019a5bbca649274cd1835238d1b0"
 dependencies = [
  "cfg-if",
  "embedded-hal",
