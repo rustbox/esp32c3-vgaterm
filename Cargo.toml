@@ -63,5 +63,5 @@ esp-backtrace = { version = "0.6.0", features = [
 
 [patch.crates-io]
 # TODO: automate these updates
-esp32c3-hal    = { git = "https://github.com/rustbox/esp-hal", rev = "716934cd" }
-esp-hal-common = { git = "https://github.com/rustbox/esp-hal", rev = "716934cd" }
+esp32c3-hal    = { git = "https://github.com/rustbox/esp-hal", rev = "72aefcc" }
+esp-hal-common = { git = "https://github.com/rustbox/esp-hal", rev = "72aefcc" }
