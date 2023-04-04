@@ -1,7 +1,7 @@
 use alloc::vec::Vec;
 use esp32c3_hal::{
     clock::Clocks,
-    gpio::{Gpio0, Gpio1, Unknown},
+    gpio::{Gpio1, Unknown, Gpio0},
     interrupt::Priority,
     peripherals::UART1,
 };
