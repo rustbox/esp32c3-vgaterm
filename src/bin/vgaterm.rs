@@ -10,8 +10,8 @@ use esp32c3_hal::prelude::*;
 use esp32c3_hal::timer::TimerGroup;
 use esp32c3_hal::{gpio::IO, peripherals::Peripherals, Rtc};
 use esp_println::{print, println};
-use vgaterm::{self, video, interrupt::Priority};
-use vgaterm::{usb_keyboard::US_ENGLISH, Delay, Work};
+use vgaterm::{Delay, usb_keyboard::US_ENGLISH, Work, interrupt::Priority};
+use vgaterm::{self, video};
 
 use core::arch::asm;
 
