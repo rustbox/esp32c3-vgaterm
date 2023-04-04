@@ -75,7 +75,7 @@ fn main() -> ! {
     rtc.rwdt.disable();
     wdt1.disable();
 
-    let io = IO::new(peripherals.GPIO, peripherals.IO_MUX);
+    let _io = IO::new(peripherals.GPIO, peripherals.IO_MUX);
 
     init_heap();
 

@@ -98,7 +98,7 @@ fn main() -> ! {
 
     // Initialize the Delay peripheral, and use it to toggle the LED state in a
     // loop.
-    let delay = vgaterm::Delay::new(&clocks);
+    let _delay = vgaterm::Delay::new(&clocks);
 
     // println!("Starting timer");
     // vgaterm::start_timer0(1_000);
