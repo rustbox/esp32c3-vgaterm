@@ -1,7 +1,7 @@
 use crate::{
     ansi::{EraseMode, Op, OpChar, TerminalEsc},
     color::Rgb3,
-    display::{self, Character, Inverse, TextDisplay},
+    display::{self, Character, TextDisplay}, ansi::{TerminalEsc, OpChar, Op, EraseMode},
 };
 use embedded_graphics::prelude::DrawTarget;
 use esp32c3_hal::systimer::SystemTimer;
@@ -61,74 +61,63 @@ impl CursorPos {
 pub struct Cursor {
     pub pos: CursorPos,
     pub character: Character,
-    pub changed: bool,
     time_to_next_blink: u64,
     blink_length: u64,
 }
 
 impl Cursor {
-    fn offset(&mut self, r: isize, c: isize) -> CursorPos {
+    /// To move the cursor:
+    /// 1. Reset the char at (r, c) to not inverted
+    /// 2. Move the cursor
+    /// 3. Set character at new position to be inverted
+    /// 4. Update time_to_next_blink
+    fn offset(&mut self, r: isize, c: isize, text: &mut TextDisplay) -> CursorPos {
         let pos = self.pos.offset(r, c);
         if pos != self.pos {
-            self.changed = true;
-            self.set_inverted();
+            self.unset_highlight(text);
             self.pos = pos;
+            self.set_highlight(text);
+            self.time_to_next_blink = SystemTimer::now().wrapping_add(self.blink_length);
         }
         pos
     }
 
-    fn set_inverted(&mut self) {
-        self.character.color.with_decoration(
-            Some(Inverse),
-            self.character.color.underline(),
-            self.character.color.strikethrough(),
-            self.character.color.blink(),
-        );
-        // Reset blink timer while we're typing
-        self.time_to_next_blink = SystemTimer::now().wrapping_add(self.blink_length);
+    fn set_highlight(&self, text: &mut TextDisplay) {
+        let mut c = text.read_char(self.pos.row(), self.pos.col());
+        c.color.set_inverted();
+        text.write_char(self.pos.row(), self.pos.col(), c);
     }
 
-    fn swap_invert(&mut self) {
-        self.character.color.invert_fore_back();
-        self.changed = true;
+    fn unset_highlight(&self, text: &mut TextDisplay) {
+        let mut c = text.read_char(self.pos.row(), self.pos.col());
+        c.color.reset_inverted();
+        text.write_char(self.pos.row(), self.pos.col(), c);
     }
 
-    fn set_char(&mut self, c: char) {
-        self.character.with_char(c);
-        self.changed = true;
+    fn swap_highlight(&self, text: &mut TextDisplay) {
+        let mut c = text.read_char(self.pos.row(), self.pos.col());
+        c.color.invert_colors();
+        text.write_char(self.pos.row(), self.pos.col(), c);
     }
 
-    fn draw<D>(&mut self, target: &mut D, text: &TextDisplay)
-    where
-        D: DrawTarget<Color = Rgb3>,
-    {
+    fn update(&mut self, text: &mut TextDisplay) {
         let now = SystemTimer::now();
+        // println!("now {}, upcoming time {}", now, self.time_to_next_blink);
         if now >= self.time_to_next_blink {
             self.time_to_next_blink = now.wrapping_add(self.blink_length);
-            self.swap_invert();
-        }
-
-        if self.changed {
-            // let (t, s) = self.character.text_and_style();
-            // println!("Drawing cursor: fore: {:?}, back: {:?}", s.text_color, s.background_color);
-            // println!("{:?}", t);
-            text.draw_character(self.pos.0, self.pos.1, self.character, target);
-            self.changed = false;
+            self.swap_highlight(text);
         }
     }
 }
 
 impl Default for Cursor {
     fn default() -> Self {
-        let mut c = Cursor {
+        Cursor {
             pos: Default::default(),
             character: Character::default(),
-            changed: true,
-            time_to_next_blink: SystemTimer::now().wrapping_add(8_000_000),
+            time_to_next_blink: SystemTimer::now(),
             blink_length: 12_000_000,
-        };
-        c.swap_invert();
-        c
+        }
     }
 }
 
@@ -151,10 +140,8 @@ impl TextField {
     /// currently being selected by the new cursor position
     pub fn move_cursor(&mut self, r: isize, c: isize) {
         // self.text.write(self.cursor.pos.0, self.cursor.pos.1, self.cursor.character.char());
-        let moved = self.cursor.offset(r, c);
-        // println!("Cursor moving to ({}, {})", r, c);
-        let c = self.text.read_char(moved.0, moved.1).char();
-        self.cursor.set_char(c);
+        self.cursor.offset(r, c, &mut self.text);
+        
     }
 
     pub fn type_next(&mut self, t: char) {
@@ -165,21 +152,19 @@ impl TextField {
             None => {}
             Some(OpChar::Char(t)) => {
                 match t {
-                    '\u{08}' | '\u{7f}' => {
+                    '\u{08}' => {
                         // backspace
-                        let curs_char = self.cursor.character.char();
-                        self.text
-                            .write(self.cursor.pos.0, self.cursor.pos.1, curs_char);
+                        // 1. Move cursor back 1
+                        // 2. Write a space over the new existing character
                         self.move_cursor(0, -1);
-                        // self.cursor.set_char(' ');
-                        self.text.write(self.cursor.pos.0, self.cursor.pos.1, ' ');
-                    }
+                        self.text.write(self.cursor.pos.row(), self.cursor.pos.col(), ' ');
+                    },
+                    '\u{07}' => {
+                        // Bell not impl
+                    },
 
-                    // these two don't work so hot yet, because of terminal <-> serial interaction reasons
-                    // '\r' => self.cursor.offset(0, -icursor.1),
-                    // '\n' => self.cursor.offset(1, -icursor.1),
-
-                    // taken from char::escape_default (below)
+                    '\u{7f}' => {}
+        
                     '\\' | '\'' | '"' => {
                         self.text
                             .write(self.cursor.pos.row(), self.cursor.pos.col(), t);
@@ -199,17 +184,11 @@ impl TextField {
                 use Op::*;
                 match op {
                     MoveCursorAbs { x, y } => {
-                        self.move_cursor(
-                            y.saturating_sub(1) as isize - self.cursor.pos.row() as isize,
-                            x.saturating_sub(1) as isize - self.cursor.pos.col() as isize,
-                        );
-                    }
+                        self.move_cursor(y as isize - self.cursor.pos.row() as isize, x as isize - self.cursor.pos.col() as isize);
+                    },
                     MoveCursorAbsCol { x } => {
-                        self.move_cursor(
-                            0,
-                            x.saturating_sub(1) as isize - self.cursor.pos.col() as isize,
-                        );
-                    }
+                        self.move_cursor(0, x as isize - self.cursor.pos.col() as isize);
+                    },
                     MoveCursorDelta { dx, dy } => {
                         self.move_cursor(dy, dx);
                     }
@@ -267,8 +246,12 @@ impl TextField {
                             }
                         }
                     },
-                    TextOp(_ops) => {}
-                    InPlaceDelete => self.text.write(self.cursor.pos.0, self.cursor.pos.1, ' '),
+                    TextOp(_ops) => {},
+                    InPlaceDelete => {
+                        self.text.write(self.cursor.pos.0, self.cursor.pos.1, ' ')
+                    },
+                    DecPrivateSet(_) => {},
+                    DecPrivateReset(_) => {},
                 }
             }
         }
@@ -279,7 +262,7 @@ impl TextField {
         D: DrawTarget<Color = Rgb3>,
     {
         self.text.draw_dirty(target);
-        self.cursor.draw(target, &self.text);
+        self.cursor.update(&mut self.text);
     }
 }
 

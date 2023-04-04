@@ -37,15 +37,10 @@ impl Display {
 
     pub fn flush(&mut self) {
         while let Some((pos, px)) = self.local_buffer.pop_back() {
-            // riscv::interrupt::free(|| unsafe {
             *unsafe { &mut video::BUFFER[pos] } = px;
-            // });
         }
     }
 
-    pub fn read(&self, x: usize, y: usize) -> u8 {
-        riscv::interrupt::free(|| unsafe { video::BUFFER[y * video::WIDTH + x] })
-    }
 }
 
 impl Default for Display {
@@ -141,7 +136,7 @@ impl Character {
             .unwrap_or(" ")
             .to_string();
 
-        let mut style_builder = if self.color.inverse().is_some() {
+        let mut style_builder = if self.color.inverse() {
             MonoTextStyleBuilder::new()
                 .text_color(self.color.background())
                 .background_color(self.color.foreground())
@@ -153,11 +148,11 @@ impl Character {
                 .font(&crate::text::TAMZEN_FONT_6x12)
         };
 
-        if self.color.strikethrough().is_some() {
+        if self.color.strikethrough() {
             style_builder = style_builder.strikethrough();
         }
 
-        if self.color.underline().is_some() {
+        if self.color.underline() {
             style_builder = style_builder.underline();
         }
 
@@ -211,36 +206,20 @@ impl CharColor {
         Rgb3::from_rgb2(r, g, b)
     }
 
-    pub fn inverse(&self) -> Option<Inverse> {
-        if self.0 & Inverse.bit() != 0 {
-            Some(Inverse)
-        } else {
-            None
-        }
+    pub fn inverse(&self) -> bool {
+        self.0 & Decoration::Inverse.bit() != 0
     }
 
-    pub fn underline(&self) -> Option<Underline> {
-        if self.0 & Underline.bit() != 0 {
-            Some(Underline)
-        } else {
-            None
-        }
+    pub fn underline(&self) -> bool {
+        self.0 & Decoration::Underline.bit() != 0
     }
 
-    pub fn strikethrough(&self) -> Option<Strikethrough> {
-        if self.0 & Strikethrough.bit() != 0 {
-            Some(Strikethrough)
-        } else {
-            None
-        }
+    pub fn strikethrough(&self) -> bool {
+        self.0 & Decoration::Strikethrough.bit() != 0
     }
 
-    pub fn blink(&self) -> Option<Blink> {
-        if self.0 & Blink.bit() != 0 {
-            Some(Blink)
-        } else {
-            None
-        }
+    pub fn blink(&self) -> bool {
+        self.0 & Decoration::Blink.bit() != 0
     }
 
     pub fn with_foreground(self, color: Rgb3) -> CharColor {
@@ -258,30 +237,32 @@ impl CharColor {
         CharColor((self.0 & 0b1111_0000_0011_1111) | c)
     }
 
-    pub fn with_decoration(
-        &mut self,
-        inverse: Option<Inverse>,
-        underline: Option<Underline>,
-        strikethrough: Option<Strikethrough>,
-        blink: Option<Blink>,
-    ) -> CharColor {
-        let decs = inverse.bit() + underline.bit() + strikethrough.bit() + blink.bit();
-        self.0 = (self.0 & 0b0000_1111_1111_1111) | decs;
+    pub fn with_decorations(&mut self, decs: &[Decoration]) -> CharColor {
+        let mut dec_value = 0;
+        for d in decs {
+            dec_value |= d.bit();
+        }
+        self.0 = (self.0 & 0b0000_1111_1111_1111) | dec_value;
         *self
     }
 
-    // If inverted, go back to not inverted, and if not inverted, do the invert
-    pub fn invert_fore_back(&mut self) {
-        if self.inverse().is_some() {
-            self.with_decoration(None, self.underline(), self.strikethrough(), self.blink());
-        } else {
-            self.with_decoration(
-                Some(Inverse),
-                self.underline(),
-                self.strikethrough(),
-                self.blink(),
-            );
+    pub fn invert_colors(&mut self) -> CharColor {
+        self.0 ^= Decoration::Inverse.bit();
+        *self
+    }
+
+    pub fn set_inverted(&mut self) -> CharColor {
+        if self.0 & Decoration::Inverse.bit() == 0 {
+            self.0 |= Decoration::Inverse.bit();
         }
+        *self
+    }
+
+    pub fn reset_inverted(&mut self) -> CharColor {
+        if self.0 & Decoration::Inverse.bit() != 0 {
+            self.0 &= !Decoration::Inverse.bit();
+        }
+        *self
     }
 }
 
@@ -291,35 +272,22 @@ impl Default for CharColor {
     }
 }
 
-pub struct Blink;
-
-impl Flag for Blink {
-    fn bit(&self) -> u16 {
-        1 << 12
-    }
+#[derive(Debug, PartialEq, PartialOrd)]
+pub enum Decoration {
+    Blink,
+    Strikethrough,
+    Underline,
+    Inverse,
 }
 
-pub struct Strikethrough;
-
-impl Flag for Strikethrough {
+impl Flag for Decoration {
     fn bit(&self) -> u16 {
-        1 << 13
-    }
-}
-
-pub struct Underline;
-
-impl Flag for Underline {
-    fn bit(&self) -> u16 {
-        1 << 14
-    }
-}
-
-pub struct Inverse;
-
-impl Flag for Inverse {
-    fn bit(&self) -> u16 {
-        1 << 15
+        match self {
+            Decoration::Blink => 1 << 12,
+            Decoration::Strikethrough => 1 << 13,
+            Decoration::Underline => 1 << 14,
+            Decoration::Inverse => 1 << 15,
+        }
     }
 }
 
@@ -339,9 +307,14 @@ pub trait Flag {
 pub const COLUMNS: usize = 105;
 pub const ROWS: usize = 33;
 
+#[inline(always)]
+fn index(row: usize, col: usize) -> usize {
+    row * COLUMNS + col
+}
+
 pub struct TextDisplay {
     buffer: [Character; ROWS * COLUMNS],
-    dirty: VecDeque<((usize, usize), Character)>,
+    dirty: VecDeque<(usize, usize)>,
 }
 
 impl TextDisplay {
@@ -352,15 +325,23 @@ impl TextDisplay {
         }
     }
 
+    #[inline(always)]
     pub fn read_char(&self, line: usize, col: usize) -> Character {
-        self.buffer[line * COLUMNS + col]
+        self.buffer[index(line, col)]
     }
 
+    #[inline(always)]
+    pub fn write_char(&mut self, line: usize, col: usize, c: Character) {
+        self.buffer[index(line, col)] = c;
+        self.dirty.push_front((line, col))
+    }
+
+    #[inline(always)]
     pub fn write(&mut self, line: usize, col: usize, c: char) {
         let ch = Character::new(c);
         let i = line * COLUMNS + col;
         self.buffer[i] = ch;
-        self.dirty.push_front(((line, col), ch));
+        self.dirty.push_front((line, col));
     }
 
     pub fn write_text(&mut self, start_line: usize, start_column: usize, text: &str) {
@@ -382,6 +363,7 @@ impl TextDisplay {
         }
     }
 
+    #[inline(always)]
     pub fn clear(&mut self) {
         for row in 0..ROWS {
             for col in 0..COLUMNS {
@@ -390,6 +372,7 @@ impl TextDisplay {
         }
     }
 
+    #[inline(always)]
     pub fn draw<D>(&self, line: usize, col: usize, target: &mut D)
     where
         D: DrawTarget<Color = Rgb3>,
@@ -409,15 +392,17 @@ impl TextDisplay {
         }
     }
 
+    #[inline(always)]
     pub fn draw_dirty<D>(&mut self, target: &mut D)
     where
         D: DrawTarget<Color = Rgb3>,
     {
-        while let Some(((line, col), _)) = self.dirty.pop_back() {
+        while let Some((line, col)) = self.dirty.pop_back() {
             self.draw(line, col, target)
         }
     }
 
+    #[inline(always)]
     pub fn draw_character<D>(&self, line: usize, col: usize, character: Character, target: &mut D)
     where
         D: DrawTarget<Color = Rgb3>,
