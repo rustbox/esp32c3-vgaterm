@@ -1,6 +1,7 @@
 use crate::{
+    ansi::{EraseMode, Op, OpChar, TerminalEsc},
     color::Rgb3,
-    display::{self, Character, Inverse, TextDisplay}, ansi::{TerminalEsc, OpChar, Op, EraseMode},
+    display::{self, Character, Inverse, TextDisplay},
 };
 use embedded_graphics::prelude::DrawTarget;
 use esp32c3_hal::systimer::SystemTimer;
@@ -161,9 +162,7 @@ impl TextField {
         // let icursor = (self.cursor.pos.0 as isize, self.cursor.pos.1 as isize);
 
         match self.escape.push(t) {
-            None => {
-
-            },
+            None => {}
             Some(OpChar::Char(t)) => {
                 match t {
                     '\u{08}' | '\u{7f}' => {
@@ -175,22 +174,19 @@ impl TextField {
                         // self.cursor.set_char(' ');
                         self.text.write(self.cursor.pos.0, self.cursor.pos.1, ' ');
                     }
-        
+
                     // these two don't work so hot yet, because of terminal <-> serial interaction reasons
                     // '\r' => self.cursor.offset(0, -icursor.1),
                     // '\n' => self.cursor.offset(1, -icursor.1),
-        
+
                     // taken from char::escape_default (below)
                     '\\' | '\'' | '"' => {
-                        self.text.write(self.cursor.pos.row(), self.cursor.pos.col(), t);
+                        self.text
+                            .write(self.cursor.pos.row(), self.cursor.pos.col(), t);
                         self.move_cursor(0, 1);
                     }
-                    '\n' => {
-                        self.move_cursor(1, -(self.cursor.pos.col() as isize))
-                    }
-                    '\r' => {
-                        self.move_cursor(0, -(self.cursor.pos.col() as isize))
-                    }
+                    '\n' => self.move_cursor(1, -(self.cursor.pos.col() as isize)),
+                    '\r' => self.move_cursor(0, -(self.cursor.pos.col() as isize)),
                     _ => {
                         for c in t.escape_default() {
                             self.text.write(self.cursor.pos.0, self.cursor.pos.1, c);
@@ -198,30 +194,36 @@ impl TextField {
                         }
                     }
                 }
-            },
+            }
             Some(OpChar::Op(op)) => {
                 use Op::*;
                 match op {
                     MoveCursorAbs { x, y } => {
-                        self.move_cursor(y.saturating_sub(1) as isize - self.cursor.pos.row() as isize, x.saturating_sub(1) as isize - self.cursor.pos.col() as isize);
-                    },
+                        self.move_cursor(
+                            y.saturating_sub(1) as isize - self.cursor.pos.row() as isize,
+                            x.saturating_sub(1) as isize - self.cursor.pos.col() as isize,
+                        );
+                    }
                     MoveCursorAbsCol { x } => {
-                        self.move_cursor(0, x.saturating_sub(1) as isize - self.cursor.pos.col() as isize);
-                    },
+                        self.move_cursor(
+                            0,
+                            x.saturating_sub(1) as isize - self.cursor.pos.col() as isize,
+                        );
+                    }
                     MoveCursorDelta { dx, dy } => {
                         self.move_cursor(dy, dx);
-                    },
+                    }
                     MoveCursorBeginningAndLine { dy } => {
                         self.move_cursor(dy, -(self.cursor.pos.col() as isize));
-                    },
-                    RequstCursorPos => {},
-                    SaveCursorPos => {},
-                    RestoreCursorPos => {},
+                    }
+                    RequstCursorPos => {}
+                    SaveCursorPos => {}
+                    RestoreCursorPos => {}
                     EraseScreen(erase) => {
                         match erase {
                             EraseMode::All => {
                                 self.text.clear();
-                            },
+                            }
                             EraseMode::FromCursor => {
                                 // Line the cursor is on
                                 for c in self.cursor.pos.col()..display::COLUMNS {
@@ -233,7 +235,7 @@ impl TextField {
                                         self.text.write(r, c, ' ');
                                     }
                                 }
-                            },
+                            }
                             EraseMode::ToCursor => {
                                 // All lines up to the cursor
                                 for r in 0..self.cursor.pos.row() {
@@ -247,34 +249,29 @@ impl TextField {
                                 }
                             }
                         }
-                    },
-                    EraseLine(erase) => {
-                        match erase {
-                            EraseMode::All => {
-                                for c in 0..display::COLUMNS {
-                                    self.text.write(self.cursor.pos.row(), c, ' ');
-                                }
-                            },
-                            EraseMode::FromCursor => {
-                                for c in self.cursor.pos.col()..display::COLUMNS {
-                                    self.text.write(self.cursor.pos.row(), c, ' ');
-                                }
-                            },
-                            EraseMode::ToCursor => {
-                                for c in 0..self.cursor.pos.col() {
-                                    self.text.write(self.cursor.pos.row(), c, ' ');
-                                }
+                    }
+                    EraseLine(erase) => match erase {
+                        EraseMode::All => {
+                            for c in 0..display::COLUMNS {
+                                self.text.write(self.cursor.pos.row(), c, ' ');
+                            }
+                        }
+                        EraseMode::FromCursor => {
+                            for c in self.cursor.pos.col()..display::COLUMNS {
+                                self.text.write(self.cursor.pos.row(), c, ' ');
+                            }
+                        }
+                        EraseMode::ToCursor => {
+                            for c in 0..self.cursor.pos.col() {
+                                self.text.write(self.cursor.pos.row(), c, ' ');
                             }
                         }
                     },
-                    TextOp(_ops) => {},
-                    InPlaceDelete => {
-                        self.text.write(self.cursor.pos.0, self.cursor.pos.1, ' ')
-                    },
+                    TextOp(_ops) => {}
+                    InPlaceDelete => self.text.write(self.cursor.pos.0, self.cursor.pos.1, ' '),
                 }
             }
         }
-
     }
 
     pub fn draw<D>(&mut self, target: &mut D)

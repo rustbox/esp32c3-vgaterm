@@ -11,8 +11,8 @@ use esp32c3_hal::prelude::*;
 use esp32c3_hal::timer::TimerGroup;
 use esp32c3_hal::{gpio::IO, peripherals::Peripherals, Rtc};
 use esp_println::{print, println};
-use vgaterm::{Delay, usb_keyboard::US_ENGLISH, Work};
 use vgaterm::{self, video};
+use vgaterm::{usb_keyboard::US_ENGLISH, Delay, Work};
 
 use core::arch::asm;
 
@@ -175,8 +175,8 @@ fn main() -> ! {
                 for c in c.chars() {
                     print!("{}", c);
                 }
-            },
-            Work::WouldBlock => {},
+            }
+            Work::WouldBlock => {}
             Work::WouldBlockUntil(_) => {}
         }
 
@@ -185,7 +185,8 @@ fn main() -> ! {
         // Flush the Display to the BUFFER
         display.flush();
 
-        if !keyvents.is_empty() || matches!(last_char, Work::WouldBlock | Work::WouldBlockUntil(_)) {
+        if !keyvents.is_empty() || matches!(last_char, Work::WouldBlock | Work::WouldBlockUntil(_))
+        {
             continue;
         }
 
