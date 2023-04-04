@@ -4,18 +4,19 @@
 
 extern crate alloc;
 
+use alloc::collections::VecDeque;
 use esp32c3_hal::clock::{ClockControl, CpuClock};
 use esp32c3_hal::interrupt::Priority;
 use esp32c3_hal::prelude::*;
 use esp32c3_hal::timer::TimerGroup;
 use esp32c3_hal::{gpio::IO, peripherals::Peripherals, Rtc};
 use esp_println::{print, println};
-use vgaterm::Delay;
+use vgaterm::{Delay, usb_keyboard::US_ENGLISH, Work};
 use vgaterm::{self, video};
 
 use core::arch::asm;
 
-core::arch::global_asm!(".global _heap_size; _heap_size = 0x8000");
+core::arch::global_asm!(".global _heap_size; _heap_size = 0x10000");
 
 #[global_allocator]
 static ALLOCATOR: esp_alloc::EspHeap = esp_alloc::EspHeap::empty();
@@ -80,11 +81,13 @@ fn main() -> ! {
 
     let io = IO::new(peripherals.GPIO, peripherals.IO_MUX);
 
+    io.pins.gpio20.into_floating_input();
+
     init_heap();
     configure_counter_for_cpu_cycles();
 
     vgaterm::configure_timer0(peripherals.TIMG0, &clocks);
-    let mut char_reciever = vgaterm::uart::configure0(peripherals.UART0);
+    let mut host_recv = vgaterm::uart::configure0(peripherals.UART0);
     vgaterm::enable_timer0_interrupt(Priority::Priority1);
     vgaterm::uart::interrupt_enable0(Priority::Priority2);
     vgaterm::gpio::interrupt_enable(Priority::max());
@@ -131,8 +134,8 @@ fn main() -> ! {
 
     let mut display = vgaterm::display::Display::new();
 
-    println!("Done");
-    println!("Clock speed: {} Hz", measure_clock(delay));
+    // println!("Done");
+    // println!("Clock speed: {} Hz", measure_clock(delay));
     vgaterm::kernel::start(io.pins.gpio3);
 
     // let mut text_display = vgaterm::display::TextDisplay::new();
@@ -144,16 +147,47 @@ fn main() -> ! {
 
     // let mut cursor = (0, 0);
     // terminal
+    let mut keyboard = vgaterm::keyboard::Keyboard::from_peripherals(
+        US_ENGLISH,
+        io.pins.gpio1,
+        io.pins.gpio0,
+        peripherals.UART1,
+        &clocks,
+    );
+
+    let mut keyvents = VecDeque::new();
+    let mut key_state = vgaterm::keyboard::PressedSet::new();
+    let mut input = vgaterm::terminal_input::TerminalInput::new(300, 40);
+
     loop {
-        // Get the pressed chars
-        while let Some(t) = char_reciever.recv() {
-            // println!("got: {}", t.escape_default());
-            terminal.type_next(t);
+        keyvents.extend(keyboard.flush_and_parse());
+        if let Some(kevent) = keyvents.pop_front() {
+            key_state.push(kevent);
         }
+
+        while let Some(r) = host_recv.recv() {
+            terminal.type_next(r);
+        }
+
+        let last_char = input.key_char(&key_state);
+        match last_char {
+            Work::Item(ref c) => {
+                for c in c.chars() {
+                    print!("{}", c);
+                }
+            },
+            Work::WouldBlock => {},
+            Work::WouldBlockUntil(_) => {}
+        }
+
         // Draw the characters on the frame
         terminal.draw(&mut display);
         // Flush the Display to the BUFFER
         display.flush();
+
+        if !keyvents.is_empty() || matches!(last_char, Work::WouldBlock | Work::WouldBlockUntil(_)) {
+            continue;
+        }
 
         unsafe {
             // this will fire no less often than once per frame

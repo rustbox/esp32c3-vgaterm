@@ -382,6 +382,14 @@ impl TextDisplay {
         }
     }
 
+    pub fn clear(&mut self) {
+        for row in 0..ROWS {
+            for col in 0..COLUMNS {
+                self.write(row, col, ' ');
+            }
+        }
+    }
+
     pub fn draw<D>(&self, line: usize, col: usize, target: &mut D)
     where
         D: DrawTarget<Color = Rgb3>,

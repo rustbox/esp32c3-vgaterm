@@ -3,7 +3,7 @@ use core::cell::RefCell;
 use critical_section::Mutex;
 use esp32c3_hal::{
     clock::Clocks,
-    gpio::{Gpio1, Gpio3, Unknown},
+    gpio::{Gpio1, Gpio3, Unknown, Gpio0},
     uart::{
         config::{Config, DataBits, Parity, StopBits},
         TxRxPins,
@@ -20,6 +20,7 @@ use crate::interrupt::which_priority;
 static mut SENDER0: Option<UartTransmitter<UART0, char>> = None;
 static SENDER1: Mutex<RefCell<Option<UartTransmitter<UART1, u8>>>> = Mutex::new(RefCell::new(None));
 
+#[must_use]
 pub fn configure0(uart: UART0) -> Receiver<char> {
     let serial0 = Uart::new(uart);
     let (tx, rx) = channel::channel();
@@ -37,7 +38,7 @@ pub fn configure0(uart: UART0) -> Receiver<char> {
 pub fn configure1(
     uart: UART1,
     tx: Gpio1<Unknown>,
-    rx: Gpio3<Unknown>,
+    rx: Gpio0<Unknown>,
     clocks: &Clocks,
 ) -> Receiver<u8> {
     let config = Config {
