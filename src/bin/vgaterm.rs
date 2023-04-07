@@ -4,18 +4,19 @@
 
 extern crate alloc;
 
-use alloc::collections::VecDeque;
+use alloc::{collections::VecDeque, string::String, vec::Vec};
 use esp32c3_hal::clock::{ClockControl, CpuClock};
 use esp32c3_hal::prelude::*;
 use esp32c3_hal::timer::TimerGroup;
 use esp32c3_hal::{gpio::IO, peripherals::Peripherals, Rtc};
-use esp_println::{print, println};
+use esp_println::println;
 use vgaterm::{Delay, usb_keyboard::US_ENGLISH, Work, interrupt::Priority};
 use vgaterm::{self, video};
+use esp_backtrace as _;
 
-use core::arch::asm;
+use core::{arch::asm, fmt::Write};
 
-core::arch::global_asm!(".global _heap_size; _heap_size = 0x10000");
+core::arch::global_asm!(".global _heap_size; _heap_size = 0xB000");
 
 #[global_allocator]
 static ALLOCATOR: esp_alloc::EspHeap = esp_alloc::EspHeap::empty();
@@ -33,25 +34,6 @@ fn init_heap() {
     }
 }
 
-// static mut BUTTON: Mutex<RefCell<Option<Gpio9<Input<PullDown>>>>> = Mutex::new(RefCell::new(None));
-// static mut BUTTON2: Mutex<RefCell<Option<Gpio10<Input<PullDown>>>>> = Mutex::new(RefCell::new(None));
-
-#[panic_handler]
-fn panic(info: &core::panic::PanicInfo) -> ! {
-    print!("Aborting: ");
-    if let Some(p) = info.location() {
-        println!(
-            "line {}, file {}: {}",
-            p.line(),
-            p.file(),
-            info.message().unwrap()
-        );
-    } else {
-        println!("no information available.");
-    }
-    stop();
-}
-
 #[no_mangle]
 extern "C" fn stop() -> ! {
     loop {
@@ -60,6 +42,8 @@ extern "C" fn stop() -> ! {
         }
     }
 }
+
+static mut NUM_BYTES: usize = 0;
 
 #[entry]
 fn main() -> ! {
@@ -86,14 +70,27 @@ fn main() -> ! {
     configure_counter_for_cpu_cycles();
 
     vgaterm::configure_timer0(peripherals.TIMG0, &clocks);
-    let mut host_recv = vgaterm::uart::configure0(peripherals.UART0);
+    // let mut host_recv = vgaterm::uart::configure0(peripherals.UART0);
+    let mut serial0 = vgaterm::uart::make_uart0(peripherals.UART0);
+    serial0.set_rx_fifo_full_threshold(1);
+    serial0.listen_rx_fifo_full();
     vgaterm::enable_timer0_interrupt(Priority::Priority5);
     vgaterm::uart::interrupt_enable0(Priority::Priority6);
     vgaterm::gpio::interrupt_enable(Priority::max());
 
+    
     unsafe {
         riscv::interrupt::enable();
     }
+
+    vgaterm::timer::start_repeat_timer0_callback(1_000_000, || unsafe {
+        if NUM_BYTES > 0 {
+            println!("{} bytes",  NUM_BYTES );
+            println!("{} draw cycles per byte", vgaterm::CHARACTER_DRAW_CYCLES as f32 / NUM_BYTES as f32);
+            NUM_BYTES = 0;
+        }
+        vgaterm::CHARACTER_DRAW_CYCLES = 0;
+    });
 
     // Initialize the Delay peripheral, and use it to toggle the LED state in a
     // loop.
@@ -158,31 +155,47 @@ fn main() -> ! {
     let mut key_state = vgaterm::keyboard::PressedSet::new();
     let mut input = vgaterm::terminal_input::TerminalInput::new(300, 40);
 
-    let local_echo = false;
-    let connect_host = true;
+    #[allow(unused)]
+    enum ConnectMode {
+        LocalEcho,
+        ConnectHost,
+        None,
+    }
+
+    let mode = ConnectMode::ConnectHost;
+
     loop {
         keyvents.extend(keyboard.flush_and_parse());
         if let Some(kevent) = keyvents.pop_front() {
             key_state.push(kevent);
         }
 
-        while let Some(r) = host_recv.recv() {
-            terminal.type_next(r);
-        }
+        let h = {
+            let mut b = Vec::new();
+            while let Ok(r) = serial0.read() {
+                b.push(r);
+            }
+            unsafe { NUM_BYTES += b.len(); }
+            String::from_utf8(b).unwrap()
+        };
+
+        terminal.type_str(h.as_str());
 
         let last_char = input.key_char(&key_state);
         match last_char {
             Work::Item(ref c) => {
-                for c in c.chars() {
-                    if connect_host {
-                        print!("{}", c);
-                    }
-                    if local_echo {
-                        terminal.type_next(c);
-                    }
-                }
-            }
-            Work::WouldBlock => {}
+                match mode {
+                    ConnectMode::ConnectHost => {
+                        let _ = serial0.write_str(c);
+                    },
+                    ConnectMode::LocalEcho => {
+                        terminal.type_str(c);
+                    },
+                    ConnectMode::None => { }
+                };
+               
+            },
+            Work::WouldBlock => {},
             Work::WouldBlockUntil(_) => {}
         }
 
@@ -191,8 +204,8 @@ fn main() -> ! {
         // Flush the Display to the BUFFER
         display.flush();
 
-        if !keyvents.is_empty() || matches!(last_char, Work::WouldBlock | Work::WouldBlockUntil(_))
-        {
+        if !keyvents.is_empty(){
+            println!("{:?}", keyvents);
             continue;
         }
 

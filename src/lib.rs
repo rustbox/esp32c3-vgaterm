@@ -3,6 +3,7 @@
 #![feature(const_trait_impl)]
 #![feature(iter_collect_into)]
 #![feature(trait_alias)]
+#![feature(round_char_boundary)]
 
 extern crate alloc;
 
@@ -30,6 +31,9 @@ pub use timer::{
 };
 
 use core::arch::asm;
+
+pub static mut CHARACTER_DRAW_CYCLES: usize = 0;
+
 
 pub enum Work<T> {
     Item(T), // implicilty: awaken immediately
@@ -62,6 +66,14 @@ pub fn measure_cycle_count() -> u32 {
         );
     }
     d
+}
+
+pub fn measure<O>(count: &mut usize, f: impl FnOnce() -> O) -> O {
+    start_cycle_count();
+    let r = f();
+    *count = measure_cycle_count() as usize;
+
+    r
 }
 
 #[inline]

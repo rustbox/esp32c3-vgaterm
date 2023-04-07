@@ -187,9 +187,6 @@ name = "esp-println"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c33a9d1eb60882ec910021bda7b67ce789dd0d6325b886e6739ef9d8f495ae22"
-dependencies = [
- "critical-section",
-]
 
 [[package]]
 name = "esp-riscv-rt"

@@ -49,7 +49,12 @@
 //! [Op(name), [Param(value)]]
 //!
 
-use alloc::{string::String, vec::Vec, borrow::ToOwned};
+use alloc::{
+    borrow::ToOwned,
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
 use core::{fmt::Debug, str::FromStr};
 use nom::{IResult, Parser};
 
@@ -213,7 +218,15 @@ fn cursor_to_line_col(input: &str) -> OpResult {
         dual_int_parameter_sequence::<usize>('H'),
         dual_int_parameter_sequence::<usize>('f'),
     ))(input)
-    .map(|(rest, (a, b))| (rest, Op::MoveCursorAbs { x: b.saturating_sub(1) - 1, y: a.saturating_sub(1) }))
+    .map(|(rest, (a, b))| {
+        (
+            rest,
+            Op::MoveCursorAbs {
+                x: b.saturating_sub(1) - 1,
+                y: a.saturating_sub(1),
+            },
+        )
+    })
 }
 
 /// ESC [ <n> A         => Cursor up n lines
@@ -254,8 +267,14 @@ fn cursor_beginning_up(input: &str) -> OpResult {
 
 // ESC [ <n> G         => Cursor to column n
 fn cursor_to_column(input: &str) -> OpResult {
-    optional_int_param_sequence::<usize>('G', 0)(input)
-        .map(|(rest, n)| (rest, Op::MoveCursorAbsCol { x: n.saturating_sub(1) }))
+    optional_int_param_sequence::<usize>('G', 0)(input).map(|(rest, n)| {
+        (
+            rest,
+            Op::MoveCursorAbsCol {
+                x: n.saturating_sub(1),
+            },
+        )
+    })
 }
 
 // Request Cursor Position
@@ -392,22 +411,24 @@ fn set_text_mode_atom(input: &str) -> TextOpResult {
     })(input)
 }
 
-/// ESC [ ? <anything> h
+/// ESC [ ? <numbers> h
 fn set_private_sequence(input: &str) -> OpResult {
     nom::sequence::tuple((
         nom::character::streaming::char('?'),
-        nom::bytes::streaming::take_till(|c| c == 'h'),
-        nom::character::streaming::char('h')
-    ))(input).map(|(rest, (_, b, _))| (rest, Op::DecPrivateSet(b.to_owned())) )
+        nom::character::streaming::digit0,
+        nom::character::streaming::char('h'),
+    ))(input)
+    .map(|(rest, (_, b, _))| (rest, Op::DecPrivateSet(b.to_owned())))
 }
 
-/// ESC [ ? <anything> l
+/// ESC [ ? <numbers> l
 fn reset_private_sequence(input: &str) -> OpResult {
     nom::sequence::tuple((
         nom::character::streaming::char('?'),
-        nom::bytes::streaming::take_till(|c| c == 'l'),
-        nom::character::streaming::char('l')
-    ))(input).map(|(rest, (_, b, _))| (rest, Op::DecPrivateReset(b.to_owned())) )
+        nom::character::streaming::digit0,
+        nom::character::streaming::char('l'),
+    ))(input)
+    .map(|(rest, (_, b, _))| (rest, Op::DecPrivateReset(b.to_owned())))
 }
 
 /// <text> m
@@ -450,7 +471,7 @@ fn parse(input: &str) -> OpResult {
                 request_cursor_postion,
                 set_text_mode,
                 set_private_sequence,
-                reset_private_sequence
+                reset_private_sequence,
             )),
         ),
     )))(input)
@@ -461,10 +482,29 @@ pub enum OpChar {
     Op(Op),
 }
 
+#[derive(Debug)]
 pub enum OpStr {
     Str(String),
     Op(Op),
-    InSequence,
+}
+
+#[derive(Debug)]
+pub struct ParseRes<'a> {
+    pub rest: &'a str,
+    pub opstr: Vec<OpStr>,
+}
+
+impl<'a> ParseRes<'a> {
+    fn from_ops(ops: Vec<OpStr>) -> ParseRes<'a> {
+        ParseRes {
+            rest: "",
+            opstr: ops,
+        }
+    }
+
+    fn new(ops: Vec<OpStr>, rest: &'a str) -> ParseRes<'a> {
+        ParseRes { rest, opstr: ops }
+    }
 }
 
 impl From<char> for OpChar {
@@ -473,58 +513,51 @@ impl From<char> for OpChar {
     }
 }
 
-pub struct TerminalEsc {
-    buffer: String,
+pub fn parse_esc_str(s: &str) -> ParseRes {
+    parse_esc_str_tail(s, vec![])
 }
 
 ///
-/// Future buffered version
+/// buffered version
 /// "hello" -> "hello" (nom returns Error)
 /// "ESC[","garbage" -> `InSequence`, "arbage" (nom returns Failure)
-/// "ESC[Ablah", "garbage" -> [Foo(Op), Foo("blah")], [Foo("garbage")],
+/// "ESC[Ablah", "garbage" -> [Foo(Op(A)), Foo("blah")], [Foo("garbage")],
+/// "garbageESC[Ablah" -> ["garbage", Op(A), "blah"]
+/// "garbageESC[Xblah" -> ["garbage", "blah"]
 ///
-impl TerminalEsc {
-    pub fn new() -> TerminalEsc {
-        TerminalEsc {
-            buffer: String::new(),
-        }
+pub fn parse_esc_str_tail(s: &str, mut current: Vec<OpStr>) -> ParseRes {
+    if s.is_empty() {
+        return ParseRes::from_ops(current);
     }
-
-    pub fn push(&mut self, c: char) -> Option<OpChar> {
-        self.buffer.push(c);
-
-        let seq = self.buffer.as_str();
-        match parse(seq) {
-            Err(nom::Err::Incomplete(_)) => {
-                // If we are incomplete, then do nothing
-                // print!("{}", c.escape_default());
-                None
-            }
-            Err(nom::Err::Error(_)) => {
-                // If we got an error, then we didn't recognize an esc seq at all
-                // So pop the char back off the buffer
-                self.buffer.pop().map(OpChar::from)
-                // h e l l o
-            }
-            Err(nom::Err::Failure(_)) => {
-                // And clear the buffer
-                // ESC [ 6 * ESC [ 6 * ESC [ 6 * h e l l o literally the word loop and then some returns
-
-                // If failure, then we were in a sequence but bombed out, and consume all the chars
-                self.buffer.clear();
-                None
-            }
-            Ok((_, op)) => {
-                // If we parsed an escape sequence, then clear the buffer and return the Op
-                self.buffer.clear();
-                Some(OpChar::Op(op))
-            }
+    match parse(s) {
+        Err(nom::Err::Incomplete(_)) => {
+            // If we are incomplete, then do nothing
+            // print!("{}", c.escape_default());
+            ParseRes::new(current, s)
         }
-    }
-}
+        Err(nom::Err::Error(_)) => {
+            // If we got an error, then we didn't recognize an esc seq at all
+            // So pop the char back off the buffer
+            let (rest, esc) = s.find(ESC).map_or((s, ""), |i| s.split_at(i));
+            // abcde,ESC[
+            current.push(OpStr::Str(rest.to_string()));
+            parse_esc_str_tail(esc, current)
+            // h e l l o
+        }
+        Err(nom::Err::Failure(e)) => {
+            // And clear the buffer
+            // ESC [ 6 * ESC [ 6 * ESC [ 6 * h e l l o literally the word loop and then some returns
 
-impl Default for TerminalEsc {
-    fn default() -> Self {
-        TerminalEsc::new()
+            // If failure, then we were in a sequence but bombed out, and consume all the chars
+            // ESC [ XYZ
+            let skip_index = e.input.ceil_char_boundary(1);
+            parse_esc_str_tail(&e.input[skip_index..], current)
+        }
+        Ok((rest, op)) => {
+            // If we parsed an escape sequence, then clear the buffer and return the Op
+
+            current.push(OpStr::Op(op));
+            parse_esc_str_tail(rest, current)
+        }
     }
 }

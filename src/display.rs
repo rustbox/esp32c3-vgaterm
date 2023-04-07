@@ -63,17 +63,21 @@ impl DrawTarget for Display {
     where
         I: IntoIterator<Item = embedded_graphics::Pixel<Self::Color>>,
     {
-        for Pixel(coord, color) in pixels.into_iter() {
-            if coord.x >= 0
-                && coord.x < video::WIDTH as i32
-                && coord.y >= 0
-                && coord.y < video::HEIGHT as i32
-            {
-                let i = coord.y as usize * video::WIDTH + coord.x as usize;
-                let raw = RawU8::from(color);
-                self.push(i, raw.into_inner());
+        let mut count = 0;
+        crate::measure(&mut count, || {
+            for Pixel(coord, color) in pixels.into_iter() {
+                if coord.x >= 0
+                    && coord.x < video::WIDTH as i32
+                    && coord.y >= 0
+                    && coord.y < video::HEIGHT as i32
+                {
+                    let i = coord.y as usize * video::WIDTH + coord.x as usize;
+                    let raw = RawU8::from(color);
+                    self.push(i, raw.into_inner());
+                }
             }
-        }
+        });
+        unsafe { crate::CHARACTER_DRAW_CYCLES += count };
         Ok(())
     }
 }
