@@ -47,6 +47,7 @@ Hash: `f2627740c2a6f1ed37715a0d487b7f4987971bb9`
 
 * Average bytes: `698`
 * Average cycles: `142818.195`
+<<<<<<< HEAD
 * Improvement: `24%`
 
 # Draw with `fill_contiguous`, buffer drawing characters, text carries dirty state
@@ -64,3 +65,6 @@ Hash: `304c52f8662db2f1363da8a9c36d6136a42d6236`
 * Average bytes: `2037`
 * Average cycles: `17585.7`
 * Improvement: `3.6x`
+=======
+* Improvement: `24%`
+>>>>>>> f262774 (setting the pixel color directly into the video buffer)
