@@ -11,6 +11,7 @@ use embedded_graphics::{
     text::Text,
     Pixel,
 };
+use esp_println::print;
 
 use crate::{
     color::{self, Rgb3},
@@ -115,13 +116,7 @@ impl DrawTarget for Display {
         unsafe { crate::CHARACTER_DRAW_CYCLES += count };
         Ok(())
     }
-
-    // fn fill_contiguous<I>(&mut self, area: &Rectangle, colors: I) -> Result<(), Self::Error>
-    //     where
-    //         I: IntoIterator<Item = Self::Color>, {
-        
-
-    // }
+    
 }
 
 #[derive(Debug, Clone, Copy)]
