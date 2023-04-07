@@ -47,19 +47,11 @@ Hash: `f2627740c2a6f1ed37715a0d487b7f4987971bb9`
 
 * Average bytes: `698`
 * Average cycles: `142818.195`
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> 304c52f (characters contain whether they are dirty, chars are drawn per rect rather than pixel at a time, drawing comes after processing input characters)
 * Improvement: `24%`
 
 # Draw with `fill_contiguous`, buffer drawing characters, text carries dirty state
 
-<<<<<<< HEAD
 Hash: `304c52f8662db2f1363da8a9c36d6136a42d6236`
-=======
-Hash: `next`
->>>>>>> 304c52f (characters contain whether they are dirty, chars are drawn per rect rather than pixel at a time, drawing comes after processing input characters)
 ============================================
 
 ```
@@ -72,9 +64,5 @@ Hash: `next`
 * Average bytes: `2037`
 * Average cycles: `17585.7`
 * Improvement: `3.6x`
-<<<<<<< HEAD
-=======
-* Improvement: `24%`
->>>>>>> f262774 (setting the pixel color directly into the video buffer)
 =======
 >>>>>>> 304c52f (characters contain whether they are dirty, chars are drawn per rect rather than pixel at a time, drawing comes after processing input characters)
