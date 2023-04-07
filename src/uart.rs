@@ -1,6 +1,3 @@
-use core::cell::RefCell;
-
-use critical_section::Mutex;
 use esp32c3_hal::{
     clock::Clocks,
     gpio::{Gpio0, Gpio1, Gpio3, Unknown},
@@ -18,7 +15,7 @@ use crate::channel::{self, Receiver, Sender};
 use crate::interrupt::which_priority;
 
 static mut SENDER0: Option<UartTransmitter<UART0, char>> = None;
-static SENDER1: Mutex<RefCell<Option<UartTransmitter<UART1, u8>>>> = Mutex::new(RefCell::new(None));
+static mut SENDER1: Option<UartTransmitter<UART1, u8>> = None;
 
 #[must_use]
 pub fn configure0(uart: UART0) -> Receiver<char> {
@@ -52,14 +49,31 @@ pub fn configure1(
     let serial1 = Uart::new_with_config(uart, Some(config), Some(pins), clocks);
     let (tx, rx) = channel::channel();
 
-    critical_section::with(|cs| {
-        SENDER1.borrow_ref_mut(cs).replace(UartTransmitter {
+    critical_section::with(|_cs| {
+        unsafe { &mut SENDER1 }.replace(UartTransmitter {
             serial: serial1,
             tx,
         })
     });
 
     rx
+}
+
+pub fn make_uart0<'a>(uart: UART0) -> Uart<'a, UART0> {
+    uart.flow_conf.write(|w| {
+        w.sw_flow_con_en().set_bit()
+    });
+    uart.swfc_conf0.write(|w| {
+        w.xoff_threshold().variant(64)
+        .xoff_char().variant(0x13)
+    });
+    uart.swfc_conf1.write(|w| {
+        w.xon_threshold().variant(64)
+        .xon_char().variant(0x11)
+    });
+    let serial0: Uart<UART0> = Uart::new(uart);
+
+    serial0
 }
 
 pub fn make_uart1<'a>(
@@ -162,8 +176,8 @@ pub fn interrupt_enable1(priority: interrupt::Priority) {
         interrupt::InterruptKind::Level,
     );
 
-    critical_section::with(|cs| {
-        if let Some(sender) = SENDER1.borrow_ref_mut(cs).as_mut() {
+    critical_section::with(|_cs| {
+        if let Some(sender) = unsafe { &mut SENDER1 } {
             sender.serial.set_rx_fifo_full_threshold(1);
             sender.serial.listen_rx_fifo_full();
         }
@@ -186,16 +200,16 @@ fn UART0() {
                 // print!("{}", c as char);
                 uart_transmitter.tx.send(c as char);
             }
-            uart_transmitter.serial.reset_rx_fifo_full_interrupt();
         }
+        // Reset the "fifo full" interrupt
+        unsafe { (*UART0::PTR).int_clr.write(|w| w.rxfifo_full_int_clr().set_bit()) }
     });
 }
 
 #[interrupt]
 fn UART1() {
-    // print!(".");
-    critical_section::with(|cs| {
-        if let Some(uart_transmitter) = SENDER1.borrow_ref_mut(cs).as_mut() {
+    crate::interrupt::theshold_mask(|| {
+        if let Some(uart_transmitter) = unsafe { &mut SENDER1 } {
             while let nb::Result::Ok(c) = uart_transmitter.serial.read() {
                 uart_transmitter.tx.send(c);
             }

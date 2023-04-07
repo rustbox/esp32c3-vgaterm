@@ -13,7 +13,7 @@ use esp32c3_hal::{
 };
 use esp_println::{print, println};
 use riscv::asm::wfi;
-use vgaterm::ansi::{OpChar, TerminalEsc};
+use vgaterm::ansi;
 
 core::arch::global_asm!(".global _heap_size; _heap_size = 0x8000");
 
@@ -80,23 +80,34 @@ fn main() -> ! {
     init_heap();
 
     vgaterm::configure_timer0(peripherals.TIMG0, &clocks);
-    let mut rx = vgaterm::uart::configure0(peripherals.UART0);
+    let mut _rx = vgaterm::uart::configure0(peripherals.UART0);
     vgaterm::uart::interrupt_enable0(vgaterm::interrupt::Priority::Priority5);
 
     unsafe {
         riscv::interrupt::enable();
     }
 
-    let mut escape = TerminalEsc::new();
+
+    let r = ansi::parse_esc_str("abcd\u{1B}[XYZ\u{1B}[");
+    println!("{:?}", r);
+
+    // match escape.push_str("abcd\u{1B}[5") {
+    //     ParseRes::InSequence(s) => {
+    //         println!("string {}", s.escape_default());
+    //     },
+    //     ParseRes::OpStr(v) => {
+    //         println!("vec {:?}", v);
+    //     }
+    // }
 
     loop {
-        while let Some(c) = rx.recv() {
-            match escape.push(c) {
-                None => print!("{}", c.escape_default()),
-                Some(OpChar::Char(h)) => println!("> {h}"),
-                Some(OpChar::Op(p)) => println!("{c}\nOp: {p:?}"),
-            }
-        }
+        // while let Some(c) = rx.recv() {
+        //     match escape.push_str(c) {
+        //         None => print!("{}", c.escape_default()),
+        //         Some(OpChar::Char(h)) => println!("> {h}"),
+        //         Some(OpChar::Op(p)) => println!("{c}\nOp: {p:?}"),
+        //     }
+        // }
 
         unsafe {
             wfi();

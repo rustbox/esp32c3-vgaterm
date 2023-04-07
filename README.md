@@ -30,7 +30,7 @@ At this point you are ready to build and upload
 
 2. Flash to the CPU
 
-`espflash /dev/ttyUSB0 target/riscv32imc-unknown-none-elf/debug/vgaterm --monitor --format direct-boot`
+`espflash flash /dev/ttyUSB0 target/riscv32imac-unknown-none-elf/debug/vgaterm --monitor --format direct-boot`
 
 Where `/dev/ttyUSB0` should be whatever serial port the esp32 is connected to. It's highly recommended that your user
 is added to the `dialout` group which will allow you to interact with `/dev/ttyUSB0` without using sudo.
