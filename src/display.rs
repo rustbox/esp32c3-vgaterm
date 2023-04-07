@@ -11,6 +11,7 @@ use embedded_graphics::{
     text::Text,
     Pixel, primitives::Rectangle,
 };
+use esp_println::print;
 
 use crate::{
     color::{self, Rgb3},
@@ -83,21 +84,39 @@ impl DrawTarget for Display {
                     && coord.y < video::HEIGHT as i32
                 {
                     let i = coord.y as usize * video::WIDTH + coord.x as usize;
-                    let raw = RawU8::from(color);
-                    self.set_pixel(i, raw.into_inner());
+                    // let raw = RawU8::from(color);
+                    self.set_pixel(i, color.to_byte());
                 }
+            }
+        });
+        // unsafe { crate::CHARACTER_DRAW_CYCLES += count };
+        Ok(())
+    }
+
+    #[inline(always)]
+    fn fill_contiguous<I>(&mut self, area: &Rectangle, colors: I) -> Result<(), Self::Error>
+        where
+            I: IntoIterator<Item = Self::Color>, {
+
+        let mut count = 0;
+        crate::measure(&mut count, || {
+            let mut colors = colors.into_iter();
+            let screen_width = self.size().width as usize;
+            let area_width = area.size.width as usize;
+
+            let mut offset = screen_width * area.top_left.y as usize + area.top_left.x as usize;
+            for _ in 0..area.size.height {
+                for col in 0..area_width {
+                    let i = offset + col;
+                    unsafe { video::BUFFER[i] = colors.next().unwrap().to_byte() };
+                }
+                offset += screen_width;
             }
         });
         unsafe { crate::CHARACTER_DRAW_CYCLES += count };
         Ok(())
     }
-
-    // fn fill_contiguous<I>(&mut self, area: &Rectangle, colors: I) -> Result<(), Self::Error>
-    //     where
-    //         I: IntoIterator<Item = Self::Color>, {
-        
-
-    // }
+    
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -334,36 +353,42 @@ fn index(row: usize, col: usize) -> usize {
     row * COLUMNS + col
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum Drawn {
+    Dirty,
+    Clean
+}
+
 pub struct TextDisplay {
-    buffer: [Character; ROWS * COLUMNS],
-    dirty: VecDeque<(usize, usize)>,
+    buffer: [(Character, Drawn); ROWS * COLUMNS],
+    pub dirty: VecDeque<(usize, usize)>,
 }
 
 impl TextDisplay {
     pub fn new() -> TextDisplay {
         TextDisplay {
-            buffer: [Character::default(); COLUMNS * ROWS],
+            buffer: [(Character::default(), Drawn::Clean); COLUMNS * ROWS],
             dirty: VecDeque::new(),
         }
     }
 
     #[inline(always)]
     pub fn read_char(&self, line: usize, col: usize) -> Character {
-        self.buffer[index(line, col)]
+        self.buffer[index(line, col)].0
     }
 
     #[inline(always)]
     pub fn write_char(&mut self, line: usize, col: usize, c: Character) {
-        self.buffer[index(line, col)] = c;
-        self.dirty.push_front((line, col))
+        self.buffer[index(line, col)] = (c, Drawn::Dirty);
+        // self.dirty.push_front((line, col))
     }
 
     #[inline(always)]
     pub fn write(&mut self, line: usize, col: usize, c: char) {
         let ch = Character::new(c);
         let i = line * COLUMNS + col;
-        self.buffer[i] = ch;
-        self.dirty.push_front((line, col));
+        self.buffer[i] = (ch, Drawn::Dirty);
+        // self.dirty.push_front((line, col));
     }
 
     pub fn write_text(&mut self, start_line: usize, start_column: usize, text: &str) {
@@ -419,8 +444,18 @@ impl TextDisplay {
     where
         D: DrawTarget<Color = Rgb3>,
     {
-        while let Some((line, col)) = self.dirty.pop_back() {
-            self.draw(line, col, target)
+        // while let Some((line, col)) = self.dirty.pop_back() {
+        //     self.draw(line, col, target)
+        // }
+        for row in 0..ROWS {
+            for col in 0..COLUMNS {
+                let i = COLUMNS * row + col;
+                if self.buffer[i].1 == Drawn::Dirty {
+                    self.buffer[i].1 = Drawn::Clean;
+                    self.draw(row, col, target)
+
+                }
+            }
         }
     }
 
