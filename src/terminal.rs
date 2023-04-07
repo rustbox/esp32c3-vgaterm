@@ -41,6 +41,7 @@ impl CursorPos {
     ///
     /// (see also: https://play.rust-lang.org/?version=stable&mode=debug&edition=2021&gist=3aacdae98b11d36599604d6300f1c71f
     ///  whoever said there's no testing in no_std?)
+    #[inline]
     pub fn offset(&self, r: isize, c: isize) -> CursorPos {
         let cols = self.1 as isize + c;
         let (p, cols) = (cols.div_euclid(ICOLS), cols.rem_euclid(ICOLS));
@@ -50,10 +51,12 @@ impl CursorPos {
         CursorPos(rows as usize, cols as usize)
     }
 
+    #[inline]
     pub fn row(&self) -> Row {
         self.0
     }
 
+    #[inline]
     pub fn col(&self) -> Col {
         self.1
     }
