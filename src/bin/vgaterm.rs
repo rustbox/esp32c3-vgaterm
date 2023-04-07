@@ -4,10 +4,17 @@
 
 extern crate alloc;
 
-use alloc::{collections::VecDeque, string::{String, ToString}, vec::Vec};
-use esp32c3_hal::{clock::{ClockControl, CpuClock}, peripherals::UART0};
+use alloc::{
+    collections::VecDeque,
+    string::{String, ToString},
+    vec::Vec,
+};
 use esp32c3_hal::prelude::*;
 use esp32c3_hal::timer::TimerGroup;
+use esp32c3_hal::{
+    clock::{ClockControl, CpuClock},
+    peripherals::UART0,
+};
 use esp32c3_hal::{gpio::IO, peripherals::Peripherals, Rtc};
 use esp_backtrace as _;
 use esp_println::println;
@@ -206,7 +213,7 @@ fn main() -> ! {
         // Flush the Display to the BUFFER
         // display.flush();
         terminal.draw_up_to(210, &mut display);
-        
+
         if !keyvents.is_empty() || unsafe { (*UART0::PTR).status.read().rxfifo_cnt().bits() } > 0 {
             continue;
         }

@@ -7,8 +7,9 @@ use alloc::{
 use embedded_graphics::{
     mono_font::{MonoTextStyle, MonoTextStyleBuilder},
     prelude::*,
+    primitives::Rectangle,
     text::Text,
-    Pixel, primitives::Rectangle,
+    Pixel,
 };
 
 use crate::{
@@ -36,7 +37,7 @@ impl Display {
 
     /// Sets the pixel color the location in the video BUFFER
     /// to the given color
-    /// 
+    ///
     /// SAFETY: This directly sets the pixel to video memory which
     /// is unsafe, but should be okay since we're the only ones
     /// setting memory in the buffer and SPI takes exclusive control
@@ -93,9 +94,9 @@ impl DrawTarget for Display {
 
     #[inline(always)]
     fn fill_contiguous<I>(&mut self, area: &Rectangle, colors: I) -> Result<(), Self::Error>
-        where
-            I: IntoIterator<Item = Self::Color>, {
-
+    where
+        I: IntoIterator<Item = Self::Color>,
+    {
         let mut count = 0;
         crate::measure(&mut count, || {
             let mut colors = colors.into_iter();
@@ -114,7 +115,6 @@ impl DrawTarget for Display {
         unsafe { crate::CHARACTER_DRAW_CYCLES += count };
         Ok(())
     }
-    
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -354,7 +354,7 @@ fn index(row: usize, col: usize) -> usize {
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 enum Drawn {
     Dirty,
-    Clean
+    Clean,
 }
 
 pub struct TextDisplay {
@@ -419,23 +419,23 @@ impl TextDisplay {
     /// 8 a b c d e f
     /// 9 a b c d e f _
     /// 10 a b c d e f
-    /// 
+    ///
     /// 0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, |30 [31 32
-    /// 
+    ///
     pub fn scroll_down(&mut self, amount: usize) {
         // We add a correction if amount and COLUMNS are differ in even/odd parity
         let odd = if amount & 1 == COLUMNS & 1 { 0 } else { 1 };
         for l in (0..ROWS - amount - odd).step_by(amount) {
-            let double_line = &mut self.buffer[l*COLUMNS..(l+2*amount)*COLUMNS];
+            let double_line = &mut self.buffer[l * COLUMNS..(l + 2 * amount) * COLUMNS];
             for (_, drawn) in double_line.iter_mut() {
                 *drawn = Drawn::Dirty;
             }
-            let (first, second) = double_line.split_at_mut(amount*COLUMNS);
+            let (first, second) = double_line.split_at_mut(amount * COLUMNS);
             first.swap_with_slice(second);
         }
         if odd == 1 {
-            for l in (ROWS-amount..ROWS).rev() {
-                let double_line = &mut self.buffer[(l-1)*COLUMNS..(l+1)*COLUMNS];
+            for l in (ROWS - amount..ROWS).rev() {
+                let double_line = &mut self.buffer[(l - 1) * COLUMNS..(l + 1) * COLUMNS];
                 for (_, drawn) in double_line.iter_mut() {
                     *drawn = Drawn::Dirty;
                 }
@@ -443,7 +443,7 @@ impl TextDisplay {
                 first.swap_with_slice(second);
             }
         }
-        let last = &mut self.buffer[(ROWS-amount)*COLUMNS..ROWS*COLUMNS];
+        let last = &mut self.buffer[(ROWS - amount) * COLUMNS..ROWS * COLUMNS];
         last.fill((Character::new(' '), Drawn::Dirty))
     }
 

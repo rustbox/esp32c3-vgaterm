@@ -201,6 +201,12 @@ fn UART0() {
                 .int_clr
                 .write(|w| w.rxfifo_full_int_clr().set_bit())
         }
+        // Reset the "fifo full" interrupt
+        unsafe {
+            (*UART0::PTR)
+                .int_clr
+                .write(|w| w.rxfifo_full_int_clr().set_bit())
+        }
     });
 }
 

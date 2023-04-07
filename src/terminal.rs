@@ -118,7 +118,7 @@ impl Cursor {
         Cursor {
             pos: self.pos,
             time_to_next_blink,
-            blink_length: self.blink_length
+            blink_length: self.blink_length,
         }
     }
 
@@ -223,7 +223,7 @@ impl TextField {
                 } else {
                     self.move_cursor(1, -(self.cursor.pos.col() as isize))
                 }
-            },
+            }
             '\r' => self.move_cursor(0, -(self.cursor.pos.col() as isize)),
             _ => {
                 for c in t.escape_default() {

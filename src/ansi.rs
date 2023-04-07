@@ -57,8 +57,8 @@ use alloc::{
     vec,
     vec::Vec,
 };
-use esp_println::println;
 use core::{fmt::Debug, str::FromStr};
+use esp_println::println;
 use nom::{IResult, Parser};
 
 const ESC: char = '\u{1B}';
@@ -281,18 +281,16 @@ fn cursor_to_column(input: &str) -> OpResult {
     })
 }
 
-/// ESC [ n S 
+/// ESC [ n S
 fn scroll_up(input: &str) -> OpResult {
-    optional_int_param_sequence::<isize>('S', -1)(input).map(|(rest, n)| {
-        (rest, Op::Scroll { delta: n })
-    })
+    optional_int_param_sequence::<isize>('S', -1)(input)
+        .map(|(rest, n)| (rest, Op::Scroll { delta: n }))
 }
 
-/// ESC [ n S 
+/// ESC [ n S
 fn scroll_down(input: &str) -> OpResult {
-    optional_int_param_sequence::<isize>('T', 1)(input).map(|(rest, n)| {
-        (rest, Op::Scroll { delta: n })
-    })
+    optional_int_param_sequence::<isize>('T', 1)(input)
+        .map(|(rest, n)| (rest, Op::Scroll { delta: n }))
 }
 
 // Request Cursor Position
