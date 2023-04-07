@@ -1,7 +1,7 @@
 use crate::{
     ansi::{EraseMode, Op, OpChar, TerminalEsc},
     color::Rgb3,
-    display::{self, Character, TextDisplay}, ansi::{TerminalEsc, OpChar, Op, EraseMode},
+    display::{self, Character, TextDisplay},
 };
 use embedded_graphics::prelude::DrawTarget;
 use esp32c3_hal::systimer::SystemTimer;
