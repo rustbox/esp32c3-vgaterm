@@ -9,7 +9,7 @@ use embedded_graphics::{
     pixelcolor::raw::RawU8,
     prelude::*,
     text::Text,
-    Pixel,
+    Pixel, primitives::Rectangle,
 };
 
 use crate::{
@@ -33,6 +33,18 @@ impl Display {
             self.flush();
         }
         self.local_buffer.push_front((pos, color))
+    }
+
+    /// Sets the pixel color the location in the video BUFFER
+    /// to the given color
+    /// 
+    /// SAFETY: This directly sets the pixel to video memory which
+    /// is unsafe, but should be okay since we're the only ones
+    /// setting memory in the buffer and SPI takes exclusive control
+    /// when it runs to display the pixels
+    #[inline(always)]
+    pub fn set_pixel(&mut self, pos: usize, color: u8) {
+        *unsafe { &mut video::BUFFER[pos] } = color;
     }
 
     pub fn flush(&mut self) {
@@ -72,13 +84,20 @@ impl DrawTarget for Display {
                 {
                     let i = coord.y as usize * video::WIDTH + coord.x as usize;
                     let raw = RawU8::from(color);
-                    self.push(i, raw.into_inner());
+                    self.set_pixel(i, raw.into_inner());
                 }
             }
         });
         unsafe { crate::CHARACTER_DRAW_CYCLES += count };
         Ok(())
     }
+
+    // fn fill_contiguous<I>(&mut self, area: &Rectangle, colors: I) -> Result<(), Self::Error>
+    //     where
+    //         I: IntoIterator<Item = Self::Color>, {
+        
+
+    // }
 }
 
 #[derive(Debug, Clone, Copy)]
