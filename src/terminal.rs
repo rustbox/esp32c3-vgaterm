@@ -186,6 +186,9 @@ impl TextField {
     }
 
     fn handle_char_in(&mut self, t: char) {
+        if t.is_ascii_control() {
+            println!("ascii {}", t.escape_debug());
+        }
         match t {
             '\u{08}' => {
                 // backspace
@@ -306,6 +309,14 @@ impl TextField {
         D: DrawTarget<Color = Rgb3>,
     {
         self.text.draw_dirty(target);
+        self.cursor.update(&mut self.text);
+    }
+
+    pub fn draw_up_to<D>(&mut self, up_to: usize, target: &mut D)
+    where
+        D: DrawTarget<Color = Rgb3>,
+    {
+        self.text.draw_dirty_up_to(up_to, target);
         self.cursor.update(&mut self.text);
     }
 }

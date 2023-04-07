@@ -6,12 +6,10 @@ use alloc::{
 };
 use embedded_graphics::{
     mono_font::{MonoTextStyle, MonoTextStyleBuilder},
-    pixelcolor::raw::RawU8,
     prelude::*,
     text::Text,
     Pixel, primitives::Rectangle,
 };
-use esp_println::print;
 
 use crate::{
     color::{self, Rgb3},
@@ -361,6 +359,7 @@ enum Drawn {
 
 pub struct TextDisplay {
     buffer: [(Character, Drawn); ROWS * COLUMNS],
+    num_dirty: usize,
     pub dirty: VecDeque<(usize, usize)>,
 }
 
@@ -368,6 +367,7 @@ impl TextDisplay {
     pub fn new() -> TextDisplay {
         TextDisplay {
             buffer: [(Character::default(), Drawn::Clean); COLUMNS * ROWS],
+            num_dirty: 0,
             dirty: VecDeque::new(),
         }
     }
@@ -380,7 +380,7 @@ impl TextDisplay {
     #[inline(always)]
     pub fn write_char(&mut self, line: usize, col: usize, c: Character) {
         self.buffer[index(line, col)] = (c, Drawn::Dirty);
-        // self.dirty.push_front((line, col))
+        self.num_dirty += 1;
     }
 
     #[inline(always)]
@@ -388,7 +388,7 @@ impl TextDisplay {
         let ch = Character::new(c);
         let i = line * COLUMNS + col;
         self.buffer[i] = (ch, Drawn::Dirty);
-        // self.dirty.push_front((line, col));
+        self.num_dirty += 1;
     }
 
     pub fn write_text(&mut self, start_line: usize, start_column: usize, text: &str) {
@@ -444,16 +444,41 @@ impl TextDisplay {
     where
         D: DrawTarget<Color = Rgb3>,
     {
-        // while let Some((line, col)) = self.dirty.pop_back() {
-        //     self.draw(line, col, target)
-        // }
+        if self.num_dirty == 0 {
+            return;
+        }
         for row in 0..ROWS {
             for col in 0..COLUMNS {
                 let i = COLUMNS * row + col;
                 if self.buffer[i].1 == Drawn::Dirty {
                     self.buffer[i].1 = Drawn::Clean;
-                    self.draw(row, col, target)
+                    self.draw(row, col, target);
+                    self.num_dirty -= 1;
+                }
+            }
+        }
+    }
 
+    #[inline(always)]
+    pub fn draw_dirty_up_to<D>(&mut self, up_to: usize, target: &mut D)
+    where
+        D: DrawTarget<Color = Rgb3>,
+    {
+        if self.num_dirty == 0 {
+            return;
+        }
+        let mut drawn = 0;
+        for row in 0..ROWS {
+            for col in 0..COLUMNS {
+                let i = COLUMNS * row + col;
+                if self.buffer[i].1 == Drawn::Dirty {
+                    self.buffer[i].1 = Drawn::Clean;
+                    self.draw(row, col, target);
+                    self.num_dirty -= 1;
+                    drawn += 1;
+                    if drawn >= up_to || self.num_dirty == 0 {
+                        return;
+                    }
                 }
             }
         }
