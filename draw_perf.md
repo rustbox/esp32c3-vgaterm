@@ -51,7 +51,7 @@ Hash: `f2627740c2a6f1ed37715a0d487b7f4987971bb9`
 
 # Draw with `fill_contiguous`, buffer drawing characters, text carries dirty state
 
-Hash: `next`
+Hash: `304c52f8662db2f1363da8a9c36d6136a42d6236`
 ============================================
 
 ```
