@@ -105,6 +105,11 @@ impl Cursor {
         text.write_char(self.pos.row(), self.pos.col(), c);
     }
 
+    fn reset_highlight_timer(&mut self, text: &mut TextDisplay) {
+        self.set_highlight(text);
+        self.time_to_next_blink = SystemTimer::now().wrapping_add(self.blink_length);
+    }
+
     fn update(&mut self, text: &mut TextDisplay) {
         let now = SystemTimer::now();
         // println!("now {}, upcoming time {}", now, self.time_to_next_blink);
@@ -127,7 +132,7 @@ impl Default for Cursor {
 }
 
 pub struct TextField {
-    text: TextDisplay,
+    pub text: TextDisplay,
     cursor: Cursor,
     input_buffer: String,
 }
@@ -257,18 +262,23 @@ impl TextField {
             }
             EraseLine(erase) => match erase {
                 EraseMode::All => {
+                    self.cursor.reset_highlight_timer(&mut self.text);
                     for c in 0..display::COLUMNS {
                         self.text.write(self.cursor.pos.row(), c, ' ');
                     }
                 }
                 EraseMode::FromCursor => {
+                    self.cursor.reset_highlight_timer(&mut self.text);
                     for c in self.cursor.pos.col()..display::COLUMNS {
                         self.text.write(self.cursor.pos.row(), c, ' ');
+                        self.cursor.update(&mut self.text);
                     }
                 }
                 EraseMode::ToCursor => {
+                    self.cursor.reset_highlight_timer(&mut self.text);
                     for c in 0..self.cursor.pos.col() {
                         self.text.write(self.cursor.pos.row(), c, ' ');
+                        self.cursor.update(&mut self.text);
                     }
                 }
             },

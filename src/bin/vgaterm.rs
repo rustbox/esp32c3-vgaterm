@@ -5,7 +5,7 @@
 extern crate alloc;
 
 use alloc::{collections::VecDeque, string::String, vec::Vec};
-use esp32c3_hal::clock::{ClockControl, CpuClock};
+use esp32c3_hal::{clock::{ClockControl, CpuClock}, peripherals::UART0};
 use esp32c3_hal::prelude::*;
 use esp32c3_hal::timer::TimerGroup;
 use esp32c3_hal::{gpio::IO, peripherals::Peripherals, Rtc};
@@ -16,7 +16,7 @@ use esp_backtrace as _;
 
 use core::{arch::asm, fmt::Write};
 
-core::arch::global_asm!(".global _heap_size; _heap_size = 0xB000");
+core::arch::global_asm!(".global _heap_size; _heap_size = 0xC000");
 
 #[global_allocator]
 static ALLOCATOR: esp_alloc::EspHeap = esp_alloc::EspHeap::empty();
@@ -200,14 +200,14 @@ fn main() -> ! {
         }
 
         // Draw the characters on the frame
-        terminal.draw(&mut display);
         // Flush the Display to the BUFFER
-        display.flush();
-
-        if !keyvents.is_empty(){
-            println!("{:?}", keyvents);
+        // display.flush();
+        
+        if !keyvents.is_empty() || unsafe { (*UART0::PTR).status.read().rxfifo_cnt().bits() } > 0 {
             continue;
         }
+
+        terminal.draw(&mut display);
 
         unsafe {
             // this will fire no less often than once per frame
