@@ -4,7 +4,7 @@
 
 extern crate alloc;
 
-use alloc::{collections::VecDeque, string::String, vec::Vec};
+use alloc::{collections::VecDeque, string::{String, ToString}, vec::Vec};
 use esp32c3_hal::{clock::{ClockControl, CpuClock}, peripherals::UART0};
 use esp32c3_hal::prelude::*;
 use esp32c3_hal::timer::TimerGroup;
@@ -176,10 +176,10 @@ fn main() -> ! {
                 b.push(r);
             }
             unsafe { NUM_BYTES += b.len(); }
-            String::from_utf8(b).unwrap()
+            String::from_utf8_lossy(&b).to_string()
         };
 
-        terminal.type_str(h.as_str());
+        terminal.type_str(&h);
 
         let last_char = input.key_char(&key_state);
         match last_char {
@@ -202,6 +202,7 @@ fn main() -> ! {
         // Draw the characters on the frame
         // Flush the Display to the BUFFER
         // display.flush();
+        terminal.draw_up_to(128, &mut display);
         
         if !keyvents.is_empty() || unsafe { (*UART0::PTR).status.read().rxfifo_cnt().bits() } > 0 {
             continue;
