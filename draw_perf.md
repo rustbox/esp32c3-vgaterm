@@ -25,8 +25,9 @@ Hash `3ec5c707513c4b6a533ae8099fe242e81975947e`
 * Average bytes: `563`
 * Average cycles: `197312.6`
 
+# Directly set video memory
 
-Hash: `next`
+Hash: `f2627740c2a6f1ed37715a0d487b7f4987971bb9`
 ========================================
 
 ```
@@ -47,3 +48,19 @@ Hash: `next`
 * Average bytes: `698`
 * Average cycles: `142818.195`
 * Improvement: `24%`
+
+# Draw with `fill_contiguous`, buffer drawing characters, text carries dirty state
+
+Hash: `next`
+============================================
+
+```
+1562 bytes
+12544.181 draw cycles per byte
+2512 bytes
+22627.264 draw cycles per byte
+```
+
+* Average bytes: `2037`
+* Average cycles: `17585.7`
+* Improvement: `3.6x`
