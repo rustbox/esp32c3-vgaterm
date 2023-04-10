@@ -16,9 +16,9 @@ use esp32c3_hal::{
     peripherals::UART0,
 };
 use esp32c3_hal::{gpio::IO, peripherals::Peripherals, Rtc};
-use esp_backtrace as _;
 use esp_println::println;
-use vgaterm::{self, video};
+use esp_backtrace as _;
+use vgaterm::{self, video, perf};
 use vgaterm::{interrupt::Priority, usb_keyboard::US_ENGLISH, Delay, Work};
 
 use core::{arch::asm, fmt::Write};
@@ -74,7 +74,7 @@ fn main() -> ! {
     // io.pins.gpio20.into_floating_input();
 
     init_heap();
-    configure_counter_for_cpu_cycles();
+    perf::configure_counter_for_cpu_cycles();
 
     vgaterm::configure_timer0(peripherals.TIMG0, &clocks);
     // let mut host_recv = vgaterm::uart::configure0(peripherals.UART0);
@@ -225,35 +225,4 @@ fn main() -> ! {
             riscv::asm::wfi();
         }
     }
-}
-
-///
-/// Configure the esp32c2 custom Control and Status register
-/// `mpcer` to count only CPU clock cycles.
-///
-/// Page 28, https://www.espressif.com/sites/default/files/documentation/esp32-c3_technical_reference_manual_en.pdf
-#[no_mangle]
-fn configure_counter_for_cpu_cycles() {
-    unsafe {
-        // Set count event to clock cycles
-        // Enable counting events and set overflow to rollover
-        asm!("csrwi 0x7E0, 0x1", "csrwi 0x7E1, 0x1");
-    }
-}
-
-#[no_mangle]
-fn measure_clock(delay: Delay) -> u32 {
-    unsafe {
-        // Set event counter to 0
-        asm!("csrwi 0x7E2, 0x00",)
-    }
-    let d: u32;
-    delay.delay_ms(1000);
-    unsafe {
-        asm!(
-            "csrr {}, 0x7E2",
-            out(reg) d
-        );
-    }
-    d
 }
