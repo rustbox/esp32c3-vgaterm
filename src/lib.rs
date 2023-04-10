@@ -15,6 +15,7 @@ pub mod gpio;
 pub mod interrupt;
 pub mod kernel;
 pub mod keyboard;
+pub mod perf;
 pub mod spi;
 pub mod terminal;
 pub mod terminal_input;
@@ -34,9 +35,13 @@ use core::arch::asm;
 
 pub static mut CHARACTER_DRAW_CYCLES: usize = 0;
 
+// back compat
+pub use perf::measure_cycle_count;
+pub use perf::reset_cycle_count as start_cycle_count;
 
+#[derive(Debug)]
 pub enum Work<T> {
-    Item(T), // implicilty: awaken immediately
+    Item(T), // implicitly: awaken immediately
 
     WouldBlock, // indefinitely
     WouldBlockUntil(u64),
@@ -44,28 +49,6 @@ pub enum Work<T> {
 
 pub fn hello() -> &'static str {
     "hello"
-}
-
-#[no_mangle]
-#[inline]
-pub fn start_cycle_count() {
-    unsafe {
-        // Set event counter to 0
-        asm!("csrwi 0x7E2, 0x00",)
-    }
-}
-
-#[no_mangle]
-#[inline]
-pub fn measure_cycle_count() -> u32 {
-    let d: u32;
-    unsafe {
-        asm!(
-            "csrr {}, 0x7E2",
-            out(reg) d
-        );
-    }
-    d
 }
 
 pub fn measure<O>(count: &mut usize, f: impl FnOnce() -> O) -> O {
