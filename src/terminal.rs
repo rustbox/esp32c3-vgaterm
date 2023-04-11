@@ -1,7 +1,7 @@
 use crate::{
     ansi::{self, EraseMode, Op, OpStr},
     color::Rgb3,
-    display::{self, TextDisplay},
+    display::{self, Character, TextDisplay, ROWS},
 };
 use alloc::string::String;
 use embedded_graphics::prelude::DrawTarget;
@@ -88,6 +88,10 @@ impl Cursor {
             return cursor;
         }
         *self
+    }
+
+    fn is_at_bottom(&self) -> bool {
+        self.pos.row() == ROWS - 1
     }
 
     fn set_highlight(&self, text: &mut TextDisplay) {
@@ -211,7 +215,15 @@ impl TextField {
                     .write(self.cursor.pos.row(), self.cursor.pos.col(), t);
                 self.move_cursor(0, 1);
             }
-            '\n' => self.move_cursor(1, -(self.cursor.pos.col() as isize)),
+            '\n' => {
+                if self.cursor.is_at_bottom() {
+                    self.cursor.unset_highlight(&mut self.text);
+                    self.text.scroll_down(1);
+                    self.move_cursor(0, -(self.cursor.pos.col() as isize))
+                } else {
+                    self.move_cursor(1, -(self.cursor.pos.col() as isize))
+                }
+            },
             '\r' => self.move_cursor(0, -(self.cursor.pos.col() as isize)),
             _ => {
                 for c in t.escape_default() {
@@ -297,6 +309,14 @@ impl TextField {
                     }
                 }
             },
+            Scroll { delta } => {
+                if delta > 0 {
+                    // self.cursor.offset(0, 1, &mut self.text);
+                    self.cursor.unset_highlight(&mut self.text);
+                    self.text.scroll_down(delta as usize);
+                    // self.cursor.set_highlight(&mut self.text);
+                }
+            }
             TextOp(_ops) => {}
             InPlaceDelete => self.text.write(self.cursor.pos.0, self.cursor.pos.1, ' '),
             DecPrivateSet(_) => {}

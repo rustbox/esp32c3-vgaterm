@@ -205,7 +205,7 @@ fn main() -> ! {
         // Draw the characters on the frame
         // Flush the Display to the BUFFER
         // display.flush();
-        terminal.draw_up_to(128, &mut display);
+        terminal.draw_up_to(210, &mut display);
         
         if !keyvents.is_empty() || unsafe { (*UART0::PTR).status.read().rxfifo_cnt().bits() } > 0 {
             continue;

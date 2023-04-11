@@ -360,7 +360,6 @@ enum Drawn {
 pub struct TextDisplay {
     buffer: [(Character, Drawn); ROWS * COLUMNS],
     num_dirty: usize,
-    pub dirty: VecDeque<(usize, usize)>,
 }
 
 impl TextDisplay {
@@ -368,7 +367,6 @@ impl TextDisplay {
         TextDisplay {
             buffer: [(Character::default(), Drawn::Clean); COLUMNS * ROWS],
             num_dirty: 0,
-            dirty: VecDeque::new(),
         }
     }
 
@@ -408,6 +406,45 @@ impl TextDisplay {
                 }
             }
         }
+    }
+    /// Rows = 11;
+    /// 0 a b c d e f
+    /// 1 a b c d e f _
+    /// 2 a b c d e f
+    /// 3 a b c d e f _
+    /// 4 a b c d e f
+    /// 5 a b c d e f _
+    /// 6 a b c d e f
+    /// 7 a b c d e f _
+    /// 8 a b c d e f
+    /// 9 a b c d e f _
+    /// 10 a b c d e f
+    /// 
+    /// 0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, |30 [31 32
+    /// 
+    pub fn scroll_down(&mut self, amount: usize) {
+        // We add a correction if amount and COLUMNS are differ in even/odd parity
+        let odd = if amount & 1 == COLUMNS & 1 { 0 } else { 1 };
+        for l in (0..ROWS - amount - odd).step_by(amount) {
+            let double_line = &mut self.buffer[l*COLUMNS..(l+2*amount)*COLUMNS];
+            for (_, drawn) in double_line.iter_mut() {
+                *drawn = Drawn::Dirty;
+            }
+            let (first, second) = double_line.split_at_mut(amount*COLUMNS);
+            first.swap_with_slice(second);
+        }
+        if odd == 1 {
+            for l in (ROWS-amount..ROWS).rev() {
+                let double_line = &mut self.buffer[(l-1)*COLUMNS..(l+1)*COLUMNS];
+                for (_, drawn) in double_line.iter_mut() {
+                    *drawn = Drawn::Dirty;
+                }
+                let (first, second) = double_line.split_at_mut(COLUMNS);
+                first.swap_with_slice(second);
+            }
+        }
+        let last = &mut self.buffer[(ROWS-amount)*COLUMNS..ROWS*COLUMNS];
+        last.fill((Character::new(' '), Drawn::Dirty))
     }
 
     #[inline(always)]
