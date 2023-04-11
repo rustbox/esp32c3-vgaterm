@@ -6,12 +6,11 @@ extern crate alloc;
 
 use alloc::collections::VecDeque;
 use esp32c3_hal::clock::{ClockControl, CpuClock};
-use esp32c3_hal::interrupt::Priority;
 use esp32c3_hal::prelude::*;
 use esp32c3_hal::timer::TimerGroup;
 use esp32c3_hal::{gpio::IO, peripherals::Peripherals, Rtc};
 use esp_println::{print, println};
-use vgaterm::{self, video};
+use vgaterm::{self, video, interrupt::Priority};
 use vgaterm::{usb_keyboard::US_ENGLISH, Delay, Work};
 
 use core::arch::asm;
@@ -81,15 +80,15 @@ fn main() -> ! {
 
     let io = IO::new(peripherals.GPIO, peripherals.IO_MUX);
 
-    io.pins.gpio20.into_floating_input();
+    // io.pins.gpio20.into_floating_input();
 
     init_heap();
     configure_counter_for_cpu_cycles();
 
     vgaterm::configure_timer0(peripherals.TIMG0, &clocks);
     let mut host_recv = vgaterm::uart::configure0(peripherals.UART0);
-    vgaterm::enable_timer0_interrupt(Priority::Priority1);
-    vgaterm::uart::interrupt_enable0(Priority::Priority2);
+    vgaterm::enable_timer0_interrupt(Priority::Priority5);
+    vgaterm::uart::interrupt_enable0(Priority::Priority6);
     vgaterm::gpio::interrupt_enable(Priority::max());
 
     unsafe {
@@ -159,6 +158,8 @@ fn main() -> ! {
     let mut key_state = vgaterm::keyboard::PressedSet::new();
     let mut input = vgaterm::terminal_input::TerminalInput::new(300, 40);
 
+    let local_echo = false;
+    let connect_host = true;
     loop {
         keyvents.extend(keyboard.flush_and_parse());
         if let Some(kevent) = keyvents.pop_front() {
@@ -173,7 +174,12 @@ fn main() -> ! {
         match last_char {
             Work::Item(ref c) => {
                 for c in c.chars() {
-                    print!("{}", c);
+                    if connect_host {
+                        print!("{}", c);
+                    }
+                    if local_echo {
+                        terminal.type_next(c);
+                    }
                 }
             }
             Work::WouldBlock => {}
