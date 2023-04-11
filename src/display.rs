@@ -10,6 +10,7 @@ use embedded_graphics::{
     text::Text,
     Pixel, primitives::Rectangle,
 };
+use esp_println::print;
 
 use crate::{
     color::{self, Rgb3},

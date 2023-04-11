@@ -15,8 +15,18 @@ pub static mut BUFFER: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];
 ///
 #[inline(always)]
 pub fn transmit_frame() {
+    static mut M1: crate::perf::Measure =
+        crate::perf::Measure::new("first_block", fugit::HertzU32::Hz(240));
+    static mut M2: crate::perf::Measure =
+        crate::perf::Measure::new("full_frame", fugit::HertzU32::Hz(240));
+
+    crate::perf::reset_cycle_count(); // no cycle count for you!
     riscv::interrupt::free(|| unsafe {
+        let (first_block, full_frame) = { (&mut M1, &mut M2) };
+        crate::perf::Measure::start([first_block, full_frame]);
+
         spi::transmit(&mut BUFFER[0..32000]);
+        crate::perf::Measure::stop([first_block]);
         spi::transmit(&mut BUFFER[32000..64000]);
         spi::transmit(&mut BUFFER[64000..96000]);
         spi::transmit(&mut BUFFER[96000..128000]);
@@ -24,11 +34,14 @@ pub fn transmit_frame() {
         spi::transmit(&mut BUFFER[160000..192000]);
         spi::transmit(&mut BUFFER[192000..224000]);
         spi::transmit(&mut BUFFER[224000..256000]);
+        crate::perf::Measure::stop([full_frame]);
+
+        crate::perf::Measure::flush([first_block, full_frame]);
     });
 }
 
 ///
-/// Split the frame buffer into 4 equallay sized columns (160 pixels wide) each
+/// Split the frame buffer into 4 equally sized columns (160 pixels wide) each
 /// of the color given in the arguments. Color a corresponds to the first column,
 /// b to the second, etc.
 ///
