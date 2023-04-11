@@ -163,7 +163,7 @@ impl TextField {
                     },
 
                     '\u{7f}' => {}
-        
+         // taken from char::escape_default (below)
                     '\\' | '\'' | '"' => {
                         self.text
                             .write(self.cursor.pos.row(), self.cursor.pos.col(), t);
