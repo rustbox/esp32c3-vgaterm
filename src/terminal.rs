@@ -140,7 +140,6 @@ impl TextField {
     pub fn move_cursor(&mut self, r: isize, c: isize) {
         // self.text.write(self.cursor.pos.0, self.cursor.pos.1, self.cursor.character.char());
         self.cursor.offset(r, c, &mut self.text);
-        
     }
 
     pub fn type_next(&mut self, t: char) {
@@ -156,14 +155,15 @@ impl TextField {
                         // 1. Move cursor back 1
                         // 2. Write a space over the new existing character
                         self.move_cursor(0, -1);
-                        self.text.write(self.cursor.pos.row(), self.cursor.pos.col(), ' ');
-                    },
+                        self.text
+                            .write(self.cursor.pos.row(), self.cursor.pos.col(), ' ');
+                    }
                     '\u{07}' => {
                         // Bell not impl
-                    },
+                    }
 
                     '\u{7f}' => {}
-         // taken from char::escape_default (below)
+                    // taken from char::escape_default (below)
                     '\\' | '\'' | '"' => {
                         self.text
                             .write(self.cursor.pos.row(), self.cursor.pos.col(), t);
@@ -183,11 +183,14 @@ impl TextField {
                 use Op::*;
                 match op {
                     MoveCursorAbs { x, y } => {
-                        self.move_cursor(y as isize - self.cursor.pos.row() as isize, x as isize - self.cursor.pos.col() as isize);
-                    },
+                        self.move_cursor(
+                            y as isize - self.cursor.pos.row() as isize,
+                            x as isize - self.cursor.pos.col() as isize,
+                        );
+                    }
                     MoveCursorAbsCol { x } => {
                         self.move_cursor(0, x as isize - self.cursor.pos.col() as isize);
-                    },
+                    }
                     MoveCursorDelta { dx, dy } => {
                         self.move_cursor(dy, dx);
                     }
@@ -245,12 +248,10 @@ impl TextField {
                             }
                         }
                     },
-                    TextOp(_ops) => {},
-                    InPlaceDelete => {
-                        self.text.write(self.cursor.pos.0, self.cursor.pos.1, ' ')
-                    },
-                    DecPrivateSet(_) => {},
-                    DecPrivateReset(_) => {},
+                    TextOp(_ops) => {}
+                    InPlaceDelete => self.text.write(self.cursor.pos.0, self.cursor.pos.1, ' '),
+                    DecPrivateSet(_) => {}
+                    DecPrivateReset(_) => {}
                 }
             }
         }

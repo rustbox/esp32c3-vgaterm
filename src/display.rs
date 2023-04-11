@@ -40,7 +40,6 @@ impl Display {
             *unsafe { &mut video::BUFFER[pos] } = px;
         }
     }
-
 }
 
 impl Default for Display {

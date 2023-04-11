@@ -49,7 +49,7 @@
 //! [Op(name), [Param(value)]]
 //!
 
-use alloc::{string::String, vec::Vec, borrow::ToOwned};
+use alloc::{borrow::ToOwned, string::String, vec::Vec};
 use core::{fmt::Debug, str::FromStr};
 use nom::{IResult, Parser};
 
@@ -213,7 +213,15 @@ fn cursor_to_line_col(input: &str) -> OpResult {
         dual_int_parameter_sequence::<usize>('H'),
         dual_int_parameter_sequence::<usize>('f'),
     ))(input)
-    .map(|(rest, (a, b))| (rest, Op::MoveCursorAbs { x: b.saturating_sub(1), y: a.saturating_sub(1) }))
+    .map(|(rest, (a, b))| {
+        (
+            rest,
+            Op::MoveCursorAbs {
+                x: b.saturating_sub(1),
+                y: a.saturating_sub(1),
+            },
+        )
+    })
 }
 
 /// ESC [ <n> A         => Cursor up n lines
@@ -254,8 +262,14 @@ fn cursor_beginning_up(input: &str) -> OpResult {
 
 // ESC [ <n> G         => Cursor to column n
 fn cursor_to_column(input: &str) -> OpResult {
-    optional_int_param_sequence::<usize>('G', 0)(input)
-        .map(|(rest, n)| (rest, Op::MoveCursorAbsCol { x: n.saturating_sub(1) }))
+    optional_int_param_sequence::<usize>('G', 0)(input).map(|(rest, n)| {
+        (
+            rest,
+            Op::MoveCursorAbsCol {
+                x: n.saturating_sub(1),
+            },
+        )
+    })
 }
 
 // Request Cursor Position
@@ -397,8 +411,9 @@ fn set_private_sequence(input: &str) -> OpResult {
     nom::sequence::tuple((
         nom::character::streaming::char('?'),
         nom::bytes::streaming::take_till(|c| c == 'h'),
-        nom::character::streaming::char('h')
-    ))(input).map(|(rest, (_, b, _))| (rest, Op::DecPrivateSet(b.to_owned())) )
+        nom::character::streaming::char('h'),
+    ))(input)
+    .map(|(rest, (_, b, _))| (rest, Op::DecPrivateSet(b.to_owned())))
 }
 
 /// ESC [ ? <anything> l
@@ -406,8 +421,9 @@ fn reset_private_sequence(input: &str) -> OpResult {
     nom::sequence::tuple((
         nom::character::streaming::char('?'),
         nom::bytes::streaming::take_till(|c| c == 'l'),
-        nom::character::streaming::char('l')
-    ))(input).map(|(rest, (_, b, _))| (rest, Op::DecPrivateReset(b.to_owned())) )
+        nom::character::streaming::char('l'),
+    ))(input)
+    .map(|(rest, (_, b, _))| (rest, Op::DecPrivateReset(b.to_owned())))
 }
 
 /// <text> m
@@ -450,7 +466,7 @@ fn parse(input: &str) -> OpResult {
                 request_cursor_postion,
                 set_text_mode,
                 set_private_sequence,
-                reset_private_sequence
+                reset_private_sequence,
             )),
         ),
     )))(input)
