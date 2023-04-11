@@ -102,7 +102,6 @@ impl Cursor {
 
     fn update(&mut self, text: &mut TextDisplay) {
         let now = SystemTimer::now();
-        // println!("now {}, upcoming time {}", now, self.time_to_next_blink);
         if now >= self.time_to_next_blink {
             self.time_to_next_blink = now.wrapping_add(self.blink_length);
             self.swap_highlight(text);
