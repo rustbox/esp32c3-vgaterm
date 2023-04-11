@@ -213,7 +213,7 @@ fn cursor_to_line_col(input: &str) -> OpResult {
         dual_int_parameter_sequence::<usize>('H'),
         dual_int_parameter_sequence::<usize>('f'),
     ))(input)
-    .map(|(rest, (a, b))| (rest, Op::MoveCursorAbs { x: b.saturating_sub(1) - 1, y: a.saturating_sub(1) }))
+    .map(|(rest, (a, b))| (rest, Op::MoveCursorAbs { x: b.saturating_sub(1), y: a.saturating_sub(1) }))
 }
 
 /// ESC [ <n> A         => Cursor up n lines
