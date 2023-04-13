@@ -573,11 +573,17 @@ fn parse4<'a>(input: &'a str) -> OpResult {
         nom::sequence::terminated(nom::combinator::map_res(P::recognize, P::map), tail)
     }
 
-    fn opt_param<'a, P: Params<'a>, Any>(
+    fn opt_param<'a, P: Params<'a> + Copy, Any>(
         tail: impl StrParser<'a, Any>,
         default: P,
     ) -> impl StrParser<'a, P> {
-        move |input| todo!()
+        nom::sequence::terminated(
+            nom::combinator::map_res(nom::combinator::opt(P::recognize), move |opt| match opt {
+                None => Ok(default),
+                Some(o) => P::map(o),
+            }),
+            tail,
+        )
     }
 
     use nom::branch::alt;
@@ -717,7 +723,7 @@ pub fn parse6(input: &str) -> Result<Op, String> {
             nom::combinator::success(""),
         ));
         let fin = nom::combinator::recognize(nom::character::streaming::satisfy(|ch| {
-            '\x40' < ch && ch < '\x7e'
+            ('\x40'..='\x7e').contains(&ch)
         }));
 
         let (rest, ((params, intermediate), fin)) =
@@ -792,38 +798,110 @@ pub fn parse6(input: &str) -> Result<Op, String> {
 }
 
 fn parse3(input: &str) -> OpResult {
-    use self::start_with_esc as esc;
     use nom::branch::alt;
     use nom::character::streaming::char as ch;
-    use nom::combinator::map;
+    use nom::combinator::{cut, fail};
+    use nom::sequence::terminated as term;
+
+    // can't use trait aliases in the return type, see: https://github.com/rust-lang/rust-analyzer/issues/13410
+    fn esc<'a, P: StrParser<'a, O>, O>(
+        parser: P,
+    ) -> impl nom::Parser<&'a str, O, nom::error::Error<&'a str>> {
+        nom::sequence::preceded(ch('\x1b'), parser)
+    }
+
+    // can't use trait aliases in the return type, see: https://github.com/rust-lang/rust-analyzer/issues/13410
+    fn csi<'a, P: StrParser<'a, O>, O>(
+        parser: P,
+    ) -> impl nom::Parser<&'a str, O, nom::error::Error<&'a str>> {
+        nom::sequence::preceded(
+            alt((
+                nom::combinator::recognize(ch('\u{9b}')),
+                nom::combinator::recognize(nom::bytes::streaming::tag("\x1b[")),
+            )),
+            parser,
+        )
+    }
+
+    trait Params<'a>: Sized {
+        type O;
+        type Err;
+        fn recognize(input: &'a str) -> IResult<&'a str, Self::O>;
+        fn map(o: Self::O) -> Result<Self, Self::Err>;
+    }
+    impl<'a> Params<'a> for (usize, usize) {
+        type O = (&'a str, &'a str);
+        type Err = ParseIntError;
+
+        fn recognize(input: &'a str) -> IResult<&'a str, (&'a str, &'a str)> {
+            nom::sequence::separated_pair(
+                nom::character::streaming::digit1,
+                nom::character::streaming::char(';'),
+                nom::character::streaming::digit1,
+            )(input)
+        }
+
+        fn map((a, b): (&'a str, &'a str)) -> Result<Self, ParseIntError> {
+            Ok((usize::from_str(a)?, usize::from_str(b)?))
+        }
+    }
+
+    fn param<'a, P: Params<'a>>() -> impl StrParser<'a, P> {
+        nom::combinator::map_res(P::recognize, P::map)
+    }
+
+    fn final_char<I, E: nom::error::ParseError<I>>(i: I) -> IResult<I, char, E>
+    where
+        I: nom::Slice<nom::lib::std::ops::RangeFrom<usize>> + nom::InputIter,
+        <I as nom::InputIter>::Item: nom::AsChar,
+    {
+        nom::character::streaming::satisfy(|ch| ('\x40'..='\x7e').contains(&ch)).parse(i)
+    }
+
+    fn non_final<I, E: nom::error::ParseError<I>>(i: I) -> IResult<I, I, E>
+    where
+        I: nom::Slice<nom::lib::std::ops::RangeFrom<usize>>
+            + nom::Slice<nom::lib::std::ops::RangeTo<usize>>
+            + nom::InputIter
+            + Clone
+            + nom::Offset
+            + nom::InputLength,
+        <I as nom::InputIter>::Item: nom::AsChar,
+    {
+        nom::combinator::recognize(nom::multi::many0_count(nom::character::streaming::satisfy(
+            |ch| !('\x40'..='\x7e').contains(&ch),
+        )))
+        .parse(i)
+    }
+
+    fn bail<I, O, E: nom::error::ParseError<I>>(i: I) -> IResult<I, O, E> {
+        cut(fail)(i)
+    }
 
     alt((
         alt((
-            esc(map(ch('7'), |_| Op::SaveCursorPos)),
-            esc(map(ch('8'), |_| Op::RestoreCursorPos)),
+            esc(ch('7')).map(|_| Op::SaveCursorPos),
+            esc(ch('8')).map(|_| Op::RestoreCursorPos),
         )),
-        esc(nom::sequence::preceded(
-            ch('['),
-            map(ch('H'), |_| Op::MoveCursorAbs { x: 0, y: 0 }),
-        )),
-        esc(nom::sequence::preceded(
-            ch('['),
-            map(dual_int_parameter_sequence::<usize>('H'), |(a, b)| {
+        csi(alt((alt((
+            alt((ch('H'), ch('f'))).map(|_| Op::MoveCursorAbs { x: 0, y: 0 }),
+            term(param::<(usize, usize)>(), alt((ch('H'), ch('f')))).map(|(a, b)| {
                 Op::MoveCursorAbs {
                     x: b.saturating_sub(1),
                     y: a.saturating_sub(1),
                 }
             }),
-        )),
-        esc(nom::sequence::preceded(
-            ch('['),
-            map(dual_int_parameter_sequence::<usize>('f'), |(a, b)| {
-                Op::MoveCursorAbs {
-                    x: b.saturating_sub(1),
-                    y: a.saturating_sub(1),
-                }
-            }),
-        )),
+            term(non_final, alt((ch('H'), ch('f')))).and_then(bail),
+        )),))),
+        // unknown sequence
+        nom::combinator::recognize(nom::sequence::preceded(
+            alt((
+                esc(nom::combinator::success(())),
+                csi(nom::combinator::success(())),
+            )),
+            term(non_final, final_char),
+        ))
+        .and_then(bail),
     ))(input)
 }
 
