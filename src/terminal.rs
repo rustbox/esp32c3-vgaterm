@@ -296,7 +296,7 @@ impl TextField {
             MoveCursorBeginningAndLine { dy } => {
                 self.move_cursor(dy, -(self.cursor.pos.col() as isize));
             }
-            RequstCursorPos => {}
+            RequestCursorPos => {}
             SaveCursorPos => {}
             RestoreCursorPos => {}
             EraseScreen(erase) => {

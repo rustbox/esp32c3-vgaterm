@@ -12,8 +12,8 @@
 //! ESC [ <n> F         => Cursor to beginning of prev line, n lines up
 //! ESC [ <n> G         => Cursor to column n
 //! ESC [ <n> S         => Scroll up n lines
-//! ESC [ <n> T         => SCroll down n lines
-//! ESC [ 6 n           => Request cursor postion, as `ESC [ <r> ; <c> R` at row r and column c
+//! ESC [ <n> T         => Scroll down n lines
+//! ESC [ 6 n           => Request cursor position, as `ESC [ <r> ; <c> R` at row r and column c
 //! ESC 7               => Save cursor position
 //! ESC 8               => Restore cursor position
 //! ESC [ 3 > ~         => Delete
@@ -57,7 +57,7 @@ use alloc::{
     vec,
     vec::Vec,
 };
-use core::{fmt::Debug, marker::PhantomData, num::ParseIntError, str::FromStr};
+use core::{fmt::Debug, str::FromStr};
 use esp_println::println;
 use nom::{IResult, Parser};
 
@@ -70,7 +70,7 @@ pub enum Op {
     MoveCursorAbsCol { x: usize },
     MoveCursorBeginningAndLine { dy: isize },
     Scroll { delta: isize },
-    RequstCursorPos,
+    RequestCursorPos,
     SaveCursorPos,
     RestoreCursorPos,
     EraseScreen(EraseMode),
@@ -293,9 +293,9 @@ fn scroll_down(input: &str) -> OpResult {
 
 // Request Cursor Position
 // ESC [ 6 n
-fn request_cursor_postion(input: &str) -> OpResult {
+fn request_cursor_position(input: &str) -> OpResult {
     sequence_with_ending(nom::character::streaming::char('6'), 'n')(input)
-        .map(|(rest, _)| (rest, Op::RequstCursorPos))
+        .map(|(rest, _)| (rest, Op::RequestCursorPos))
 }
 
 // ESC 7               => Save cursor position
@@ -468,190 +468,10 @@ fn set_text_mode(input: &str) -> OpResult {
     .map(|(rest, found)| (rest, Op::TextOp(found)))
 }
 
-// struct Seq<'a, 'b, P, O>(&'a [P], &'b dyn FnOnce((&'a str, &'a str)) -> O)
-// where
-//     P: StrParser<'a, O>;
-
-// fn parse2<'a>(input: &'a str) -> OpResult {
-//     let q = [
-//         Seq(&[ESC, '7'], &|(rest, _)| (rest, Op::SaveCursorPos)),
-//         Seq(&[ESC, '8'], &|(rest, _)| (rest, Op::RestoreCursorPos)),
-//         Seq(&[ESC, 'H'], &|(rest, _)| {
-//             (rest, Op::MoveCursorAbs { x: 0, y: 0 })
-//         }),
-//         Seq(&[ESC, arg::<usize>, ';', arg::<usize>, 'H'], &|(
-//             rest,
-//             _,
-//         )| {
-//             (
-//                 rest,
-//                 Op::MoveCursorAbs {
-//                     x: b.saturating_sub(1),
-//                     y: a.saturating_sub(1),
-//                 },
-//             )
-//         }),
-//     ];
-
-//     todo!()
-// }
-
-fn parse4<'a>(input: &'a str) -> OpResult {
-    use nom::Err;
-    // struct Seq<P1: 'static, P2, F>(&'static [P1], P2, F);
-    // struct Seq<F>(char, char, F)
-    // where
-    //     F: FnOnce(char) -> Op;
-
-    fn seq<'a>(s: &'a [char], f: &'a impl Fn(char) -> Op) -> impl StrParser<'a, Op> {
-        let (req, rest) = match s {
-            &[req, ref rest @ ..] if !rest.is_empty() => (req, rest),
-            _ => panic!("bad sequence, needed at least two characters (i.e. [ESC, X] for some X)"),
-        };
-
-        nom::combinator::map(Chars { req, rest }, f)
-    }
-
-    // parse! {
-    //     [ESC, ']', 'H'] => Op::MoveCursorAbs
-    //     [ESC, ']', (a,b) @ params::<(usize,usize)>, 'H'] => |a, b| Op::MoveCursorAbs
-    // }
-
-    fn seqz<'a, O>(
-        (s, p): (&'a [char], impl StrParser<'a, O>),
-        f: &'a impl Fn(O) -> Op,
-    ) -> impl StrParser<'a, Op> {
-        let (req, rest) = match s {
-            &[req, ref rest @ ..] if !rest.is_empty() => (req, rest),
-            _ => panic!("bad sequence, needed at least two characters (i.e. [ESC, X] for some X)"),
-        };
-
-        nom::sequence::preceded(Chars { req, rest }, nom::combinator::map(p, f))
-    }
-
-    struct Chars<'a> {
-        req: char,
-        rest: &'a [char],
-    }
-    impl<'a> nom::Parser<&'a str, char, nom::error::Error<&'a str>> for Chars<'a> {
-        fn parse(&mut self, input: &'a str) -> IResult<&'a str, char, nom::error::Error<&'a str>> {
-            let (input, ch) =
-                nom::combinator::cut(nom::character::streaming::char(self.req))(input)?;
-            self.rest.iter().try_fold((input, ch), |(input, _), &ch| {
-                nom::character::streaming::char(ch)(input)
-            })
-        }
-    }
-
-    trait Params<'a>: Sized {
-        type O;
-        type Err;
-        fn recognize(input: &'a str) -> IResult<&'a str, Self::O>;
-        fn map(o: Self::O) -> Result<Self, Self::Err>;
-    }
-    impl<'a> Params<'a> for (usize, usize) {
-        type O = (&'a str, &'a str);
-        type Err = ParseIntError;
-
-        fn recognize(input: &'a str) -> IResult<&'a str, (&'a str, &'a str)> {
-            nom::sequence::separated_pair(
-                nom::character::streaming::digit1,
-                nom::character::streaming::char(';'),
-                nom::character::streaming::digit1,
-            )(input)
-        }
-
-        fn map((a, b): (&'a str, &'a str)) -> Result<Self, ParseIntError> {
-            Ok((usize::from_str(a)?, usize::from_str(b)?))
-        }
-    }
-    // impl<'a> Params<'a> for isize {
-
-    // }
-
-    fn param<'a, P: Params<'a>, Any>(tail: impl StrParser<'a, Any>) -> impl StrParser<'a, P> {
-        nom::sequence::terminated(nom::combinator::map_res(P::recognize, P::map), tail)
-    }
-
-    fn opt_param<'a, P: Params<'a> + Copy, Any>(
-        tail: impl StrParser<'a, Any>,
-        default: P,
-    ) -> impl StrParser<'a, P> {
-        nom::sequence::terminated(
-            nom::combinator::map_res(nom::combinator::opt(P::recognize), move |opt| match opt {
-                None => Ok(default),
-                Some(o) => P::map(o),
-            }),
-            tail,
-        )
-    }
-
-    use nom::branch::alt;
-    use nom::character::streaming::char as ch;
-
-    // enum Foo {
-    //     Ch(char),
-    //     P(StrParser)
-    // }
-    // TODO: how to make this transparent again to the optimizer?
-    for opt in [
-        &mut seq(&[ESC, '7'], &|_| Op::SaveCursorPos),
-        &mut seq(&[ESC, '8'], &|_| Op::RestoreCursorPos),
-        &mut seq(&[ESC, '[', 'H'], &|_| Op::MoveCursorAbs { x: 0, y: 0 }),
-        &mut seqz(
-            (
-                &[ESC, '['],
-                param::<(usize, usize), _>(alt((ch('H'), ch('f')))),
-            ),
-            &|(a, b)| Op::MoveCursorAbs {
-                x: b.saturating_sub(1),
-                y: a.saturating_sub(1),
-            },
-        ),
-    ] as [&mut dyn StrParser<'a, Op>; 4]
-    {
-        let res = opt.parse(input);
-        if let Err(Err::Error(_)) = res {
-            continue;
-        }
-        return res;
-    }
-
-    Err(nom::Err::Incomplete(nom::Needed::Unknown))
-}
-
-// fn parse7(input: &str) -> OpResult {
-//     static SEQUENCES = [
-//         "ESC [ <n> ; <n> ? H",
-//     ];
-
-//     fn make_parser(seq: &[&str]) -> impl FnMut() -> GenericSequence {
-
-//     }
-
-//     // SEQUENCES
-// }
-
-pub fn parse6(input: &str) -> Result<Op, String> {
-    // ESC [ <n>;<n>? H
-
-    // "ESC 7" -> Op::SaveCursorPos,
-    // "ESC 8"
-    // "ESC [ <n>;<n>? H" -> ([])
-
-    // generic parser:
-    // s => ESC [ `[4, 6]` H
-    // enum GenSeq<'a> {
-    //     Lit(char)
-    //     Param()
-    // }
-    // let foo = [""; 6];
-
-    // let gen_parse = |input| start_with_esc(nom::multi::fold_many_m_n(0, 6, parse, init, fold));
-
-    fn gen_parse<'a, 'str, const M: usize>(
+pub fn parse6(input: &str) -> OpResult {
+    fn gen_parse<'a, 'str>(
         input: &'str str,
-        q: &'a mut [&'str str; M],
+        q: &'a mut [&'str str; 4],
     ) -> IResult<&'str str, &'a [&'str str]> {
         let (input, start) = nom::combinator::cut(nom::combinator::recognize(
             nom::character::streaming::one_of("\u{1b}\u{9b}"),
@@ -736,57 +556,63 @@ pub fn parse6(input: &str) -> Result<Op, String> {
         Ok((rest, &q[..=3]))
     }
 
-    // TODO: other kinds of non-digit-y things?
-    fn sep<'a, 'str, const M: usize>(
-        input: &'str str,
-        q: &'a mut [&'str str; M],
-    ) -> Result<&'a [&'str str], nom::Err<nom::error::Error<&'str str>>> {
+    trait Params<'a>: Sized {
+        fn parse(input: &'a str) -> IResult<&'a str, Self>;
+    }
+    impl<'a> Params<'a> for usize {
+        fn parse(input: &'a str) -> IResult<&'a str, Self> {
+            nom::combinator::map_res(nom::character::streaming::digit1, usize::from_str)
+                .parse(input)
+        }
+    }
+
+    /// kind of like [nom::multi::fill], but for up to N repeats rather than exactly N
+    fn param<'s, 'p, P: Params<'s>, const N: usize>(
+        input: &'s str,
+        params: &'p mut [P; N],
+    ) -> Result<&'p [P], nom::Err<nom::error::Error<&'s str>>> {
         let (_, i) = nom::combinator::all_consuming(nom::multi::fold_many_m_n(
             0,
-            M,
+            N,
             nom::sequence::terminated(
-                nom::bytes::complete::take_while1(nom::AsChar::is_dec_digit),
+                P::parse,
                 // TODO: this is wrong: it's not optional, unless it's in the last position
                 nom::combinator::opt(nom::character::complete::char(';')),
             ),
             || 0,
             |i, p| {
-                q[i] = p;
+                params[i] = p;
                 i + 1
             },
         ))
         .parse(input)?;
 
-        Ok(&q[..i])
+        Ok(&params[..i])
     }
 
     const ESC: &str = "\u{1b}";
     const CSI: &str = "\u{9b}";
 
-    let z = match *gen_parse(input, &mut [""; 4])
-        .map_err(|e| alloc::format!("{:?}", e))?
-        .1
-    {
+    let mut seq = [""; 4];
+    let (rest, seq) = gen_parse(input, &mut seq)?;
+
+    let op = match *seq {
         [ESC, "7"] => Op::SaveCursorPos,
         [ESC, "8"] => Op::RestoreCursorPos,
 
         [CSI, params, "", "H"] | [CSI, params, "", "f"] => {
-            esp_println::println!("{params:?}");
-            match *sep(params, &mut [""; 2]).map_err(|e| alloc::format!("{:?}", e))? {
+            match *param(params, &mut [usize::default(); 2])? {
                 [] => Op::MoveCursorAbs { x: 0, y: 0 },
                 [a, b] => Op::MoveCursorAbs {
-                    x: usize::from_str(b)
-                        .map_err(|e| alloc::format!("{:?}", e))?
-                        .saturating_sub(1),
-                    y: usize::from_str(a)
-                        .map_err(|e| alloc::format!("{:?}", e))?
-                        .saturating_sub(1),
+                    x: b.saturating_sub(1),
+                    y: a.saturating_sub(1),
                 },
                 _ => {
-                    return Err(alloc::format!(
-                        "Bad number of params got {:?} wanted 0 or 2",
-                        params
-                    ))
+                    todo!("return Err(Failure(..)) with appropriate context")
+                    // return Err(alloc::format!(
+                    //     "Bad number of params got {:?} wanted 0 or 2",
+                    //     params
+                    // ))
                 }
             }
         }
@@ -794,536 +620,7 @@ pub fn parse6(input: &str) -> Result<Op, String> {
         _ => todo!(),
     };
 
-    Ok(z)
-}
-
-fn parse3(input: &str) -> OpResult {
-    use nom::branch::alt;
-    use nom::character::streaming::char as ch;
-    use nom::combinator::{cut, fail};
-    use nom::sequence::terminated as term;
-
-    // can't use trait aliases in the return type, see: https://github.com/rust-lang/rust-analyzer/issues/13410
-    fn esc<'a, P: StrParser<'a, O>, O>(
-        parser: P,
-    ) -> impl nom::Parser<&'a str, O, nom::error::Error<&'a str>> {
-        nom::sequence::preceded(ch('\x1b'), parser)
-    }
-
-    // can't use trait aliases in the return type, see: https://github.com/rust-lang/rust-analyzer/issues/13410
-    fn csi<'a, P: StrParser<'a, O>, O>(
-        parser: P,
-    ) -> impl nom::Parser<&'a str, O, nom::error::Error<&'a str>> {
-        nom::sequence::preceded(
-            alt((
-                nom::combinator::recognize(ch('\u{9b}')),
-                nom::combinator::recognize(nom::bytes::streaming::tag("\x1b[")),
-            )),
-            parser,
-        )
-    }
-
-    trait Params<'a>: Sized {
-        type O;
-        type Err;
-        fn recognize(input: &'a str) -> IResult<&'a str, Self::O>;
-        fn map(o: Self::O) -> Result<Self, Self::Err>;
-    }
-    impl<'a> Params<'a> for (usize, usize) {
-        type O = (&'a str, &'a str);
-        type Err = ParseIntError;
-
-        fn recognize(input: &'a str) -> IResult<&'a str, (&'a str, &'a str)> {
-            nom::sequence::separated_pair(
-                nom::character::streaming::digit1,
-                nom::character::streaming::char(';'),
-                nom::character::streaming::digit1,
-            )(input)
-        }
-
-        fn map((a, b): (&'a str, &'a str)) -> Result<Self, ParseIntError> {
-            Ok((usize::from_str(a)?, usize::from_str(b)?))
-        }
-    }
-
-    fn param<'a, P: Params<'a>>() -> impl StrParser<'a, P> {
-        nom::combinator::map_res(P::recognize, P::map)
-    }
-
-    fn final_char<I, E: nom::error::ParseError<I>>(i: I) -> IResult<I, char, E>
-    where
-        I: nom::Slice<nom::lib::std::ops::RangeFrom<usize>> + nom::InputIter,
-        <I as nom::InputIter>::Item: nom::AsChar,
-    {
-        nom::character::streaming::satisfy(|ch| ('\x40'..='\x7e').contains(&ch)).parse(i)
-    }
-
-    fn non_final<I, E: nom::error::ParseError<I>>(i: I) -> IResult<I, I, E>
-    where
-        I: nom::Slice<nom::lib::std::ops::RangeFrom<usize>>
-            + nom::Slice<nom::lib::std::ops::RangeTo<usize>>
-            + nom::InputIter
-            + Clone
-            + nom::Offset
-            + nom::InputLength,
-        <I as nom::InputIter>::Item: nom::AsChar,
-    {
-        nom::combinator::recognize(nom::multi::many0_count(nom::character::streaming::satisfy(
-            |ch| !('\x40'..='\x7e').contains(&ch),
-        )))
-        .parse(i)
-    }
-
-    fn bail<I, O, E: nom::error::ParseError<I>>(i: I) -> IResult<I, O, E> {
-        cut(fail)(i)
-    }
-
-    alt((
-        alt((
-            esc(ch('7')).map(|_| Op::SaveCursorPos),
-            esc(ch('8')).map(|_| Op::RestoreCursorPos),
-        )),
-        csi(alt((alt((
-            alt((ch('H'), ch('f'))).map(|_| Op::MoveCursorAbs { x: 0, y: 0 }),
-            term(param::<(usize, usize)>(), alt((ch('H'), ch('f')))).map(|(a, b)| {
-                Op::MoveCursorAbs {
-                    x: b.saturating_sub(1),
-                    y: a.saturating_sub(1),
-                }
-            }),
-            term(non_final, alt((ch('H'), ch('f')))).and_then(bail),
-        )),))),
-        // unknown sequence
-        nom::combinator::recognize(nom::sequence::preceded(
-            alt((
-                esc(nom::combinator::success(())),
-                csi(nom::combinator::success(())),
-            )),
-            term(non_final, final_char),
-        ))
-        .and_then(bail),
-    ))(input)
-}
-
-fn parse_all<'a>(input: &'a str) -> OpResult {
-    {
-        let mut parser = nom::branch::alt((
-            |input| {
-                nom::bytes::streaming::tag("\u{1B}7")(input)
-                    .map(|(rest, _)| (rest, Op::SaveCursorPos))
-            },
-            |input| {
-                nom::bytes::streaming::tag("\u{1B}8")(input)
-                    .map(|(rest, _)| (rest, Op::RestoreCursorPos))
-            },
-            {
-                let mut parser = nom::branch::alt((
-                    |input| {
-                        nom::character::streaming::char('H')(input)
-                            .map(|(rest, _)| (rest, Op::MoveCursorAbs { x: 0, y: 0 }))
-                    },
-                    move |input| {
-                        nom::branch::alt((
-                            move |input: &'a str| {
-                                let params = nom::sequence::separated_pair(
-                                    nom::character::streaming::digit1,
-                                    nom::character::streaming::char(';'),
-                                    nom::character::streaming::digit1,
-                                );
-                                {
-                                    let mut parser = params;
-                                    move |input: &'a str| {
-                                        nom::sequence::terminated(
-                                            |x: &'a str| parser.parse(x),
-                                            nom::character::streaming::char('H'),
-                                        )(input)
-                                    }
-                                }
-                                .parse(input)
-                                .map(move |(rest, (a, b))| {
-                                    (
-                                        rest,
-                                        (
-                                            <usize>::from_str(a).unwrap(),
-                                            <usize>::from_str(b).unwrap(),
-                                        ),
-                                    )
-                                })
-                            },
-                            move |input: &'a str| {
-                                let params = nom::sequence::separated_pair(
-                                    nom::character::streaming::digit1,
-                                    nom::character::streaming::char(';'),
-                                    nom::character::streaming::digit1,
-                                );
-                                {
-                                    let mut parser = params;
-                                    move |input: &'a str| {
-                                        nom::sequence::terminated(
-                                            |x: &'a str| parser.parse(x),
-                                            nom::character::streaming::char('f'),
-                                        )(input)
-                                    }
-                                }
-                                .parse(input)
-                                .map(|(rest, (a, b))| {
-                                    (
-                                        rest,
-                                        (
-                                            <usize>::from_str(a).unwrap(),
-                                            <usize>::from_str(b).unwrap(),
-                                        ),
-                                    )
-                                })
-                            },
-                        ))
-                        .parse(input)
-                        .map(|(rest, (a, b))| {
-                            (
-                                rest,
-                                Op::MoveCursorAbs {
-                                    x: b.saturating_sub(1),
-                                    y: a.saturating_sub(1),
-                                },
-                            )
-                        })
-                    },
-                    |input| {
-                        {
-                            move |input: &'a str| {
-                                {
-                                    {
-                                        let mut parser =
-                                            nom::combinator::opt(nom::character::streaming::digit1);
-                                        move |input: &'a str| {
-                                            nom::sequence::terminated(
-                                                |x: &'a str| parser.parse(x),
-                                                nom::character::streaming::char('A'),
-                                            )
-                                            .parse(input)
-                                        }
-                                    }
-                                    .parse(input)
-                                    .map(|(rest, n)| {
-                                        (
-                                            rest,
-                                            match n {
-                                                None => 1,
-                                                Some(n) => <isize>::from_str(n).unwrap(),
-                                            },
-                                        )
-                                    })
-                                }
-                                .map(|(rest, n)| (rest, Op::MoveCursorDelta { dx: 0, dy: -n }))
-                            }
-                        }
-                        .parse(input)
-                    },
-                    |input| {
-                        {
-                            move |input: &'a str| {
-                                {
-                                    {
-                                        let mut parser =
-                                            nom::combinator::opt(nom::character::streaming::digit1);
-                                        move |input: &'a str| {
-                                            nom::sequence::terminated(
-                                                |x: &'a str| parser.parse(x),
-                                                nom::character::streaming::char('B'),
-                                            )(input)
-                                        }
-                                    }
-                                    .parse(input)
-                                    .map(|(rest, n)| {
-                                        (
-                                            rest,
-                                            match n {
-                                                None => 1,
-                                                Some(n) => <isize>::from_str(n).unwrap(),
-                                            },
-                                        )
-                                    })
-                                }
-                                .map(|(rest, n)| (rest, Op::MoveCursorDelta { dx: 0, dy: n }))
-                            }
-                        }
-                        .parse(input)
-                    },
-                    |input| {
-                        {
-                            move |input: &'a str| {
-                                {
-                                    sequence_with_ending(
-                                        nom::combinator::opt(nom::character::streaming::digit1),
-                                        'D',
-                                    )
-                                    .parse(input)
-                                    .map(|(rest, n)| {
-                                        (
-                                            rest,
-                                            match n {
-                                                None => 1,
-                                                Some(n) => <isize>::from_str(n).unwrap(),
-                                            },
-                                        )
-                                    })
-                                }
-                                .map(|(rest, n)| (rest, Op::MoveCursorDelta { dx: -n, dy: 0 }))
-                            }
-                        }
-                        .parse(input)
-                    },
-                    |input| {
-                        {
-                            move |input: &'a str| {
-                                {
-                                    {
-                                        let mut parser =
-                                            nom::combinator::opt(nom::character::streaming::digit1);
-                                        move |input: &'a str| {
-                                            nom::sequence::terminated(
-                                                |x: &'a str| parser.parse(x),
-                                                nom::character::streaming::char('C'),
-                                            )
-                                            .parse(input)
-                                        }
-                                    }
-                                    .parse(input)
-                                    .map(|(rest, n)| {
-                                        (
-                                            rest,
-                                            match n {
-                                                None => 1,
-                                                Some(n) => <isize>::from_str(n).unwrap(),
-                                            },
-                                        )
-                                    })
-                                }
-                                .map(|(rest, n)| (rest, Op::MoveCursorDelta { dx: n, dy: 0 }))
-                            }
-                        }
-                        .parse(input)
-                    },
-                    |input| {
-                        {
-                            move |input: &'a str| {
-                                {
-                                    sequence_with_ending(
-                                        nom::combinator::opt(nom::character::streaming::digit1),
-                                        'G',
-                                    )
-                                    .parse(input)
-                                    .map(|(rest, n)| {
-                                        (
-                                            rest,
-                                            match n {
-                                                None => 0,
-                                                Some(n) => <usize>::from_str(n).unwrap(),
-                                            },
-                                        )
-                                    })
-                                }
-                                .map(|(rest, n)| {
-                                    (
-                                        rest,
-                                        Op::MoveCursorAbsCol {
-                                            x: n.saturating_sub(1),
-                                        },
-                                    )
-                                })
-                            }
-                        }
-                        .parse(input)
-                    },
-                    |input| {
-                        {
-                            move |input: &'a str| {
-                                {
-                                    {
-                                        sequence_with_ending(
-                                            nom::combinator::opt(nom::character::streaming::digit1),
-                                            'E',
-                                        )
-                                        .parse(input)
-                                        .map(
-                                            |(rest, n)| {
-                                                (
-                                                    rest,
-                                                    match n {
-                                                        None => 1,
-                                                        Some(n) => <isize>::from_str(n).unwrap(),
-                                                    },
-                                                )
-                                            },
-                                        )
-                                    }
-                                    .map(|(rest, n)| {
-                                        (rest, Op::MoveCursorBeginningAndLine { dy: n })
-                                    })
-                                }
-                            }
-                        }
-                        .parse(input)
-                    },
-                    |input| {
-                        {
-                            move |input: &'a str| {
-                                {
-                                    {
-                                        let mut parser =
-                                            nom::combinator::opt(nom::character::streaming::digit1);
-                                        move |input: &'a str| {
-                                            nom::sequence::terminated(
-                                                |x: &'a str| parser.parse(x),
-                                                nom::character::streaming::char('F'),
-                                            )
-                                            .parse(input)
-                                        }
-                                    }
-                                    .parse(input)
-                                    .map(|(rest, n)| {
-                                        (
-                                            rest,
-                                            match n {
-                                                None => 1,
-                                                Some(n) => <isize>::from_str(n).unwrap(),
-                                            },
-                                        )
-                                    })
-                                }
-                                .map(|(rest, n)| (rest, Op::MoveCursorBeginningAndLine { dy: -n }))
-                            }
-                        }
-                        .parse(input)
-                    },
-                    |input| {
-                        nom::bytes::streaming::tag("3~")
-                            .parse(input)
-                            .map(|(rest, _)| (rest, Op::InPlaceDelete))
-                    },
-                    |input| {
-                        {
-                            let mut parser =
-                                nom::combinator::opt(nom::character::streaming::one_of("012"));
-                            move |input: &'a str| {
-                                nom::sequence::terminated(
-                                    |x: &'a str| parser.parse(x),
-                                    nom::character::streaming::char('J'),
-                                )
-                                .parse(input)
-                            }
-                        }
-                        .parse(input)
-                        .map(|(rest, arg)| {
-                            (
-                                rest,
-                                match arg {
-                                    None => Op::EraseScreen(EraseMode::FromCursor),
-                                    Some('0') => Op::EraseScreen(EraseMode::FromCursor),
-                                    Some('1') => Op::EraseScreen(EraseMode::ToCursor),
-                                    Some('2') => Op::EraseScreen(EraseMode::All),
-                                    Some(_) => unreachable!(),
-                                },
-                            )
-                        })
-                    },
-                    |input| {
-                        {
-                            let mut parser =
-                                nom::combinator::opt(nom::character::streaming::one_of("012"));
-                            move |input: &'a str| {
-                                nom::sequence::terminated(
-                                    |x: &'a str| parser.parse(x),
-                                    nom::character::streaming::char('K'),
-                                )
-                                .parse(input)
-                            }
-                        }
-                        .parse(input)
-                        .map(|(rest, arg)| {
-                            (
-                                rest,
-                                match arg {
-                                    None => Op::EraseLine(EraseMode::FromCursor),
-                                    Some('0') => Op::EraseLine(EraseMode::FromCursor),
-                                    Some('1') => Op::EraseLine(EraseMode::ToCursor),
-                                    Some('2') => Op::EraseLine(EraseMode::All),
-                                    Some(_) => unreachable!(),
-                                },
-                            )
-                        })
-                    },
-                    |input| {
-                        {
-                            let mut parser = nom::character::streaming::char('6');
-                            move |input: &'a str| {
-                                nom::sequence::terminated(
-                                    |x: &'a str| parser.parse(x),
-                                    nom::character::streaming::char('n'),
-                                )
-                                .parse(input)
-                            }
-                        }
-                        .parse(input)
-                        .map(|(rest, _)| (rest, Op::RequstCursorPos))
-                    },
-                    |input| {
-                        nom::sequence::terminated(
-                            nom::multi::separated_list0(
-                                nom::character::streaming::char(';'),
-                                nom::branch::alt((
-                                    set_basic_color_atom,
-                                    set_bg_256_color_atom,
-                                    set_fg_256_color_atom,
-                                    set_text_mode_atom,
-                                )),
-                            ),
-                            nom::character::streaming::char('m'),
-                        )
-                        .parse(input)
-                        .map(|(rest, found)| (rest, Op::TextOp(found)))
-                    },
-                    |input: &'a str| {
-                        nom::sequence::tuple((
-                            nom::character::streaming::char('?'),
-                            nom::character::streaming::digit0,
-                            nom::character::streaming::char('h'),
-                        ))
-                        .parse(input)
-                        .map(|(rest, (_, b, _))| (rest, Op::DecPrivateSet(b.to_owned())))
-                    },
-                    |input: &'a str| {
-                        nom::sequence::tuple((
-                            nom::character::streaming::char('?'),
-                            nom::character::streaming::digit0,
-                            nom::character::streaming::char('l'),
-                        ))
-                        .parse(input)
-                        .map(|(rest, (_, b, _))| (rest, Op::DecPrivateReset(b.to_owned())))
-                    },
-                ));
-                move |input: &'a str| {
-                    nom::sequence::preceded(nom::character::streaming::char('['), |x: &'a str| {
-                        parser.parse(x)
-                    })
-                    .parse(input)
-                }
-            },
-        ));
-        move |input: &'a str| {
-            {
-                let mut parser = nom::combinator::cut(|x: &'a str| parser.parse(x));
-                move |input: &'a str| {
-                    nom::sequence::preceded(nom::character::streaming::char(ESC), |x: &'a str| {
-                        parser.parse(x)
-                    })
-                    .parse(input)
-                }
-            }
-            .parse(input)
-        }
-    }
-    .parse(input)
+    Ok((rest, op))
 }
 
 fn parse(input: &str) -> OpResult {
@@ -1348,7 +645,7 @@ fn parse(input: &str) -> OpResult {
                 delete,
                 erase_screen,
                 erase_line,
-                request_cursor_postion,
+                request_cursor_position,
                 set_text_mode,
                 set_private_sequence,
                 reset_private_sequence,
