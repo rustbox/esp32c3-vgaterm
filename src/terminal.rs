@@ -77,12 +77,12 @@ impl Cursor {
         if pos != self.pos {
             self.unset_highlight(text);
             let cursor = Cursor {
-                pos, 
+                pos,
                 time_to_next_blink: SystemTimer::now().wrapping_add(self.blink_length),
                 blink_length: self.blink_length,
             };
             cursor.set_highlight(text);
-            return cursor
+            return cursor;
         }
         *self
     }
@@ -114,7 +114,7 @@ impl Cursor {
                 pos: self.pos,
                 blink_length: self.blink_length,
                 time_to_next_blink,
-            }
+            };
         }
         *self
     }
@@ -155,7 +155,7 @@ impl TextField {
         self.input_buffer.push_str(s);
         let res = ansi::parse_esc_str(self.input_buffer.as_str());
         let len = res.rest.len();
-        
+
         // At the end buffer should have only the contents of res.rest
         for op in res.opstr {
             match op {

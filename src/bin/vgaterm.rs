@@ -9,10 +9,10 @@ use esp32c3_hal::clock::{ClockControl, CpuClock};
 use esp32c3_hal::prelude::*;
 use esp32c3_hal::timer::TimerGroup;
 use esp32c3_hal::{gpio::IO, peripherals::Peripherals, Rtc};
-use esp_println::println;
-use vgaterm::{Delay, usb_keyboard::US_ENGLISH, Work, interrupt::Priority};
-use vgaterm::{self, video};
 use esp_backtrace as _;
+use esp_println::println;
+use vgaterm::{self, video};
+use vgaterm::{interrupt::Priority, usb_keyboard::US_ENGLISH, Delay, Work};
 
 use core::{arch::asm, fmt::Write};
 
@@ -78,15 +78,17 @@ fn main() -> ! {
     vgaterm::uart::interrupt_enable0(Priority::Priority6);
     vgaterm::gpio::interrupt_enable(Priority::max());
 
-    
     unsafe {
         riscv::interrupt::enable();
     }
 
     vgaterm::timer::start_repeat_timer0_callback(1_000_000, || unsafe {
         if NUM_BYTES > 0 {
-            println!("{} bytes",  NUM_BYTES );
-            println!("{} draw cycles per byte", vgaterm::CHARACTER_DRAW_CYCLES as f32 / NUM_BYTES as f32);
+            println!("{} bytes", NUM_BYTES);
+            println!(
+                "{} draw cycles per byte",
+                vgaterm::CHARACTER_DRAW_CYCLES as f32 / NUM_BYTES as f32
+            );
             NUM_BYTES = 0;
         }
         vgaterm::CHARACTER_DRAW_CYCLES = 0;
@@ -175,7 +177,9 @@ fn main() -> ! {
             while let Ok(r) = serial0.read() {
                 b.push(r);
             }
-            unsafe { NUM_BYTES += b.len(); }
+            unsafe {
+                NUM_BYTES += b.len();
+            }
             String::from_utf8(b).unwrap()
         };
 
@@ -187,15 +191,14 @@ fn main() -> ! {
                 match mode {
                     ConnectMode::ConnectHost => {
                         let _ = serial0.write_str(c);
-                    },
+                    }
                     ConnectMode::LocalEcho => {
                         terminal.type_str(c);
-                    },
-                    ConnectMode::None => { }
+                    }
+                    ConnectMode::None => {}
                 };
-               
-            },
-            Work::WouldBlock => {},
+            }
+            Work::WouldBlock => {}
             Work::WouldBlockUntil(_) => {}
         }
 
@@ -204,7 +207,7 @@ fn main() -> ! {
         // Flush the Display to the BUFFER
         display.flush();
 
-        if !keyvents.is_empty(){
+        if !keyvents.is_empty() {
             println!("{:?}", keyvents);
             continue;
         }

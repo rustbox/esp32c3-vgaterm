@@ -87,7 +87,6 @@ fn main() -> ! {
         riscv::interrupt::enable();
     }
 
-
     let r = ansi::parse_esc_str("abcd\u{1B}[XYZ\u{1B}[");
     println!("{:?}", r);
 

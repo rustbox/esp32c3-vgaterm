@@ -34,7 +34,6 @@ use core::arch::asm;
 
 pub static mut CHARACTER_DRAW_CYCLES: usize = 0;
 
-
 pub enum Work<T> {
     Item(T), // implicilty: awaken immediately
 

@@ -60,17 +60,11 @@ pub fn configure1(
 }
 
 pub fn make_uart0<'a>(uart: UART0) -> Uart<'a, UART0> {
-    uart.flow_conf.write(|w| {
-        w.sw_flow_con_en().set_bit()
-    });
-    uart.swfc_conf0.write(|w| {
-        w.xoff_threshold().variant(64)
-        .xoff_char().variant(0x13)
-    });
-    uart.swfc_conf1.write(|w| {
-        w.xon_threshold().variant(64)
-        .xon_char().variant(0x11)
-    });
+    uart.flow_conf.write(|w| w.sw_flow_con_en().set_bit());
+    uart.swfc_conf0
+        .write(|w| w.xoff_threshold().variant(64).xoff_char().variant(0x13));
+    uart.swfc_conf1
+        .write(|w| w.xon_threshold().variant(64).xon_char().variant(0x11));
     let serial0: Uart<UART0> = Uart::new(uart);
 
     serial0
@@ -202,7 +196,11 @@ fn UART0() {
             }
         }
         // Reset the "fifo full" interrupt
-        unsafe { (*UART0::PTR).int_clr.write(|w| w.rxfifo_full_int_clr().set_bit()) }
+        unsafe {
+            (*UART0::PTR)
+                .int_clr
+                .write(|w| w.rxfifo_full_int_clr().set_bit())
+        }
     });
 }
 
