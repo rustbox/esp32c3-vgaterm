@@ -7,11 +7,21 @@ use core::{arch::asm, num::NonZeroUsize};
 ///
 /// Page 28, https://www.espressif.com/sites/default/files/documentation/esp32-c3_technical_reference_manual_en.pdf
 #[no_mangle]
+#[inline]
 pub fn configure_counter_for_cpu_cycles() {
     unsafe {
         // Set count event to clock cycles
         // Enable counting events and set overflow to rollover
         asm!("csrwi 0x7E0, 0x1", "csrwi 0x7E1, 0x1");
+    }
+}
+
+#[no_mangle]
+#[inline]
+pub fn pause_event_counter() {
+    unsafe {
+        // Disable counting events
+        asm!("csrwi 0x7E1, 0x0");
     }
 }
 
@@ -145,9 +155,9 @@ impl Measure {
             let _ = last_diff;
             let _ = name;
 
-            esp_println::println!(
-                "perf: {name:>12}: {accum:>15} / {ticks} ≈ {avg:15.4} (vs. baseline: {base_diff:+12.3} last: {last_diff:+12.3})"
-            );
+            // esp_println::println!(
+            //     "perf: {name:>12}: {accum:>15} / {ticks} ≈ {avg:15.4} (vs. baseline: {base_diff:+12.3} last: {last_diff:+12.3})"
+            // );
         }
     }
 }

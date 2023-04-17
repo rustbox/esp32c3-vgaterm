@@ -15,12 +15,13 @@
 extern crate alloc;
 
 use critical_section::Mutex;
-use esp32c3_hal::clock::Clocks;
+use esp32c3_hal::{clock::Clocks, peripherals::SYSTIMER, systimer::{Alarm, Target}};
 use esp32c3_hal::peripherals::{self, TIMG0};
 use esp32c3_hal::systimer::SystemTimer;
 use esp32c3_hal::timer::{Timer0, TimerGroup};
 use esp32c3_hal::{interrupt, interrupt::Priority};
 use esp32c3_hal::{prelude::*, timer::Timer};
+use esp_println::print;
 use fugit::HertzU64;
 
 use alloc::boxed::Box;
@@ -29,6 +30,8 @@ use core::cell::RefCell;
 static TIMER0: Mutex<RefCell<Option<Timer<Timer0<TIMG0>>>>> = Mutex::new(RefCell::new(None));
 static mut TIMER0_CALLBACK: Option<Box<dyn FnMut()>> = None;
 static mut DELAY: Option<Delay> = None;
+
+static mut SYSTIMER: Option<SystemTimer> = None;
 
 /// Uses the `SYSTIMER` peripheral for counting clock cycles, as
 /// unfortunately the ESP32-C3 does NOT implement the `mcycle` CSR, which is
@@ -97,14 +100,6 @@ pub fn delay(us: u64) {
     }
 }
 
-/// Current time in microseconds
-// pub fn now() -> u64 {
-//     unsafe {
-//         if let Some(delay) = DELAY {
-//             delay.
-//         }
-//     }
-// }
 
 // Would fugit::TimerInstant be useful ? It's not obvious how to convert bases
 pub type TimerInstant = u64; // micros
@@ -130,6 +125,42 @@ pub fn wait_until(deadline: u64) {
         match DELAY {
             Some(delay) => delay.wait_until(deadline),
             None => while SystemTimer::now() <= deadline {},
+        }
+    }
+}
+
+const TICKS_PER_US: u64 = SystemTimer::TICKS_PER_SECOND / 1_000_000;
+
+pub fn configure_systimer(systimer: SYSTIMER) {
+    unsafe {
+        SYSTIMER.replace(SystemTimer::new(systimer));
+    }
+}
+
+pub fn enable_alarm_interrupts(priority: Priority) {
+    interrupt::enable(peripherals::Interrupt::SYSTIMER_TARGET0, priority).unwrap();
+    unsafe {
+        if let Some(systimer) = &SYSTIMER {
+            systimer.alarm0.interrupt_enable(true);
+        }
+    }
+}
+
+pub fn set_alarm0(us: u64) {
+    unsafe {
+        if let Some(systimer) = &SYSTIMER {
+            print!("a");
+            systimer.alarm0.set_target(TICKS_PER_US * us);
+        }
+    }
+}
+
+pub fn clear_alarm0() {
+    unsafe {
+        if let Some(systimer) = &SYSTIMER {
+            systimer.alarm0.clear_interrupt();
+            print!("x");
+            // systimer.alarm0.interrupt_enable(false);
         }
     }
 }
@@ -204,6 +235,7 @@ pub fn clear_timer0() {
     }) // println!("+")
 }
 
+#[link_section = ".rwtext"]
 #[interrupt]
 fn TG0_T0_LEVEL() {
     // println!("timer 0 interrupt!");

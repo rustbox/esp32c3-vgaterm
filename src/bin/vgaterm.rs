@@ -77,29 +77,28 @@ fn main() -> ! {
     perf::configure_counter_for_cpu_cycles();
 
     vgaterm::configure_timer0(peripherals.TIMG0, &clocks);
+    vgaterm::timer::configure_systimer(peripherals.SYSTIMER);
     // let mut host_recv = vgaterm::uart::configure0(peripherals.UART0);
     let mut serial0 = vgaterm::uart::make_uart0(peripherals.UART0);
     serial0.set_rx_fifo_full_threshold(1);
     serial0.listen_rx_fifo_full();
-    vgaterm::enable_timer0_interrupt(Priority::Priority5);
+    vgaterm::enable_timer0_interrupt(Priority::Priority14);
     vgaterm::uart::interrupt_enable0(Priority::Priority6);
+    // vgaterm::timer::enable_alarm_interrupts(Priority::Priority14);
     vgaterm::gpio::interrupt_enable(Priority::max());
 
     unsafe {
         riscv::interrupt::enable();
     }
 
-    vgaterm::timer::start_repeat_timer0_callback(1_000_000, || unsafe {
-        if NUM_BYTES > 0 {
-            println!("{} bytes", NUM_BYTES);
-            println!(
-                "{} draw cycles per byte",
-                vgaterm::CHARACTER_DRAW_CYCLES as f32 / NUM_BYTES as f32
-            );
-            NUM_BYTES = 0;
-        }
-        vgaterm::CHARACTER_DRAW_CYCLES = 0;
-    });
+    // vgaterm::timer::start_repeat_timer0_callback(1_000_000, || unsafe {
+    //     if NUM_BYTES > 0 {
+    //         println!("{} bytes",  NUM_BYTES );
+    //         // println!("{} draw cycles per byte", vgaterm::CHARACTER_DRAW_CYCLES as f32 / NUM_BYTES as f32);
+    //         NUM_BYTES = 0;
+    //     }
+    //     // vgaterm::CHARACTER_DRAW_CYCLES = 0;
+    // });
 
     // Initialize the Delay peripheral, and use it to toggle the LED state in a
     // loop.
@@ -212,8 +211,8 @@ fn main() -> ! {
         // Draw the characters on the frame
         // Flush the Display to the BUFFER
         // display.flush();
-        terminal.draw_up_to(210, &mut display);
-
+        terminal.draw_up_to(420, &mut display);
+        
         if !keyvents.is_empty() || unsafe { (*UART0::PTR).status.read().rxfifo_cnt().bits() } > 0 {
             continue;
         }

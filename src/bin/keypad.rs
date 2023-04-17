@@ -169,10 +169,10 @@ fn main() -> ! {
     }
 }
 
-#[interrupt]
-fn SYSTIMER_TARGET0() {
-    use esp32c3_hal::systimer::Target;
-    let hax: Alarm<Target, 0> = unsafe { core::mem::transmute(()) };
+// #[interrupt]
+// fn SYSTIMER_TARGET0() {
+//     use esp32c3_hal::systimer::Target;
+//     let hax: Alarm<Target, 0> = unsafe { core::mem::transmute(()) };
 
-    hax.clear_interrupt();
-}
+//     hax.clear_interrupt();
+// }

@@ -79,6 +79,7 @@ pub enum Op {
     InPlaceDelete,
     DecPrivateSet(String),
     DecPrivateReset(String),
+    Vgaterm(Vgaterm),
 }
 
 #[derive(Debug)]
@@ -113,6 +114,11 @@ pub enum EraseMode {
     FromCursor,
     ToCursor,
     All,
+}
+
+#[derive(Debug)]
+pub enum Vgaterm {
+    Redraw,
 }
 
 trait StrParser<'a, O> = nom::Parser<&'a str, O, nom::error::Error<&'a str>>;
@@ -191,6 +197,65 @@ where
         })
     }
 }
+
+// enum Thing<'a> {
+//     Var(usize),
+//     Opt(&'a str),
+//     Lit(char),
+// }
+
+// struct GenSeq<'a>(&'a [Thing<'a>]);
+
+// struct TupleSeq1<A>(A);
+// struct TupleSeq2<A, B>(A, B);
+
+// impl<'a> Default for GenSeq<'a> {
+//     fn default() -> Self {
+//         GenSeq(&[])
+//     }
+// }
+
+// fn parse_thing<'a>(th: Thing) -> impl StrParseFnMut<'a, Thing> {
+//     |input: &str| {
+//         match th {
+//             Thing::Var(v) => todo!(),
+//             Thing::Opt(_) => todo!(),
+//             Thing::Lit(c) => {
+//                 nom::character::streaming::char(c)(input).map(|(rest, d)| (rest, Thing::Lit(d)))
+//             },
+//         }
+//     }
+// }
+
+// // ESC 7
+// // sequence(Thing::Lit('7'), |_| Op::Save) "\ESC 7"
+// fn sequence1<'a>(thing: Thing, f: impl FnMut(Thing) -> OpResult<'a>) -> impl StrParseFnMut<'a, OpResult<'a>> {
+
+// }
+
+// // ESC [ <n> A
+// // sequence(Thing::Lit('['), Thing::Var("n"), Thing::Lit('A'), |_, dy, _| Op::MoveCursor { usize::from(dy) }) "\ESC 7"
+// fn sequence3<'a>(t1: Thing, t2: Thing, t3: Thing, f: impl FnMut(Thing, Thing, Thing) -> OpResult<'a>) -> impl StrParseFnMut<'a, OpResult<'a>> {
+//     |input: &str| {
+
+//     }
+// }
+
+// ESC
+// esc(alt(sequence(['[', 'H']), ['[', 'garbo', 'truck', 'H']))
+// fn sequence<'a>(seq: &[Thing], f: impl FnMut(GenSeq) -> OpResult) -> impl StrParseFnMut<'a, OpResult<'a>> {
+//     move |input: &str| {
+//         seq.iter().try_fold(GenSeq::default(), |acc, &t| {
+//             match t {
+//                 Thing::Var() => {},
+//                 Thing::Opt() => {},
+//                 Thing::Lit(c) => {
+//                     nom::character::streaming::char(c)(input).map(|(rest, d)| (rest,  ) ))
+//                 },
+//             }
+//         })
+//     }
+// }
 
 /// This will parse x ; y <end>
 fn dual_int_parameter_sequence<N: FromStr>(
@@ -283,11 +348,11 @@ fn cursor_to_column(input: &str) -> OpResult {
 
 /// ESC [ n S
 fn scroll_up(input: &str) -> OpResult {
-    optional_int_param_sequence::<isize>('S', -1)(input)
-        .map(|(rest, n)| (rest, Op::Scroll { delta: n }))
+    optional_int_param_sequence::<isize>('S', 1)(input)
+        .map(|(rest, n)| (rest, Op::Scroll { delta: -n }))
 }
 
-/// ESC [ n S
+/// ESC [ n T
 fn scroll_down(input: &str) -> OpResult {
     optional_int_param_sequence::<isize>('T', 1)(input)
         .map(|(rest, n)| (rest, Op::Scroll { delta: n }))
@@ -447,6 +512,11 @@ fn reset_private_sequence(input: &str) -> OpResult {
     .map(|(rest, (_, b, _))| (rest, Op::DecPrivateReset(b.to_owned())))
 }
 
+/// ESC [ V x D
+fn vgaterm_sequence(input: &str) -> OpResult {
+    nom::bytes::streaming::tag("VxD")(input).map(|(rest, _)| (rest, Op::Vgaterm(Vgaterm::Redraw)))
+}
+
 /// <text> m
 fn any_text_mode(input: &str) -> TextOpResult {
     nom::branch::alt((
@@ -472,6 +542,7 @@ fn parse(input: &str) -> OpResult {
         start_with_char(
             '[',
             nom::branch::alt((
+                vgaterm_sequence,
                 cursor_to_0,
                 cursor_to_line_col,
                 cursor_up_lines,
