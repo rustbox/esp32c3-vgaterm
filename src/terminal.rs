@@ -62,7 +62,6 @@ impl CursorPos {
 #[derive(Debug, Clone, Copy)]
 pub struct Cursor {
     pub pos: CursorPos,
-    pub character: Character,
     time_to_next_blink: u64,
     blink_length: u64,
 }
@@ -73,15 +72,19 @@ impl Cursor {
     /// 2. Move the cursor
     /// 3. Set character at new position to be inverted
     /// 4. Update time_to_next_blink
-    fn offset(&mut self, r: isize, c: isize, text: &mut TextDisplay) -> CursorPos {
+    fn offset(&self, r: isize, c: isize, text: &mut TextDisplay) -> Cursor {
         let pos = self.pos.offset(r, c);
         if pos != self.pos {
             self.unset_highlight(text);
-            self.pos = pos;
-            self.set_highlight(text);
-            self.time_to_next_blink = SystemTimer::now().wrapping_add(self.blink_length);
+            let cursor = Cursor {
+                pos, 
+                time_to_next_blink: SystemTimer::now().wrapping_add(self.blink_length),
+                blink_length: self.blink_length,
+            };
+            cursor.set_highlight(text);
+            return cursor
         }
-        pos
+        *self
     }
 
     fn set_highlight(&self, text: &mut TextDisplay) {
@@ -102,12 +105,18 @@ impl Cursor {
         text.write_char(self.pos.row(), self.pos.col(), c);
     }
 
-    fn update(&mut self, text: &mut TextDisplay) {
+    fn update(&self, text: &mut TextDisplay) -> Cursor {
         let now = SystemTimer::now();
         if now >= self.time_to_next_blink {
-            self.time_to_next_blink = now.wrapping_add(self.blink_length);
             self.swap_highlight(text);
+            let time_to_next_blink = now.wrapping_add(self.blink_length);
+            return Cursor {
+                pos: self.pos,
+                blink_length: self.blink_length,
+                time_to_next_blink,
+            }
         }
+        *self
     }
 }
 
@@ -115,7 +124,6 @@ impl Default for Cursor {
     fn default() -> Self {
         Cursor {
             pos: Default::default(),
-            character: Character::default(),
             time_to_next_blink: SystemTimer::now(),
             blink_length: 12_000_000,
         }
@@ -140,14 +148,14 @@ impl TextField {
     /// Moves the cursor by the given offset, and sets the cursor character to character
     /// currently being selected by the new cursor position
     pub fn move_cursor(&mut self, r: isize, c: isize) {
-        self.cursor.offset(r, c, &mut self.text);
+        self.cursor = self.cursor.offset(r, c, &mut self.text);
     }
 
     pub fn type_str(&mut self, s: &str) {
         self.input_buffer.push_str(s);
-        let drained: String = self.input_buffer.drain(..).collect();
-        let res = ansi::parse_esc_str(drained.as_str());
-
+        let res = ansi::parse_esc_str(self.input_buffer.as_str());
+        let len = res.rest.len();
+        
         // At the end buffer should have only the contents of res.rest
         for op in res.opstr {
             match op {
@@ -161,7 +169,7 @@ impl TextField {
                 }
             }
         }
-        self.input_buffer.push_str(res.rest);
+        let _ = self.input_buffer.drain(..(self.input_buffer.len() - len));
     }
 
     fn handle_char_in(&mut self, t: char) {
