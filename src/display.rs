@@ -10,11 +10,11 @@ use embedded_graphics::{
     text::Text,
     Pixel, primitives::Rectangle,
 };
-use esp_println::print;
+use esp_println::{print, println};
 
 use crate::{
     color::{self, Rgb3},
-    video,
+    video, CHARACTER_DRAW_CYCLES,
 };
 
 pub struct Display {
@@ -92,13 +92,13 @@ impl DrawTarget for Display {
         Ok(())
     }
 
-    #[inline(always)]
+    // #[link_section = ".rwtext"]
     fn fill_contiguous<I>(&mut self, area: &Rectangle, colors: I) -> Result<(), Self::Error>
         where
             I: IntoIterator<Item = Self::Color>, {
 
         let mut count = 0;
-        crate::measure(&mut count, || {
+        // crate::measure(&mut count, || {
             let mut colors = colors.into_iter();
             let screen_width = self.size().width as usize;
             let area_width = area.size.width as usize;
@@ -107,12 +107,15 @@ impl DrawTarget for Display {
             for _ in 0..area.size.height {
                 for col in 0..area_width {
                     let i = offset + col;
-                    unsafe { video::BUFFER[i] = colors.next().unwrap().to_byte() };
+                    let c = colors.next().unwrap().to_byte();
+                    // print!("{: ^5}", c);
+                    unsafe { video::BUFFER[i] = c };
                 }
+                // println!();
                 offset += screen_width;
             }
-        });
-        unsafe { crate::CHARACTER_DRAW_CYCLES += count };
+        // });
+        // unsafe { crate::CHARACTER_DRAW_CYCLES += count };
         Ok(())
     }
     
@@ -349,7 +352,7 @@ pub const ROWS: usize = 33;
 
 #[inline(always)]
 fn index(row: usize, col: usize) -> usize {
-    row * COLUMNS + col
+    (row) * COLUMNS + col
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -361,6 +364,7 @@ enum Drawn {
 pub struct TextDisplay {
     buffer: [(Character, Drawn); ROWS * COLUMNS],
     num_dirty: usize,
+    top: usize,
 }
 
 impl TextDisplay {
@@ -368,26 +372,30 @@ impl TextDisplay {
         TextDisplay {
             buffer: [(Character::default(), Drawn::Clean); COLUMNS * ROWS],
             num_dirty: 0,
+            top: 0,
         }
+    }
+
+    fn real_index(&self, line: usize, col: usize) -> usize {
+        let real_row = (self.top + line) % ROWS;
+        index(real_row, col)
     }
 
     #[inline(always)]
     pub fn read_char(&self, line: usize, col: usize) -> Character {
-        self.buffer[index(line, col)].0
+        self.buffer[self.real_index(line, col)].0
     }
 
     #[inline(always)]
     pub fn write_char(&mut self, line: usize, col: usize, c: Character) {
-        self.buffer[index(line, col)] = (c, Drawn::Dirty);
+        self.buffer[self.real_index(line, col)] = (c, Drawn::Dirty);
         self.num_dirty += 1;
     }
 
     #[inline(always)]
     pub fn write(&mut self, line: usize, col: usize, c: char) {
         let ch = Character::new(c);
-        let i = line * COLUMNS + col;
-        self.buffer[i] = (ch, Drawn::Dirty);
-        self.num_dirty += 1;
+        self.write_char(line, col, ch)
     }
 
     pub fn write_text(&mut self, start_line: usize, start_column: usize, text: &str) {
@@ -408,44 +416,21 @@ impl TextDisplay {
             }
         }
     }
-    /// Rows = 11;
-    /// 0 a b c d e f
-    /// 1 a b c d e f _
-    /// 2 a b c d e f
-    /// 3 a b c d e f _
-    /// 4 a b c d e f
-    /// 5 a b c d e f _
-    /// 6 a b c d e f
-    /// 7 a b c d e f _
-    /// 8 a b c d e f
-    /// 9 a b c d e f _
-    /// 10 a b c d e f
+
     /// 
-    /// 0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, |30 [31 32
-    /// 
-    pub fn scroll_down(&mut self, amount: usize) {
+    pub fn scroll_down(&mut self, amount: isize) {
         // We add a correction if amount and COLUMNS are differ in even/odd parity
-        let odd = if amount & 1 == COLUMNS & 1 { 0 } else { 1 };
-        for l in (0..ROWS - amount - odd).step_by(amount) {
-            let double_line = &mut self.buffer[l*COLUMNS..(l+2*amount)*COLUMNS];
-            for (_, drawn) in double_line.iter_mut() {
-                *drawn = Drawn::Dirty;
-            }
-            let (first, second) = double_line.split_at_mut(amount*COLUMNS);
-            first.swap_with_slice(second);
+        let amount = amount % ROWS as isize;
+        self.top = ((self.top as isize + amount) % ROWS as isize) as usize;
+        
+        self.dirty_all();
+    }
+
+    pub fn dirty_all(&mut self) {
+        for (_, d) in self.buffer.iter_mut() {
+            *d = Drawn::Dirty;
         }
-        if odd == 1 {
-            for l in (ROWS-amount..ROWS).rev() {
-                let double_line = &mut self.buffer[(l-1)*COLUMNS..(l+1)*COLUMNS];
-                for (_, drawn) in double_line.iter_mut() {
-                    *drawn = Drawn::Dirty;
-                }
-                let (first, second) = double_line.split_at_mut(COLUMNS);
-                first.swap_with_slice(second);
-            }
-        }
-        let last = &mut self.buffer[(ROWS-amount)*COLUMNS..ROWS*COLUMNS];
-        last.fill((Character::new(' '), Drawn::Dirty))
+        self.num_dirty = ROWS * COLUMNS;
     }
 
     #[inline(always)]
@@ -487,11 +472,19 @@ impl TextDisplay {
         }
         for row in 0..ROWS {
             for col in 0..COLUMNS {
-                let i = COLUMNS * row + col;
+                let i = self.real_index(row, col);
                 if self.buffer[i].1 == Drawn::Dirty {
                     self.buffer[i].1 = Drawn::Clean;
                     self.draw(row, col, target);
                     self.num_dirty -= 1;
+                    if self.num_dirty == 0 {
+                        unsafe {
+                            if CHARACTER_DRAW_CYCLES == 0 {
+                                CHARACTER_DRAW_CYCLES = crate::perf::measure_cycle_count() as usize;
+                                println!("Took {} cycles", CHARACTER_DRAW_CYCLES);
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -508,7 +501,7 @@ impl TextDisplay {
         let mut drawn = 0;
         for row in 0..ROWS {
             for col in 0..COLUMNS {
-                let i = COLUMNS * row + col;
+                let i = self.real_index(row, col);
                 if self.buffer[i].1 == Drawn::Dirty {
                     self.buffer[i].1 = Drawn::Clean;
                     self.draw(row, col, target);
@@ -536,6 +529,7 @@ impl TextDisplay {
 
         let text = Text::new(&text, Point::new(x as i32, y as i32), style);
 
+        // print!("d");
         let _ = text.draw(target);
     }
 }

@@ -59,14 +59,6 @@ pub fn measure<O>(count: &mut usize, f: impl FnOnce() -> O) -> O {
     r
 }
 
-pub fn measure<O>(count: &mut usize, f: impl FnOnce() -> O) -> O {
-    start_cycle_count();
-    let r = f();
-    *count = measure_cycle_count() as usize;
-
-    r
-}
-
 #[inline]
 pub fn noops<const N: u8>() {
     if 0 < N {

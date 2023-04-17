@@ -18,7 +18,9 @@ use esp32c3_hal::gpio::Gpio3;
 use esp32c3_hal::gpio::{Event, Unknown};
 use esp32c3_hal::gpio::{Floating, Input};
 use esp32c3_hal::macros::ram;
-use esp_println::println;
+use esp_println::{println, print};
+
+use crate::video;
 
 pub const BLANKING_WAIT_TIME: u64 = 3960; // us
 
@@ -50,5 +52,10 @@ pub fn start(start: Gpio3<Unknown>) {
 // #[inline]
 #[ram]
 pub fn frame(_: &mut Gpio3<Input<Floating>>) {
-    crate::video::transmit_frame();
+    // Beginning of frame, so let's guarentee we start at 0
+    // print!("*");
+    unsafe {
+        video::OFFSET = 0;
+    }
+    video::transmit_chunk();
 }

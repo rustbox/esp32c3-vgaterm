@@ -1,4 +1,10 @@
-use crate::spi;
+use core::time;
+
+use esp32c3_hal::interrupt;
+use esp32c3_hal::prelude::*;
+use esp_println::{print, println};
+
+use crate::{spi, timer};
 
 pub const WIDTH: usize = 640;
 pub const HEIGHT: usize = 400;
@@ -15,18 +21,19 @@ pub static mut BUFFER: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];
 ///
 #[inline(always)]
 pub fn transmit_frame() {
-    static mut M1: crate::perf::Measure =
-        crate::perf::Measure::new("first_block", fugit::HertzU32::Hz(240));
-    static mut M2: crate::perf::Measure =
-        crate::perf::Measure::new("full_frame", fugit::HertzU32::Hz(240));
+    // static mut M1: crate::perf::Measure =
+    //     crate::perf::Measure::new("first_block", fugit::HertzU32::Hz(240));
+    // static mut M2: crate::perf::Measure =
+    //     crate::perf::Measure::new("full_frame", fugit::HertzU32::Hz(240));
 
-    crate::perf::reset_cycle_count(); // no cycle count for you!
+    // crate::perf::reset_cycle_count(); // no cycle count for you!
     riscv::interrupt::free(|| unsafe {
-        let (first_block, full_frame) = { (&mut M1, &mut M2) };
-        crate::perf::Measure::start([first_block, full_frame]);
+        // let (first_block, full_frame) = { (&mut M1, &mut M2) };
+        // crate::perf::Measure::start([first_block, full_frame]);
+        // crate::perf::pause_event_counter();
 
         spi::transmit(&mut BUFFER[0..32000]);
-        crate::perf::Measure::stop([first_block]);
+        // crate::perf::Measure::stop([first_block]);
         spi::transmit(&mut BUFFER[32000..64000]);
         spi::transmit(&mut BUFFER[64000..96000]);
         spi::transmit(&mut BUFFER[96000..128000]);
@@ -34,11 +41,51 @@ pub fn transmit_frame() {
         spi::transmit(&mut BUFFER[160000..192000]);
         spi::transmit(&mut BUFFER[192000..224000]);
         spi::transmit(&mut BUFFER[224000..256000]);
-        crate::perf::Measure::stop([full_frame]);
+        // crate::perf::Measure::stop([full_frame]);
 
-        crate::perf::Measure::flush([first_block, full_frame]);
+        // crate::perf::Measure::flush([first_block, full_frame]);
+        // crate::perf::configure_counter_for_cpu_cycles();
     });
 }
+
+pub static mut OFFSET: usize = 0;
+const CHUNK_SIZE: usize = 32000;
+const LAST_CHUNK: usize = 224000;
+
+#[inline(always)]
+pub fn transmit_chunk() {
+    riscv::interrupt::free(|| unsafe {
+        spi::start_transmit(&mut BUFFER[OFFSET..OFFSET + CHUNK_SIZE]);
+        timer::start_timer0_callback(1550, timer_callback)
+    })
+}
+
+#[ram]
+fn timer_callback() {
+    unsafe {
+        if let Some(tx) = spi::SPI_DMA_TRANSFER.take() {
+            let (_, spi) = tx.wait();
+            spi::QSPI.replace(spi);
+        }
+        if OFFSET < LAST_CHUNK {
+            OFFSET += CHUNK_SIZE;
+            transmit_chunk();
+        }
+    }
+}
+
+// #[interrupt]
+// fn SYSTIMER_TARGET0() {
+//     riscv::interrupt::free(|| unsafe {
+//         timer::clear_alarm0();
+//         if let Some(tx) = spi::SPI_DMA_TRANSFER.take() {
+//             print!(".");
+//             let (_, spi) = tx.wait();
+//             spi::QSPI.replace(spi);
+//         }
+//         transmit_chunk();
+//     });
+// }
 
 ///
 /// Split the frame buffer into 4 equally sized columns (160 pixels wide) each

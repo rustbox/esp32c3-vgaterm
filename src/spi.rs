@@ -1,4 +1,4 @@
-use esp32c3_hal::dma::DmaPriority;
+use esp32c3_hal::{dma::DmaPriority, spi::dma::{SpiDmaTransferRxTx, SpiDmaTransfer}, systimer::SystemTimer};
 use esp32c3_hal::dma::*;
 use esp32c3_hal::gdma::Gdma;
 use esp32c3_hal::gdma::*;
@@ -17,7 +17,7 @@ use esp_println::println;
 use riscv::interrupt;
 
 #[allow(clippy::type_complexity)]
-static mut QSPI: Option<
+pub static mut QSPI: Option<
     SpiDma<
         '_,
         SPI2,
@@ -100,20 +100,32 @@ pub fn configure(
 // #[ram]
 #[link_section = ".rwtext"] // #[ram] without #[inline(never)]
 pub fn transmit(data: &'static mut [u8]) {
-    static mut RECV: [u8; 0] = [];
+    // static mut RECV: [u8; 0] = [];
     unsafe {
         if let Some(qspi) = QSPI.take() {
-            let transfer = qspi.dma_transfer(data, &mut RECV).unwrap();
+            let transfer = qspi.dma_write(data).unwrap();
             // here we could do something else while DMA transfer is in progress
             // the buffers and spi is moved into the transfer and we can get it back via
             // `wait`
-            let (_, _, q) = transfer.wait();
+            let (_, q) = transfer.wait();
 
             QSPI.replace(q);
 
             // qspi.transfer(data);
             // qspi.with_dma(..).transfer(...)
             // unimplemented!()
+        }
+    }
+}
+
+pub static mut SPI_DMA_TRANSFER: Option<SpiDmaTransfer<SPI2, ChannelTx<Channel0TxImpl, Channel0>, ChannelRx<Channel0RxImpl, Channel0>, SuitablePeripheral0, &mut [u8]>> = None;
+
+#[link_section = ".rwtext"]
+pub fn start_transmit(data: &'static mut [u8]) {
+    unsafe {
+        if let Some(qspi) = QSPI.take() {
+            let transfer = qspi.dma_write(data).unwrap();
+            SPI_DMA_TRANSFER.replace(transfer);            
         }
     }
 }

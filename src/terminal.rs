@@ -1,7 +1,7 @@
 use crate::{
     ansi::{self, EraseMode, Op, OpStr},
     color::Rgb3,
-    display::{self, Character, TextDisplay, ROWS},
+    display::{self, Character, TextDisplay, ROWS}, CHARACTER_DRAW_CYCLES,
 };
 use alloc::string::String;
 use embedded_graphics::prelude::DrawTarget;
@@ -178,7 +178,7 @@ impl TextField {
 
     fn handle_char_in(&mut self, t: char) {
         if t.is_ascii_control() {
-            println!("ascii {}", t.escape_debug());
+            // println!("ascii {}", t.escape_debug());
         }
         match t {
             '\u{08}' => {
@@ -297,17 +297,21 @@ impl TextField {
                 }
             },
             Scroll { delta } => {
-                if delta > 0 {
-                    // self.cursor.offset(0, 1, &mut self.text);
-                    self.cursor.unset_highlight(&mut self.text);
-                    self.text.scroll_down(delta as usize);
-                    // self.cursor.set_highlight(&mut self.text);
-                }
+                self.cursor.unset_highlight(&mut self.text);
+                self.text.scroll_down(delta);
+                
             }
             TextOp(_ops) => {}
             InPlaceDelete => self.text.write(self.cursor.pos.0, self.cursor.pos.1, ' '),
             DecPrivateSet(_) => {}
             DecPrivateReset(_) => {}
+            Vgaterm(ansi::Vgaterm::Redraw) => {
+                self.text.dirty_all();
+                unsafe {
+                    CHARACTER_DRAW_CYCLES = 0;
+                    crate::perf::reset_cycle_count();
+                }
+            }
         }
     }
 
