@@ -1,7 +1,7 @@
 use crate::{
     ansi::{self, EraseMode, Op, OpStr},
     color::Rgb3,
-    display::{self, Character, TextDisplay},
+    display::{self, TextDisplay},
 };
 use alloc::string::String;
 use embedded_graphics::prelude::DrawTarget;
