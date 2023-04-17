@@ -1,6 +1,11 @@
 use core::cell::RefCell;
 
-use alloc::{collections::VecDeque, sync::Arc, vec::Vec};
+use alloc::{
+    collections::VecDeque,
+    string::{String, ToString},
+    sync::Arc,
+    vec::Vec,
+};
 use critical_section::Mutex;
 
 pub struct Sender<T> {
@@ -78,6 +83,12 @@ impl<T> Iterator for Recv<T> {
 
     fn next(&mut self) -> Option<Self::Item> {
         self.contents.pop()
+    }
+}
+
+impl ToString for Recv<char> {
+    fn to_string(&self) -> String {
+        self.contents.iter().collect()
     }
 }
 
