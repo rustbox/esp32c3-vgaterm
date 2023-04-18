@@ -18,7 +18,7 @@ use esp32c3_hal::gpio::Gpio3;
 use esp32c3_hal::gpio::{Event, Unknown};
 use esp32c3_hal::gpio::{Floating, Input};
 use esp32c3_hal::macros::ram;
-use esp_println::{println, print};
+use esp_println::{print, println};
 
 use crate::video;
 

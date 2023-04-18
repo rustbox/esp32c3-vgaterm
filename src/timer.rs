@@ -15,10 +15,14 @@
 extern crate alloc;
 
 use critical_section::Mutex;
-use esp32c3_hal::{clock::Clocks, peripherals::SYSTIMER, systimer::{Alarm, Target}};
 use esp32c3_hal::peripherals::{self, TIMG0};
 use esp32c3_hal::systimer::SystemTimer;
 use esp32c3_hal::timer::{Timer0, TimerGroup};
+use esp32c3_hal::{
+    clock::Clocks,
+    peripherals::SYSTIMER,
+    systimer::{Alarm, Target},
+};
 use esp32c3_hal::{interrupt, interrupt::Priority};
 use esp32c3_hal::{prelude::*, timer::Timer};
 use esp_println::print;
@@ -99,7 +103,6 @@ pub fn delay(us: u64) {
         }
     }
 }
-
 
 // Would fugit::TimerInstant be useful ? It's not obvious how to convert bases
 pub type TimerInstant = u64; // micros

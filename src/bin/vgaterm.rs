@@ -16,9 +16,9 @@ use esp32c3_hal::{
     peripherals::UART0,
 };
 use esp32c3_hal::{gpio::IO, peripherals::Peripherals, Rtc};
-use esp_println::println;
 use esp_backtrace as _;
-use vgaterm::{self, video, perf};
+use esp_println::println;
+use vgaterm::{self, perf, video};
 use vgaterm::{interrupt::Priority, usb_keyboard::US_ENGLISH, Delay, Work};
 
 use core::{arch::asm, fmt::Write};
@@ -212,7 +212,7 @@ fn main() -> ! {
         // Flush the Display to the BUFFER
         // display.flush();
         terminal.draw_up_to(420, &mut display);
-        
+
         if !keyvents.is_empty() || unsafe { (*UART0::PTR).status.read().rxfifo_cnt().bits() } > 0 {
             continue;
         }

@@ -100,26 +100,25 @@ impl DrawTarget for Display {
     {
         let mut count = 0;
         // crate::measure(&mut count, || {
-            let mut colors = colors.into_iter();
-            let screen_width = self.size().width as usize;
-            let area_width = area.size.width as usize;
+        let mut colors = colors.into_iter();
+        let screen_width = self.size().width as usize;
+        let area_width = area.size.width as usize;
 
-            let mut offset = screen_width * area.top_left.y as usize + area.top_left.x as usize;
-            for _ in 0..area.size.height {
-                for col in 0..area_width {
-                    let i = offset + col;
-                    let c = colors.next().unwrap().to_byte();
-                    // print!("{: ^5}", c);
-                    unsafe { video::BUFFER[i] = c };
-                }
-                // println!();
-                offset += screen_width;
+        let mut offset = screen_width * area.top_left.y as usize + area.top_left.x as usize;
+        for _ in 0..area.size.height {
+            for col in 0..area_width {
+                let i = offset + col;
+                let c = colors.next().unwrap().to_byte();
+                // print!("{: ^5}", c);
+                unsafe { video::BUFFER[i] = c };
             }
+            // println!();
+            offset += screen_width;
+        }
         // });
         // unsafe { crate::CHARACTER_DRAW_CYCLES += count };
         Ok(())
     }
-    
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -418,12 +417,12 @@ impl TextDisplay {
         }
     }
 
-    /// 
+    ///
     pub fn scroll_down(&mut self, amount: isize) {
         // We add a correction if amount and COLUMNS are differ in even/odd parity
         let amount = amount % ROWS as isize;
         self.top = ((self.top as isize + amount) % ROWS as isize) as usize;
-        
+
         self.dirty_all();
     }
 

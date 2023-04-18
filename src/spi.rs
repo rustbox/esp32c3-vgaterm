@@ -1,4 +1,3 @@
-use esp32c3_hal::{dma::DmaPriority, spi::dma::{SpiDmaTransferRxTx, SpiDmaTransfer}, systimer::SystemTimer};
 use esp32c3_hal::dma::*;
 use esp32c3_hal::gdma::Gdma;
 use esp32c3_hal::gdma::*;
@@ -8,6 +7,11 @@ use esp32c3_hal::prelude::*;
 use esp32c3_hal::spi::dma::SpiDma;
 use esp32c3_hal::spi::{Spi, SpiMode};
 use esp32c3_hal::{clock::Clocks, gpio::OutputSignal};
+use esp32c3_hal::{
+    dma::DmaPriority,
+    spi::dma::{SpiDmaTransfer, SpiDmaTransferRxTx},
+    systimer::SystemTimer,
+};
 use esp32c3_hal::{
     gpio::{OutputPin, Unknown},
     system::{Peripheral, PeripheralClockControl},
@@ -118,14 +122,22 @@ pub fn transmit(data: &'static mut [u8]) {
     }
 }
 
-pub static mut SPI_DMA_TRANSFER: Option<SpiDmaTransfer<SPI2, ChannelTx<Channel0TxImpl, Channel0>, ChannelRx<Channel0RxImpl, Channel0>, SuitablePeripheral0, &mut [u8]>> = None;
+pub static mut SPI_DMA_TRANSFER: Option<
+    SpiDmaTransfer<
+        SPI2,
+        ChannelTx<Channel0TxImpl, Channel0>,
+        ChannelRx<Channel0RxImpl, Channel0>,
+        SuitablePeripheral0,
+        &mut [u8],
+    >,
+> = None;
 
 #[link_section = ".rwtext"]
 pub fn start_transmit(data: &'static mut [u8]) {
     unsafe {
         if let Some(qspi) = QSPI.take() {
             let transfer = qspi.dma_write(data).unwrap();
-            SPI_DMA_TRANSFER.replace(transfer);            
+            SPI_DMA_TRANSFER.replace(transfer);
         }
     }
 }

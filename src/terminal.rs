@@ -1,7 +1,8 @@
 use crate::{
     ansi::{self, EraseMode, Op, OpStr},
     color::Rgb3,
-    display::{self, Character, TextDisplay, ROWS}, CHARACTER_DRAW_CYCLES,
+    display::{self, Character, TextDisplay, ROWS},
+    CHARACTER_DRAW_CYCLES,
 };
 use alloc::string::String;
 use embedded_graphics::prelude::DrawTarget;
@@ -312,7 +313,6 @@ impl TextField {
             Scroll { delta } => {
                 self.cursor.unset_highlight(&mut self.text);
                 self.text.scroll_down(delta);
-                
             }
             TextOp(_ops) => {}
             InPlaceDelete => self.text.write(self.cursor.pos.0, self.cursor.pos.1, ' '),
