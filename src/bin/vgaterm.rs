@@ -4,11 +4,7 @@
 
 extern crate alloc;
 
-use alloc::{
-    collections::VecDeque,
-    string::{String, ToString},
-    vec::Vec,
-};
+use alloc::{collections::VecDeque, string::String, vec::Vec};
 use esp32c3_hal::prelude::*;
 use esp32c3_hal::timer::TimerGroup;
 use esp32c3_hal::{
@@ -17,11 +13,10 @@ use esp32c3_hal::{
 };
 use esp32c3_hal::{gpio::IO, peripherals::Peripherals, Rtc};
 use esp_backtrace as _;
-use esp_println::println;
 use vgaterm::{self, perf, video};
-use vgaterm::{interrupt::Priority, usb_keyboard::US_ENGLISH, Delay, Work};
+use vgaterm::{interrupt::Priority, usb_keyboard::US_ENGLISH, Work};
 
-use core::{arch::asm, fmt::Write};
+use core::fmt::Write;
 
 core::arch::global_asm!(".global _heap_size; _heap_size = 0xC000");
 
@@ -211,7 +206,7 @@ fn main() -> ! {
         // Draw the characters on the frame
         // Flush the Display to the BUFFER
         // display.flush();
-        terminal.draw_up_to(420, &mut display);
+        terminal.draw_up_to(315, &mut display);
 
         if !keyvents.is_empty() || unsafe { (*UART0::PTR).status.read().rxfifo_cnt().bits() } > 0 {
             continue;

@@ -5,14 +5,11 @@
 extern crate alloc;
 
 use alloc::collections::VecDeque;
+use esp32c3_hal::interrupt::{self, Priority};
 use esp32c3_hal::prelude::*;
 use esp32c3_hal::timer::TimerGroup;
 use esp32c3_hal::{clock::ClockControl, peripherals::Peripherals};
 use esp32c3_hal::{clock::CpuClock, systimer::SystemTimer};
-use esp32c3_hal::{
-    interrupt::{self, Priority},
-    systimer::Alarm,
-};
 use esp32c3_hal::{Rtc, IO};
 use esp_println::{print, println};
 use vgaterm::usb_keyboard::US_ENGLISH;

@@ -64,5 +64,4 @@ Hash: `304c52f8662db2f1363da8a9c36d6136a42d6236`
 * Average bytes: `2037`
 * Average cycles: `17585.7`
 * Improvement: `3.6x`
-=======
->>>>>>> 304c52f (characters contain whether they are dirty, chars are drawn per rect rather than pixel at a time, drawing comes after processing input characters)
+

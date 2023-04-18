@@ -18,11 +18,7 @@ use critical_section::Mutex;
 use esp32c3_hal::peripherals::{self, TIMG0};
 use esp32c3_hal::systimer::SystemTimer;
 use esp32c3_hal::timer::{Timer0, TimerGroup};
-use esp32c3_hal::{
-    clock::Clocks,
-    peripherals::SYSTIMER,
-    systimer::{Alarm, Target},
-};
+use esp32c3_hal::{clock::Clocks, peripherals::SYSTIMER};
 use esp32c3_hal::{interrupt, interrupt::Priority};
 use esp32c3_hal::{prelude::*, timer::Timer};
 use esp_println::print;
@@ -192,6 +188,7 @@ pub fn enable_timer0_interrupt(priority: Priority) {
 }
 
 /// Start timer zero set for t microseconds
+#[link_section = ".rwtext"]
 pub fn start_timer0_callback(t: u64, callback: impl FnMut() + 'static) {
     critical_section::with(|cs| {
         if let Some(timer) = TIMER0.borrow(cs).borrow_mut().as_mut() {

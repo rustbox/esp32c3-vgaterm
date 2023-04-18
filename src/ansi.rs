@@ -198,65 +198,6 @@ where
     }
 }
 
-// enum Thing<'a> {
-//     Var(usize),
-//     Opt(&'a str),
-//     Lit(char),
-// }
-
-// struct GenSeq<'a>(&'a [Thing<'a>]);
-
-// struct TupleSeq1<A>(A);
-// struct TupleSeq2<A, B>(A, B);
-
-// impl<'a> Default for GenSeq<'a> {
-//     fn default() -> Self {
-//         GenSeq(&[])
-//     }
-// }
-
-// fn parse_thing<'a>(th: Thing) -> impl StrParseFnMut<'a, Thing> {
-//     |input: &str| {
-//         match th {
-//             Thing::Var(v) => todo!(),
-//             Thing::Opt(_) => todo!(),
-//             Thing::Lit(c) => {
-//                 nom::character::streaming::char(c)(input).map(|(rest, d)| (rest, Thing::Lit(d)))
-//             },
-//         }
-//     }
-// }
-
-// // ESC 7
-// // sequence(Thing::Lit('7'), |_| Op::Save) "\ESC 7"
-// fn sequence1<'a>(thing: Thing, f: impl FnMut(Thing) -> OpResult<'a>) -> impl StrParseFnMut<'a, OpResult<'a>> {
-
-// }
-
-// // ESC [ <n> A
-// // sequence(Thing::Lit('['), Thing::Var("n"), Thing::Lit('A'), |_, dy, _| Op::MoveCursor { usize::from(dy) }) "\ESC 7"
-// fn sequence3<'a>(t1: Thing, t2: Thing, t3: Thing, f: impl FnMut(Thing, Thing, Thing) -> OpResult<'a>) -> impl StrParseFnMut<'a, OpResult<'a>> {
-//     |input: &str| {
-
-//     }
-// }
-
-// ESC
-// esc(alt(sequence(['[', 'H']), ['[', 'garbo', 'truck', 'H']))
-// fn sequence<'a>(seq: &[Thing], f: impl FnMut(GenSeq) -> OpResult) -> impl StrParseFnMut<'a, OpResult<'a>> {
-//     move |input: &str| {
-//         seq.iter().try_fold(GenSeq::default(), |acc, &t| {
-//             match t {
-//                 Thing::Var() => {},
-//                 Thing::Opt() => {},
-//                 Thing::Lit(c) => {
-//                     nom::character::streaming::char(c)(input).map(|(rest, d)| (rest,  ) ))
-//                 },
-//             }
-//         })
-//     }
-// }
-
 /// This will parse x ; y <end>
 fn dual_int_parameter_sequence<N: FromStr>(
     ending: char,

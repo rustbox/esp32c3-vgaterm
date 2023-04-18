@@ -1,8 +1,4 @@
-use core::time;
-
-use esp32c3_hal::interrupt;
 use esp32c3_hal::prelude::*;
-use esp_println::{print, println};
 
 use crate::{spi, timer};
 
@@ -54,13 +50,11 @@ const LAST_CHUNK: usize = 224000;
 
 #[inline(always)]
 pub fn transmit_chunk() {
-    riscv::interrupt::free(|| unsafe {
-        spi::start_transmit(&mut BUFFER[OFFSET..OFFSET + CHUNK_SIZE]);
-        timer::start_timer0_callback(1550, timer_callback)
-    })
+    spi::start_transmit(unsafe { &mut BUFFER[OFFSET..OFFSET + CHUNK_SIZE] });
+    timer::start_timer0_callback(1475, timer_callback)
 }
 
-#[ram]
+#[link_section = ".rwtext"]
 fn timer_callback() {
     unsafe {
         if let Some(tx) = spi::SPI_DMA_TRANSFER.take() {

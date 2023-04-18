@@ -11,7 +11,7 @@ use embedded_graphics::{
     text::Text,
     Pixel,
 };
-use esp_println::{print, println};
+use esp_println::println;
 
 use crate::{
     color::{self, Rgb3},
@@ -98,7 +98,7 @@ impl DrawTarget for Display {
     where
         I: IntoIterator<Item = Self::Color>,
     {
-        let mut count = 0;
+        // let mut _count = 0;
         // crate::measure(&mut count, || {
         let mut colors = colors.into_iter();
         let screen_width = self.size().width as usize;

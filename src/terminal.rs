@@ -1,7 +1,7 @@
 use crate::{
     ansi::{self, EraseMode, Op, OpStr},
     color::Rgb3,
-    display::{self, Character, TextDisplay, ROWS},
+    display::{self, TextDisplay, ROWS},
     CHARACTER_DRAW_CYCLES,
 };
 use alloc::string::String;
@@ -333,7 +333,7 @@ impl TextField {
         D: DrawTarget<Color = Rgb3>,
     {
         self.text.draw_dirty(target);
-        self.cursor.update(&mut self.text);
+        self.cursor = self.cursor.update(&mut self.text);
     }
 
     pub fn draw_up_to<D>(&mut self, up_to: usize, target: &mut D)
@@ -341,7 +341,7 @@ impl TextField {
         D: DrawTarget<Color = Rgb3>,
     {
         self.text.draw_dirty_up_to(up_to, target);
-        self.cursor.update(&mut self.text);
+        self.cursor = self.cursor.update(&mut self.text);
     }
 }
 

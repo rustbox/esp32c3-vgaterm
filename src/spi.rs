@@ -7,11 +7,7 @@ use esp32c3_hal::prelude::*;
 use esp32c3_hal::spi::dma::SpiDma;
 use esp32c3_hal::spi::{Spi, SpiMode};
 use esp32c3_hal::{clock::Clocks, gpio::OutputSignal};
-use esp32c3_hal::{
-    dma::DmaPriority,
-    spi::dma::{SpiDmaTransfer, SpiDmaTransferRxTx},
-    systimer::SystemTimer,
-};
+use esp32c3_hal::{dma::DmaPriority, spi::dma::SpiDmaTransfer};
 use esp32c3_hal::{
     gpio::{OutputPin, Unknown},
     system::{Peripheral, PeripheralClockControl},
@@ -122,6 +118,7 @@ pub fn transmit(data: &'static mut [u8]) {
     }
 }
 
+#[allow(clippy::type_complexity)]
 pub static mut SPI_DMA_TRANSFER: Option<
     SpiDmaTransfer<
         SPI2,
@@ -132,7 +129,7 @@ pub static mut SPI_DMA_TRANSFER: Option<
     >,
 > = None;
 
-#[link_section = ".rwtext"]
+#[inline(always)]
 pub fn start_transmit(data: &'static mut [u8]) {
     unsafe {
         if let Some(qspi) = QSPI.take() {
