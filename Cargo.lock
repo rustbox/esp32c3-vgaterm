@@ -152,7 +152,7 @@ dependencies = [
 [[package]]
 name = "esp-hal-common"
 version = "0.7.1"
-source = "git+https://github.com/rustbox/esp-hal?rev=60d9a516be284c459eb236c1e093f5f7ac48dcb9#60d9a516be284c459eb236c1e093f5f7ac48dcb9"
+source = "git+https://github.com/rustbox/esp-hal?rev=f73e3f90deb93751fce8863f412ed7120d329b5d#f73e3f90deb93751fce8863f412ed7120d329b5d"
 dependencies = [
  "cfg-if",
  "critical-section",
@@ -172,7 +172,7 @@ dependencies = [
 [[package]]
 name = "esp-hal-procmacros"
 version = "0.4.0"
-source = "git+https://github.com/rustbox/esp-hal?rev=60d9a516be284c459eb236c1e093f5f7ac48dcb9#60d9a516be284c459eb236c1e093f5f7ac48dcb9"
+source = "git+https://github.com/rustbox/esp-hal?rev=f73e3f90deb93751fce8863f412ed7120d329b5d#f73e3f90deb93751fce8863f412ed7120d329b5d"
 dependencies = [
  "darling",
  "proc-macro-crate",
@@ -212,7 +212,7 @@ dependencies = [
 [[package]]
 name = "esp32c3-hal"
 version = "0.7.0"
-source = "git+https://github.com/rustbox/esp-hal?rev=60d9a516be284c459eb236c1e093f5f7ac48dcb9#60d9a516be284c459eb236c1e093f5f7ac48dcb9"
+source = "git+https://github.com/rustbox/esp-hal?rev=f73e3f90deb93751fce8863f412ed7120d329b5d#f73e3f90deb93751fce8863f412ed7120d329b5d"
 dependencies = [
  "cfg-if",
  "embedded-hal",

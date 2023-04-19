@@ -59,6 +59,51 @@ pub fn measure<O>(count: &mut usize, f: impl FnOnce() -> O) -> O {
     r
 }
 
+// see: https://github.com/rust-lang/compiler-builtins/issues/339
+// in our case, they're unoptimized because they don't live in ram, but on flash, so they thrash the shit out of the cache
+mod mem {
+    #[no_mangle]
+    #[link_section = ".rwtext"]
+    pub unsafe extern "C" fn memcpy(dest: *mut u8, src: *const u8, n: usize) -> *mut u8 {
+        for i in 0..n {
+            *dest.add(i) = *src.add(i);
+        }
+        dest
+    }
+
+    #[no_mangle]
+    #[link_section = ".rwtext"]
+    pub unsafe extern "C" fn memmove(dest: *mut u8, src: *const u8, n: usize) -> *mut u8 {
+        // "[...] you don't have to worry about whether they overlap at all.
+        // If src is less than dst, just copy from the end.
+        // If src is greater than dst, just copy from the beginning."
+        // — https://stackoverflow.com/a/3572519/151464
+        for i in if dest as *const u8 > src {
+            0..=(n - 1)
+        } else {
+            (n - 1)..=0
+        } {
+            *dest.add(i) = *src.add(i);
+        }
+
+        dest
+    }
+
+    #[no_mangle]
+    #[link_section = ".rwtext"]
+    pub unsafe extern "C" fn memset(
+        s: *mut u8,
+        c: i32, /* equivalent to c's int */
+        n: usize,
+    ) -> *mut u8 {
+        let b = c as u8;
+        for i in 0..n {
+            *s.add(i) = b;
+        }
+        s
+    }
+}
+
 #[inline]
 pub fn noops<const N: u8>() {
     if 0 < N {

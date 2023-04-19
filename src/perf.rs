@@ -125,6 +125,7 @@ impl Measure {
         }
     }
 
+    #[link_section = ".rwtext"]
     pub fn flush<const N: usize>(measures: [&mut Measure; N]) {
         for m in measures {
             if m.ticks < m.freq.to_Hz() {

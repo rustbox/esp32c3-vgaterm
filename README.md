@@ -13,7 +13,7 @@ This is targeted at the RISC-V architecture esp32-c3 processor from espressif. T
 
 `rustup target add riscv32imc-unknown-none-elf`
 
-3. Using Cargo, install the `espflash` tool which can upload and flash the code across a serial 
+3. Using Cargo, install the `espflash` tool which can upload and flash the code across a serial
 port (through usb) to the esp32 chip:
 
 `cargo install espflash`
