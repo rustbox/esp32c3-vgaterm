@@ -65,16 +65,25 @@ pub unsafe extern "C" fn DefaultHandler(trap_frame: *mut esp32c3_hal::trapframe:
     panic!("unhandled exception: {:?}", *trap_frame)
 }
 
-// see: https://github.com/rust-lang/compiler-builtins/issues/339
-// in our case, they're unoptimized because they don't live in ram, but on flash, so they thrash the shit out of the cache
 mod mem {
+    //! see: https://github.com/rust-lang/compiler-builtins/issues/339
+    //! in our case, they're primarily unoptimized because they don't live in ram, but on flash,
+    //! so they thrash the shit out of the cache
+
     #[no_mangle]
     #[link_section = ".rwtext"]
     pub unsafe extern "C" fn memcpy(dest: *mut u8, src: *const u8, n: usize) -> *mut u8 {
+        let r = dest;
+        let (n, m) = (n / 4, n % 4);
+        for i in 0..m {
+            *dest.add(i) = *src.add(i);
+        }
+        let dest = dest.add(m).cast::<usize>();
+        let src = src.add(m).cast::<usize>();
         for i in 0..n {
             *dest.add(i) = *src.add(i);
         }
-        dest
+        r
     }
 
     #[no_mangle]
@@ -84,10 +93,10 @@ mod mem {
         // If src is less than dst, just copy from the end.
         // If src is greater than dst, just copy from the beginning."
         // — https://stackoverflow.com/a/3572519/151464
-        for i in if dest as *const u8 > src {
-            0..=(n - 1)
-        } else {
+        for i in if src < dest as *const u8 {
             (n - 1)..=0
+        } else {
+            0..=(n - 1)
         } {
             *dest.add(i) = *src.add(i);
         }
@@ -95,16 +104,27 @@ mod mem {
         dest
     }
 
+    // in hot paths:
+    //  called once with n=256 : something something interrupt handling (trap frame?)
+    //  called once with n=96 : clearing 24*8 bytes of DMA descriptors
     #[no_mangle]
     #[link_section = ".rwtext"]
     pub unsafe extern "C" fn memset(
-        s: *mut u8,
+        p: *mut u8,
         c: i32, /* equivalent to c's int */
         n: usize,
     ) -> *mut u8 {
+        let s = p;
+        let (n, m) = (n / 4, n % 4);
         let b = c as u8;
+        for i in 0..m {
+            *p.add(i) = b
+        }
+        let p = p.add(m).cast::<usize>();
+
+        let w = usize::from_ne_bytes([b; 4]);
         for i in 0..n {
-            *s.add(i) = b;
+            *p.add(i) = w;
         }
         s
     }
