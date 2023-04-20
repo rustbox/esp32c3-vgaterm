@@ -153,6 +153,28 @@ mod mem {
         }
         s
     }
+
+    #[no_mangle]
+    #[link_section = ".rwtext"]
+    pub unsafe extern "C" fn memcmp(a: *const u8, b: *const u8, n: usize) -> i32 {
+        let (n, m) = (n / 4, n % 4);
+        for i in 0..m {
+            let d = (*a.add(i) as i32).wrapping_sub(*b.add(i) as i32);
+            if d != 0 {
+                return d;
+            }
+        }
+        let a = a.add(m).cast::<usize>();
+        let b = b.add(m).cast::<usize>();
+        for i in 0..n {
+            let d = (*a.add(i) as isize).wrapping_sub(*b.add(i) as isize);
+            if d != 0 {
+                return d as i32;
+            }
+        }
+
+        0
+    }
 }
 
 #[inline]
