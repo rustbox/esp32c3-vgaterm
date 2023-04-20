@@ -61,14 +61,18 @@ extern "C" fn stop() -> ! {
 #[entry]
 fn main() -> ! {
     let peripherals = Peripherals::take();
-    let system = peripherals.SYSTEM.split();
+    let mut system = peripherals.SYSTEM.split();
     let clocks = ClockControl::configure(system.clock_control, CpuClock::Clock160MHz).freeze();
 
     // Disable the watchdog timers. For the ESP32-C3, this includes the Super WDT,
     // the RTC WDT, and the TIMG WDTs.
     let mut rtc = Rtc::new(peripherals.RTC_CNTL);
 
-    let timer_group1 = TimerGroup::new(peripherals.TIMG1, &clocks);
+    let timer_group1 = TimerGroup::new(
+        peripherals.TIMG1,
+        &clocks,
+        &mut system.peripheral_clock_control,
+    );
     let mut wdt1 = timer_group1.wdt;
 
     rtc.swd.disable();
@@ -79,8 +83,13 @@ fn main() -> ! {
 
     init_heap();
 
-    vgaterm::configure_timer0(peripherals.TIMG0, &clocks);
-    let mut _rx = vgaterm::uart::configure0(peripherals.UART0);
+    vgaterm::configure_timer0(
+        peripherals.TIMG0,
+        &clocks,
+        &mut system.peripheral_clock_control,
+    );
+    let mut _rx =
+        vgaterm::uart::configure0(peripherals.UART0, &mut system.peripheral_clock_control);
     vgaterm::uart::interrupt_enable0(vgaterm::interrupt::Priority::Priority5);
 
     unsafe {

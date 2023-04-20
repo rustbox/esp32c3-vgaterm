@@ -1,5 +1,4 @@
 use esp32c3_hal::dma::*;
-use esp32c3_hal::gdma::Gdma;
 use esp32c3_hal::gdma::*;
 use esp32c3_hal::gpio::{Gpio10, Gpio2, Gpio4, Gpio5, Gpio6, Gpio7};
 use esp32c3_hal::peripherals::{DMA, SPI2};
@@ -8,6 +7,7 @@ use esp32c3_hal::spi::dma::SpiDma;
 use esp32c3_hal::spi::{Spi, SpiMode};
 use esp32c3_hal::{clock::Clocks, gpio::OutputSignal};
 use esp32c3_hal::{dma::DmaPriority, spi::dma::SpiDmaTransfer};
+use esp32c3_hal::{gdma::Gdma, spi::FullDuplexMode};
 use esp32c3_hal::{
     gpio::{OutputPin, Unknown},
     system::{Peripheral, PeripheralClockControl},
@@ -24,6 +24,7 @@ pub static mut QSPI: Option<
         ChannelTx<'_, Channel0TxImpl, Channel0>,
         ChannelRx<'_, Channel0RxImpl, Channel0>,
         SuitablePeripheral0,
+        FullDuplexMode,
     >,
 > = None;
 

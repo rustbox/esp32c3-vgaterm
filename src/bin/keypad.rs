@@ -1,16 +1,19 @@
 #![no_std]
 #![no_main]
-#![feature(panic_info_message)]
 
 extern crate alloc;
 
 use alloc::collections::VecDeque;
-use esp32c3_hal::interrupt::{self, Priority};
 use esp32c3_hal::prelude::*;
 use esp32c3_hal::timer::TimerGroup;
 use esp32c3_hal::{clock::ClockControl, peripherals::Peripherals};
 use esp32c3_hal::{clock::CpuClock, systimer::SystemTimer};
+use esp32c3_hal::{
+    interrupt::{self, Priority},
+    systimer::Alarm,
+};
 use esp32c3_hal::{Rtc, IO};
+use esp_backtrace as _;
 use esp_println::{print, println};
 use vgaterm::usb_keyboard::US_ENGLISH;
 
@@ -32,45 +35,21 @@ fn init_heap() {
     }
 }
 
-// static mut BUTTON: Mutex<RefCell<Option<Gpio9<Input<PullDown>>>>> = Mutex::new(RefCell::new(None));
-// static mut BUTTON2: Mutex<RefCell<Option<Gpio10<Input<PullDown>>>>> = Mutex::new(RefCell::new(None));
-
-#[panic_handler]
-fn panic(info: &core::panic::PanicInfo) -> ! {
-    print!("Aborting: ");
-    if let Some(p) = info.location() {
-        println!(
-            "line {}, file {}: {}",
-            p.line(),
-            p.file(),
-            info.message().unwrap()
-        );
-    } else {
-        println!("no information available.");
-    }
-    stop();
-}
-
-#[no_mangle]
-extern "C" fn stop() -> ! {
-    loop {
-        unsafe {
-            riscv::asm::wfi();
-        }
-    }
-}
-
 #[entry]
 fn main() -> ! {
     let peripherals = Peripherals::take();
-    let system = peripherals.SYSTEM.split();
+    let mut system = peripherals.SYSTEM.split();
     let clocks = ClockControl::configure(system.clock_control, CpuClock::Clock160MHz).freeze();
 
     // Disable the watchdog timers. For the ESP32-C3, this includes the Super WDT,
     // the RTC WDT, and the TIMG WDTs.
     let mut rtc = Rtc::new(peripherals.RTC_CNTL);
 
-    let timer_group1 = TimerGroup::new(peripherals.TIMG1, &clocks);
+    let timer_group1 = TimerGroup::new(
+        peripherals.TIMG1,
+        &clocks,
+        &mut system.peripheral_clock_control,
+    );
     let mut wdt1 = timer_group1.wdt;
 
     rtc.swd.disable();
@@ -81,7 +60,11 @@ fn main() -> ! {
 
     init_heap();
 
-    vgaterm::configure_timer0(peripherals.TIMG0, &clocks);
+    vgaterm::configure_timer0(
+        peripherals.TIMG0,
+        &clocks,
+        &mut system.peripheral_clock_control,
+    );
 
     unsafe {
         riscv::interrupt::enable();
@@ -98,6 +81,7 @@ fn main() -> ! {
         io.pins.gpio0,
         peripherals.UART1,
         &clocks,
+        &mut system.peripheral_clock_control,
     );
 
     let alarm0 = SystemTimer::new(peripherals.SYSTIMER).alarm0;
@@ -137,27 +121,34 @@ fn main() -> ! {
         // terminal.send(host_in);
         // terminal.draw(&mut display);
         // display.flush();
-        kevents.extend(keyboard.flush_and_parse());
+        loop {
+            kevents.extend(keyboard.flush_and_parse());
 
-        if let Some(kevent) = kevents.pop_front() {
-            key_state.push(kevent);
-        }
-
-        use vgaterm::Work::*;
-        let last_char = input.key_char(&key_state);
-
-        match last_char {
-            Item(ref c) => print!("{}", c),
-            WouldBlock => {
-                println!("\nwaiting for keyboard....");
-                alarm0.set_target(u64::MAX) /* wait for keyboard input */
+            if let Some(kevent) = kevents.pop_front() {
+                println!("{:?} {}", kevent, kevents.len());
+                key_state.push(kevent);
             }
-            WouldBlockUntil(inst) => alarm0.set_target(inst),
-        }
 
-        if !kevents.is_empty() || !matches!(last_char, WouldBlock | WouldBlockUntil(_)) {
+            use vgaterm::Work::*;
+            let last_char = input.key_char(&key_state);
+
+            match last_char {
+                Item(ref c) => print!("{}", c),
+                WouldBlock => {
+                    if kevents.is_empty() {
+                        println!("\nwaiting for keyboard....");
+                    }
+                    alarm0.set_target(u64::MAX) /* wait for keyboard input */
+                }
+                WouldBlockUntil(inst) => alarm0.set_target(inst),
+            }
+
+            println!("{:?}", last_char);
+
             // don't sleep while there's work to do
-            continue;
+            if kevents.is_empty() && matches!(last_char, WouldBlock | WouldBlockUntil(_)) {
+                break;
+            }
         }
 
         unsafe {
@@ -166,10 +157,10 @@ fn main() -> ! {
     }
 }
 
-// #[interrupt]
-// fn SYSTIMER_TARGET0() {
-//     use esp32c3_hal::systimer::Target;
-//     let hax: Alarm<Target, 0> = unsafe { core::mem::transmute(()) };
+#[interrupt]
+fn SYSTIMER_TARGET0() {
+    use esp32c3_hal::systimer::Target;
+    let hax: Alarm<Target, 0> = unsafe { core::mem::transmute(()) };
 
-//     hax.clear_interrupt();
-// }
+    hax.clear_interrupt();
+}

@@ -15,11 +15,14 @@
 extern crate alloc;
 
 use critical_section::Mutex;
-use esp32c3_hal::peripherals::{self, TIMG0};
 use esp32c3_hal::systimer::SystemTimer;
 use esp32c3_hal::timer::{Timer0, TimerGroup};
 use esp32c3_hal::{clock::Clocks, peripherals::SYSTIMER};
 use esp32c3_hal::{interrupt, interrupt::Priority};
+use esp32c3_hal::{
+    peripherals::{self, TIMG0},
+    system::PeripheralClockControl,
+};
 use esp32c3_hal::{prelude::*, timer::Timer};
 use esp_println::print;
 use fugit::HertzU64;
@@ -165,8 +168,8 @@ pub fn clear_alarm0() {
 }
 
 /// Initialize and disable Timer Group 0
-pub fn configure_timer0(timg0: TIMG0, clocks: &Clocks) {
-    let mut group0 = TimerGroup::new(timg0, clocks);
+pub fn configure_timer0(timg0: TIMG0, clocks: &Clocks, clock_ctl: &mut PeripheralClockControl) {
+    let mut group0 = TimerGroup::new(timg0, clocks, clock_ctl);
     let timer0 = group0.timer0;
 
     group0.wdt.disable();

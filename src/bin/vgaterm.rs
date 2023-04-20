@@ -57,7 +57,11 @@ fn main() -> ! {
     // the RTC WDT, and the TIMG WDTs.
     let mut rtc = Rtc::new(peripherals.RTC_CNTL);
 
-    let timer_group1 = TimerGroup::new(peripherals.TIMG1, &clocks);
+    let timer_group1 = TimerGroup::new(
+        peripherals.TIMG1,
+        &clocks,
+        &mut system.peripheral_clock_control,
+    );
     let mut wdt1 = timer_group1.wdt;
 
     rtc.swd.disable();
@@ -66,15 +70,18 @@ fn main() -> ! {
 
     let io = IO::new(peripherals.GPIO, peripherals.IO_MUX);
 
-    // io.pins.gpio20.into_floating_input();
-
     init_heap();
     perf::configure_counter_for_cpu_cycles();
 
-    vgaterm::configure_timer0(peripherals.TIMG0, &clocks);
+    vgaterm::configure_timer0(
+        peripherals.TIMG0,
+        &clocks,
+        &mut system.peripheral_clock_control,
+    );
     vgaterm::timer::configure_systimer(peripherals.SYSTIMER);
     // let mut host_recv = vgaterm::uart::configure0(peripherals.UART0);
-    let mut serial0 = vgaterm::uart::make_uart0(peripherals.UART0);
+    let mut serial0 =
+        vgaterm::uart::make_uart0(peripherals.UART0, &mut system.peripheral_clock_control);
     serial0.set_rx_fifo_full_threshold(1);
     serial0.listen_rx_fifo_full();
     vgaterm::enable_timer0_interrupt(Priority::Priority14);
@@ -152,9 +159,10 @@ fn main() -> ! {
         io.pins.gpio0,
         peripherals.UART1,
         &clocks,
+        &mut system.peripheral_clock_control,
     );
 
-    let mut keyvents = VecDeque::new();
+    let mut key_events = VecDeque::new();
     let mut key_state = vgaterm::keyboard::PressedSet::new();
     let mut input = vgaterm::terminal_input::TerminalInput::new(300, 40);
 
@@ -168,8 +176,8 @@ fn main() -> ! {
     let mode = ConnectMode::ConnectHost;
 
     loop {
-        keyvents.extend(keyboard.flush_and_parse());
-        if let Some(kevent) = keyvents.pop_front() {
+        key_events.extend(keyboard.flush_and_parse());
+        if let Some(kevent) = key_events.pop_front() {
             key_state.push(kevent);
         }
 
@@ -208,7 +216,7 @@ fn main() -> ! {
         // display.flush();
         terminal.draw_up_to(315, &mut display);
 
-        if !keyvents.is_empty() || unsafe { (*UART0::PTR).status.read().rxfifo_cnt().bits() } > 0 {
+        if !key_events.is_empty() {
             continue;
         }
 

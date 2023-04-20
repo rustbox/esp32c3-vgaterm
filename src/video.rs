@@ -48,17 +48,32 @@ pub static mut OFFSET: usize = 0;
 const CHUNK_SIZE: usize = 32000;
 const LAST_CHUNK: usize = 224000;
 
-#[inline(always)]
+// #[inline(always)]
+#[link_section = ".rwtext"]
 pub fn transmit_chunk() {
+    static mut M1: crate::perf::Measure =
+        crate::perf::Measure::new("xmit_chunk", fugit::HertzU32::Hz(240 * 8));
+
+    let xmit_chunk = unsafe { &mut M1 };
+    crate::perf::Measure::start([xmit_chunk]);
     spi::start_transmit(unsafe { &mut BUFFER[OFFSET..OFFSET + CHUNK_SIZE] });
-    timer::start_timer0_callback(1475, timer_callback)
+    crate::perf::Measure::stop([xmit_chunk]);
+
+    timer::start_timer0_callback(1475, timer_callback);
+    crate::perf::Measure::flush([xmit_chunk]);
 }
 
 #[link_section = ".rwtext"]
 fn timer_callback() {
+    static mut M1: crate::perf::Measure =
+        crate::perf::Measure::new("tx_wait", fugit::HertzU32::Hz(240 * 8));
+    let tx_wait = unsafe { &mut M1 };
+
     unsafe {
         if let Some(tx) = spi::SPI_DMA_TRANSFER.take() {
+            crate::perf::Measure::start([tx_wait]);
             let (_, spi) = tx.wait();
+            crate::perf::Measure::stop([tx_wait]);
             spi::QSPI.replace(spi);
         }
         if OFFSET < LAST_CHUNK {
@@ -66,6 +81,7 @@ fn timer_callback() {
             transmit_chunk();
         }
     }
+    // crate::perf::Measure::flush([tx_wait]);
 }
 
 // #[interrupt]

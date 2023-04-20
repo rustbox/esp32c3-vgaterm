@@ -49,10 +49,9 @@ pub fn start(start: Gpio3<Unknown>) {
 ///
 /// Transmit the contents of the frame buffer out to the monitor via SPI.
 ///
-// #[inline]
 #[ram]
 pub fn frame(_: &mut Gpio3<Input<Floating>>) {
-    // Beginning of frame, so let's guarentee we start at 0
+    // Beginning of frame, so let's guarantee we start at 0
     // print!("*");
     unsafe {
         video::OFFSET = 0;

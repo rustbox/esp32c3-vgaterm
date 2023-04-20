@@ -1,6 +1,7 @@
 use esp32c3_hal::{
     clock::Clocks,
     gpio::{Gpio0, Gpio1, Gpio3, Unknown},
+    system::PeripheralClockControl,
     uart::{
         config::{Config, DataBits, Parity, StopBits},
         TxRxPins,
@@ -18,8 +19,8 @@ static mut SENDER0: Option<UartTransmitter<UART0, char>> = None;
 static mut SENDER1: Option<UartTransmitter<UART1, u8>> = None;
 
 #[must_use]
-pub fn configure0(uart: UART0) -> Receiver<char> {
-    let serial0 = Uart::new(uart);
+pub fn configure0(uart: UART0, clock_ctl: &mut PeripheralClockControl) -> Receiver<char> {
+    let serial0 = Uart::new(uart, clock_ctl);
     let (tx, rx) = channel::channel();
 
     critical_section::with(|_cs| {
@@ -37,6 +38,7 @@ pub fn configure1(
     tx: Gpio1<Unknown>,
     rx: Gpio0<Unknown>,
     clocks: &Clocks,
+    clock_ctl: &mut PeripheralClockControl,
 ) -> Receiver<u8> {
     let config = Config {
         baudrate: 400_000,
@@ -46,7 +48,7 @@ pub fn configure1(
     };
 
     let pins = TxRxPins::new_tx_rx(tx.into_push_pull_output(), rx.into_floating_input());
-    let serial1 = Uart::new_with_config(uart, Some(config), Some(pins), clocks);
+    let serial1 = Uart::new_with_config(uart, Some(config), Some(pins), clocks, clock_ctl);
     let (tx, rx) = channel::channel();
 
     critical_section::with(|_cs| {
@@ -59,13 +61,13 @@ pub fn configure1(
     rx
 }
 
-pub fn make_uart0<'a>(uart: UART0) -> Uart<'a, UART0> {
+pub fn make_uart0<'a>(uart: UART0, clock_ctl: &mut PeripheralClockControl) -> Uart<'a, UART0> {
     uart.flow_conf.write(|w| w.sw_flow_con_en().set_bit());
     uart.swfc_conf0
         .write(|w| w.xoff_threshold().variant(64).xoff_char().variant(0x13));
     uart.swfc_conf1
         .write(|w| w.xon_threshold().variant(64).xon_char().variant(0x11));
-    let serial0: Uart<UART0> = Uart::new(uart);
+    let serial0: Uart<UART0> = Uart::new(uart, clock_ctl);
 
     serial0
 }
@@ -75,6 +77,7 @@ pub fn make_uart1<'a>(
     tx: Gpio1<Unknown>,
     rx: Gpio3<Unknown>,
     clocks: &Clocks,
+    clock_ctl: &mut PeripheralClockControl,
 ) -> Uart<'a, UART1> {
     let config = Config {
         baudrate: 400_000,
@@ -83,7 +86,7 @@ pub fn make_uart1<'a>(
         stop_bits: StopBits::STOP1,
     };
     let pins = TxRxPins::new_tx_rx(tx.into_push_pull_output(), rx.into_floating_input());
-    let serial1 = Uart::new_with_config(uart, Some(config), Some(pins), clocks);
+    let serial1 = Uart::new_with_config(uart, Some(config), Some(pins), clocks, clock_ctl);
 
     serial1
 }

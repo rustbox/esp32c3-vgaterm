@@ -38,15 +38,23 @@ fn init_heap() {
 #[entry]
 fn main() -> ! {
     let peripherals = Peripherals::take();
-    let system = peripherals.SYSTEM.split();
+    let mut system = peripherals.SYSTEM.split();
     let clocks = ClockControl::boot_defaults(system.clock_control).freeze();
 
     // Disable the watchdog timers. For the ESP32-C3, this includes the Super WDT,
     // the RTC WDT, and the TIMG WDTs.
     let mut rtc = Rtc::new(peripherals.RTC_CNTL);
-    let timer_group0 = TimerGroup::new(peripherals.TIMG0, &clocks);
+    let timer_group0 = TimerGroup::new(
+        peripherals.TIMG0,
+        &clocks,
+        &mut system.peripheral_clock_control,
+    );
     let mut wdt0 = timer_group0.wdt;
-    let timer_group1 = TimerGroup::new(peripherals.TIMG1, &clocks);
+    let timer_group1 = TimerGroup::new(
+        peripherals.TIMG1,
+        &clocks,
+        &mut system.peripheral_clock_control,
+    );
     let mut wdt1 = timer_group1.wdt;
 
     rtc.swd.disable();
@@ -60,14 +68,16 @@ fn main() -> ! {
 
     let mut led = io.pins.gpio5.into_push_pull_output();
 
-    let mut pref = vgaterm::gpio::pin_interrupt(
-        io.pins.gpio9.into_pull_down_input(),
-        Event::FallingEdge,
-        move |_| {
-            esp_println::println!("GPIO interrupt");
-            led.toggle().unwrap();
-        },
-    );
+    // fn callback<T>(_: T) {
+    //     esp_println::println!("GPIO interrupt");
+    //     // led.toggle().unwrap();
+    // }
+
+    // let mut pref = vgaterm::gpio::pin_interrupt(
+    //     io.pins.gpio9.into_pull_down_input(),
+    //     Event::FallingEdge,
+    //     callback,
+    // );
 
     interrupt::enable(peripherals::Interrupt::GPIO, interrupt::Priority::Priority3).unwrap();
 
@@ -78,8 +88,8 @@ fn main() -> ! {
     loop {
         unsafe { riscv::asm::wfi() };
 
-        let (input, event, callback) = interrupt_disable(pref);
-        println!("I now hold pin {}", input.number());
-        pref = pin_interrupt(input, event, callback);
+        // let (input, event, callback) = interrupt_disable(pref);
+        // println!("I now hold pin {}", input.number());
+        // pref = pin_interrupt(input, event, callback);
     }
 }

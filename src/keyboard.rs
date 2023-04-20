@@ -4,6 +4,7 @@ use esp32c3_hal::{
     gpio::{Gpio0, Gpio1, Unknown},
     interrupt::Priority,
     peripherals::UART1,
+    system::PeripheralClockControl,
 };
 use esp_println::println;
 
@@ -32,8 +33,9 @@ impl Keyboard {
         rx: Gpio0<Unknown>,
         uart: UART1,
         clocks: &Clocks,
+        clock_ctl: &mut PeripheralClockControl,
     ) -> Keyboard {
-        let receiver = uart::configure1(uart, tx, rx, clocks);
+        let receiver = uart::configure1(uart, tx, rx, clocks, clock_ctl);
         uart::interrupt_enable1(Priority::Priority5);
         Keyboard::new(layout, receiver)
     }

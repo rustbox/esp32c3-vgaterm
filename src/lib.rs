@@ -59,6 +59,12 @@ pub fn measure<O>(count: &mut usize, f: impl FnOnce() -> O) -> O {
     r
 }
 
+#[allow(clippy::missing_safety_doc)]
+#[no_mangle]
+pub unsafe extern "C" fn DefaultHandler(trap_frame: *mut esp32c3_hal::trapframe::TrapFrame) {
+    panic!("unhandled exception: {:?}", *trap_frame)
+}
+
 // see: https://github.com/rust-lang/compiler-builtins/issues/339
 // in our case, they're unoptimized because they don't live in ram, but on flash, so they thrash the shit out of the cache
 mod mem {
