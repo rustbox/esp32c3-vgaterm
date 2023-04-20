@@ -89,14 +89,39 @@ mod mem {
     #[no_mangle]
     #[link_section = ".rwtext"]
     pub unsafe extern "C" fn memmove(dest: *mut u8, src: *const u8, n: usize) -> *mut u8 {
+        enum Idx {
+            Forward(usize, usize),
+            Backward(usize),
+        }
+
+        impl Iterator for Idx {
+            type Item = usize;
+
+            fn next(&mut self) -> Option<Self::Item> {
+                match self {
+                    Idx::Backward(0) => None,
+                    Idx::Backward(n) => {
+                        *n -= 1;
+                        Some(*n)
+                    }
+                    Idx::Forward(a, b) if *a >= *b => None,
+                    Idx::Forward(a, _) => {
+                        let r = *a;
+                        *a += 1;
+                        Some(r)
+                    }
+                }
+            }
+        }
+
         // "[...] you don't have to worry about whether they overlap at all.
         // If src is less than dst, just copy from the end.
         // If src is greater than dst, just copy from the beginning."
         // — https://stackoverflow.com/a/3572519/151464
         for i in if src < dest as *const u8 {
-            (n - 1)..=0
+            Idx::Backward(n)
         } else {
-            0..=(n - 1)
+            Idx::Forward(0, n)
         } {
             *dest.add(i) = *src.add(i);
         }
