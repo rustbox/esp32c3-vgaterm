@@ -4,6 +4,8 @@
 #![feature(iter_collect_into)]
 #![feature(trait_alias)]
 #![feature(round_char_boundary)]
+#![feature(const_replace)]
+#![feature(const_mut_refs)]
 
 extern crate alloc;
 

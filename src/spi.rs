@@ -1,12 +1,13 @@
-use esp32c3_hal::dma::*;
+use core::marker::Destruct;
+
 use esp32c3_hal::gdma::*;
 use esp32c3_hal::gpio::{Gpio10, Gpio2, Gpio4, Gpio5, Gpio6, Gpio7};
 use esp32c3_hal::peripherals::{DMA, SPI2};
 use esp32c3_hal::prelude::*;
-use esp32c3_hal::spi::dma::SpiDma;
 use esp32c3_hal::spi::{Spi, SpiMode};
 use esp32c3_hal::{clock::Clocks, gpio::OutputSignal};
 use esp32c3_hal::{dma::DmaPriority, spi::dma::SpiDmaTransfer};
+use esp32c3_hal::{dma::*, spi::dma::SpiDma};
 use esp32c3_hal::{gdma::Gdma, spi::FullDuplexMode};
 use esp32c3_hal::{
     gpio::{OutputPin, Unknown},
@@ -16,17 +17,66 @@ use esp32c3_hal::{
 use esp_println::println;
 use riscv::interrupt;
 
+use Instance::*;
+
 #[allow(clippy::type_complexity)]
-pub static mut QSPI: Option<
-    SpiDma<
-        '_,
-        SPI2,
-        ChannelTx<'_, Channel0TxImpl, Channel0>,
-        ChannelRx<'_, Channel0RxImpl, Channel0>,
-        SuitablePeripheral0,
-        FullDuplexMode,
-    >,
-> = None;
+
+pub enum Instance<'a> {
+    ReadyToSend(
+        SpiDma<
+            'a,
+            SPI2,
+            ChannelTx<'a, Channel0TxImpl, Channel0>,
+            ChannelRx<'a, Channel0RxImpl, Channel0>,
+            SuitablePeripheral0,
+            FullDuplexMode,
+        >,
+    ),
+    TxInProgress(
+        SpiDmaTransfer<
+            'a,
+            SPI2,
+            ChannelTx<'a, Channel0TxImpl, Channel0>,
+            ChannelRx<'a, Channel0RxImpl, Channel0>,
+            SuitablePeripheral0,
+            &'a mut [u8],
+            FullDuplexMode,
+        >,
+    ),
+    None,
+}
+
+impl<'a> Instance<'a> {
+    /// cf. [Option::replace]
+    #[inline]
+    pub const fn replace(&mut self, val: Self) -> Self {
+        core::mem::replace(self, val)
+    }
+
+    /// cf. [Option::take]
+    #[inline]
+    pub const fn take(&mut self) -> Self {
+        core::mem::replace(self, None)
+    }
+
+    /// this is surprisingly hard to do correctly in a language with unwinding semantics (i.e. panics), at least in general
+    /// we don't have to solve it in general, though, just for ourselves
+    /// see also: https://stackoverflow.com/questions/75278531/in-place-memory-update-like-take-swap-replace-but-with-a-closure
+    ///      and: https://github.com/rust-lang/rfcs/pull/1736
+    #[inline]
+    pub const fn replace_with<F>(&mut self, f: F)
+    where
+        F: ~const FnOnce(Self) -> Self,
+        F: ~const Destruct,
+    {
+        let i = core::mem::replace(self, None);
+        // the sticky wicket is what happens here if `f` panics
+        let n = core::mem::replace(self, f(i));
+        core::mem::forget(n); // forgets "None"
+    }
+}
+
+pub static mut QSPI: Instance = None;
 
 static mut DESCRIPTORS: [u32; 8 * 3] = [0u32; 8 * 3];
 static mut RX_DESCRIPTORS: [u32; 3] = [0u32; 3]; // should be zero, but dma will get mad
@@ -73,7 +123,7 @@ pub fn configure(
     ));
 
     interrupt::free(|| unsafe {
-        QSPI.replace(qspi);
+        QSPI.replace(ReadyToSend(qspi));
     });
 }
 
@@ -102,34 +152,35 @@ pub fn configure(
 pub fn transmit(data: &'static mut [u8]) {
     static mut RECV: [u8; 0] = [];
 
-    let qspi = unsafe { &mut QSPI }.take().unwrap();
+    let qspi = match unsafe { &mut QSPI }.take() {
+        ReadyToSend(qspi) => qspi,
+        TxInProgress(tx) => {
+            let (_, q) = tx.wait();
+            q
+        }
+        _ => panic!("no QSPI; did you call `configure`?"),
+    };
     let transfer = qspi.dma_transfer(data, unsafe { &mut RECV }).unwrap();
     // here we could do something else while DMA transfer is in progress
     // the buffers and spi is moved into the transfer and we can get it back via
     // `wait`
     let (_, _, q) = transfer.wait();
 
-    unsafe { &mut QSPI }.replace(q);
+    unsafe { &mut QSPI }.replace(ReadyToSend(q));
 }
-
-#[allow(clippy::type_complexity)]
-pub static mut SPI_DMA_TRANSFER: Option<
-    SpiDmaTransfer<
-        SPI2,
-        ChannelTx<Channel0TxImpl, Channel0>,
-        ChannelRx<Channel0RxImpl, Channel0>,
-        SuitablePeripheral0,
-        &mut [u8],
-        FullDuplexMode,
-    >,
-> = None;
 
 #[inline(always)]
 pub fn start_transmit(data: &'static mut [u8]) {
-    let qspi = unsafe { &mut QSPI }.take().unwrap();
+    let qspi = match unsafe { &mut QSPI }.take() {
+        ReadyToSend(qspi) => qspi,
+        TxInProgress(_) => {
+            panic!("start_transmit called while an operation is already in progress")
+        }
+        _ => panic!("no QSPI; did you call `configure`?"),
+    };
 
     let transfer = qspi.dma_write(data).unwrap();
-    unsafe { &mut SPI_DMA_TRANSFER }.replace(transfer);
+    unsafe { &mut QSPI }.replace(TxInProgress(transfer));
 }
 
 ///

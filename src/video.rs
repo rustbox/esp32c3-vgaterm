@@ -1,6 +1,12 @@
 use esp32c3_hal::prelude::*;
 
-use crate::{spi, timer};
+use crate::{
+    spi::{
+        self,
+        Instance::{ReadyToSend, TxInProgress},
+    },
+    timer,
+};
 
 pub const WIDTH: usize = 640;
 pub const HEIGHT: usize = 400;
@@ -48,30 +54,36 @@ pub static mut OFFSET: usize = 0;
 const CHUNK_SIZE: usize = 32000;
 const LAST_CHUNK: usize = 224000;
 
-// #[inline(always)]
 #[link_section = ".rwtext"]
 pub fn transmit_chunk() {
     static mut M1: crate::perf::Measure =
-        crate::perf::Measure::new("start_xmit", fugit::HertzU32::Hz(240 * 8));
+        crate::perf::Measure::new("xmit_chunk", fugit::HertzU32::Hz(240 * 8));
     static mut M2: crate::perf::Measure =
+        crate::perf::Measure::new("start_xmit", fugit::HertzU32::Hz(240 * 8));
+    static mut M3: crate::perf::Measure =
         crate::perf::Measure::new("tx_wait", fugit::HertzU32::Hz(240 * 8));
 
-    let (xmit_chunk, tx_wait) = unsafe { (&mut M1, &mut M2) };
+    let (xmit_chunk, start_xmit, tx_wait) = unsafe { (&mut M1, &mut M2, &mut M3) };
+    crate::perf::Measure::start([xmit_chunk]);
 
-    if let Some(tx) = unsafe { &mut spi::SPI_DMA_TRANSFER }.take() {
-        crate::perf::Measure::start([tx_wait]);
-        let (_, spi) = tx.wait();
-        crate::perf::Measure::stop([tx_wait]);
-        unsafe { &mut spi::QSPI }.replace(spi);
-    }
+    unsafe { &mut spi::QSPI }.replace_with(|i| match i {
+        TxInProgress(tx) => {
+            crate::perf::Measure::start([tx_wait]);
+            let (_, spi) = tx.wait();
+            crate::perf::Measure::stop([tx_wait]);
+            ReadyToSend(spi)
+        }
+        i => i,
+    });
 
     let data = unsafe { &mut BUFFER[OFFSET..OFFSET + CHUNK_SIZE] };
-    crate::perf::Measure::start([xmit_chunk]);
+    crate::perf::Measure::start([start_xmit]);
     spi::start_transmit(data);
-    crate::perf::Measure::stop([xmit_chunk]);
+    crate::perf::Measure::stop([start_xmit]);
 
     timer::start_timer0_callback(1565, timer_callback);
-    crate::perf::Measure::flush([xmit_chunk, tx_wait]);
+    crate::perf::Measure::stop([xmit_chunk]);
+    crate::perf::Measure::flush([start_xmit, tx_wait, xmit_chunk]);
 }
 
 #[link_section = ".rwtext"]
