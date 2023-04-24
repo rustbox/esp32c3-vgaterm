@@ -44,6 +44,7 @@ pub fn rgb3_from_rgb(red: u8, green: u8, blue: u8) -> u16 {
     r + g + b
 }
 
+#[inline(always)]
 pub const fn rgb3_to_byte(rgb3: u16) -> u8 {
     (rgb3 >> 1) as u8
 }
@@ -136,6 +137,7 @@ impl Rgb3 {
         )
     }
 
+    #[inline(always)]
     pub const fn to_byte(&self) -> u8 {
         let mut v = self.red as u16;
         v += (self.green as u16) << 3;

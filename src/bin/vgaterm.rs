@@ -5,18 +5,20 @@
 extern crate alloc;
 
 use alloc::{collections::VecDeque, string::String, vec::Vec};
-use esp32c3_hal::clock::{ClockControl, CpuClock};
 use esp32c3_hal::prelude::*;
 use esp32c3_hal::timer::TimerGroup;
+use esp32c3_hal::{
+    clock::{ClockControl, CpuClock},
+    peripherals::UART0,
+};
 use esp32c3_hal::{gpio::IO, peripherals::Peripherals, Rtc};
 use esp_backtrace as _;
-use esp_println::println;
-use vgaterm::{self, video};
-use vgaterm::{interrupt::Priority, usb_keyboard::US_ENGLISH, Delay, Work};
+use vgaterm::{self, perf, video};
+use vgaterm::{interrupt::Priority, usb_keyboard::US_ENGLISH, Work};
 
-use core::{arch::asm, fmt::Write};
+use core::fmt::Write;
 
-core::arch::global_asm!(".global _heap_size; _heap_size = 0xB000");
+core::arch::global_asm!(".global _heap_size; _heap_size = 0xC000");
 
 #[global_allocator]
 static ALLOCATOR: esp_alloc::EspHeap = esp_alloc::EspHeap::empty();
@@ -55,7 +57,11 @@ fn main() -> ! {
     // the RTC WDT, and the TIMG WDTs.
     let mut rtc = Rtc::new(peripherals.RTC_CNTL);
 
-    let timer_group1 = TimerGroup::new(peripherals.TIMG1, &clocks);
+    let timer_group1 = TimerGroup::new(
+        peripherals.TIMG1,
+        &clocks,
+        &mut system.peripheral_clock_control,
+    );
     let mut wdt1 = timer_group1.wdt;
 
     rtc.swd.disable();
@@ -64,35 +70,37 @@ fn main() -> ! {
 
     let io = IO::new(peripherals.GPIO, peripherals.IO_MUX);
 
-    // io.pins.gpio20.into_floating_input();
-
     init_heap();
-    configure_counter_for_cpu_cycles();
+    perf::configure_counter_for_cpu_cycles();
 
-    vgaterm::configure_timer0(peripherals.TIMG0, &clocks);
+    vgaterm::configure_timer0(
+        peripherals.TIMG0,
+        &clocks,
+        &mut system.peripheral_clock_control,
+    );
+    vgaterm::timer::configure_systimer(peripherals.SYSTIMER);
     // let mut host_recv = vgaterm::uart::configure0(peripherals.UART0);
-    let mut serial0 = vgaterm::uart::make_uart0(peripherals.UART0);
+    let mut serial0 =
+        vgaterm::uart::make_uart0(peripherals.UART0, &mut system.peripheral_clock_control);
     serial0.set_rx_fifo_full_threshold(1);
     serial0.listen_rx_fifo_full();
-    vgaterm::enable_timer0_interrupt(Priority::Priority5);
+    vgaterm::enable_timer0_interrupt(Priority::Priority14);
     vgaterm::uart::interrupt_enable0(Priority::Priority6);
+    // vgaterm::timer::enable_alarm_interrupts(Priority::Priority14);
     vgaterm::gpio::interrupt_enable(Priority::max());
 
     unsafe {
         riscv::interrupt::enable();
     }
 
-    vgaterm::timer::start_repeat_timer0_callback(1_000_000, || unsafe {
-        if NUM_BYTES > 0 {
-            println!("{} bytes", NUM_BYTES);
-            println!(
-                "{} draw cycles per byte",
-                vgaterm::CHARACTER_DRAW_CYCLES as f32 / NUM_BYTES as f32
-            );
-            NUM_BYTES = 0;
-        }
-        vgaterm::CHARACTER_DRAW_CYCLES = 0;
-    });
+    // vgaterm::timer::start_repeat_timer0_callback(1_000_000, || unsafe {
+    //     if NUM_BYTES > 0 {
+    //         println!("{} bytes",  NUM_BYTES );
+    //         // println!("{} draw cycles per byte", vgaterm::CHARACTER_DRAW_CYCLES as f32 / NUM_BYTES as f32);
+    //         NUM_BYTES = 0;
+    //     }
+    //     // vgaterm::CHARACTER_DRAW_CYCLES = 0;
+    // });
 
     // Initialize the Delay peripheral, and use it to toggle the LED state in a
     // loop.
@@ -151,9 +159,10 @@ fn main() -> ! {
         io.pins.gpio0,
         peripherals.UART1,
         &clocks,
+        &mut system.peripheral_clock_control,
     );
 
-    let mut keyvents = VecDeque::new();
+    let mut key_events = VecDeque::new();
     let mut key_state = vgaterm::keyboard::PressedSet::new();
     let mut input = vgaterm::terminal_input::TerminalInput::new(300, 40);
 
@@ -167,8 +176,8 @@ fn main() -> ! {
     let mode = ConnectMode::ConnectHost;
 
     loop {
-        keyvents.extend(keyboard.flush_and_parse());
-        if let Some(kevent) = keyvents.pop_front() {
+        key_events.extend(keyboard.flush_and_parse());
+        if let Some(kevent) = key_events.pop_front() {
             key_state.push(kevent);
         }
 
@@ -203,49 +212,19 @@ fn main() -> ! {
         }
 
         // Draw the characters on the frame
-        terminal.draw(&mut display);
         // Flush the Display to the BUFFER
-        display.flush();
+        // display.flush();
+        terminal.draw_up_to(315, &mut display);
 
-        if !keyvents.is_empty() {
-            println!("{:?}", keyvents);
+        if !key_events.is_empty() {
             continue;
         }
+
+        terminal.draw(&mut display);
 
         unsafe {
             // this will fire no less often than once per frame
             riscv::asm::wfi();
         }
     }
-}
-
-///
-/// Configure the esp32c2 custom Control and Status register
-/// `mpcer` to count only CPU clock cycles.
-///
-/// Page 28, https://www.espressif.com/sites/default/files/documentation/esp32-c3_technical_reference_manual_en.pdf
-#[no_mangle]
-fn configure_counter_for_cpu_cycles() {
-    unsafe {
-        // Set count event to clock cycles
-        // Enable counting events and set overflow to rollover
-        asm!("csrwi 0x7E0, 0x1", "csrwi 0x7E1, 0x1");
-    }
-}
-
-#[no_mangle]
-fn measure_clock(delay: Delay) -> u32 {
-    unsafe {
-        // Set event counter to 0
-        asm!("csrwi 0x7E2, 0x00",)
-    }
-    let d: u32;
-    delay.delay_ms(1000);
-    unsafe {
-        asm!(
-            "csrr {}, 0x7E2",
-            out(reg) d
-        );
-    }
-    d
 }

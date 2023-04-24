@@ -6,15 +6,16 @@ use alloc::{
 };
 use embedded_graphics::{
     mono_font::{MonoTextStyle, MonoTextStyleBuilder},
-    pixelcolor::raw::RawU8,
     prelude::*,
+    primitives::Rectangle,
     text::Text,
     Pixel,
 };
+use esp_println::println;
 
 use crate::{
     color::{self, Rgb3},
-    video,
+    video, CHARACTER_DRAW_CYCLES,
 };
 
 pub struct Display {
@@ -33,6 +34,18 @@ impl Display {
             self.flush();
         }
         self.local_buffer.push_front((pos, color))
+    }
+
+    /// Sets the pixel color the location in the video BUFFER
+    /// to the given color
+    ///
+    /// SAFETY: This directly sets the pixel to video memory which
+    /// is unsafe, but should be okay since we're the only ones
+    /// setting memory in the buffer and SPI takes exclusive control
+    /// when it runs to display the pixels
+    #[inline(always)]
+    pub fn set_pixel(&mut self, pos: usize, color: u8) {
+        *unsafe { &mut video::BUFFER[pos] } = color;
     }
 
     pub fn flush(&mut self) {
@@ -71,12 +84,39 @@ impl DrawTarget for Display {
                     && coord.y < video::HEIGHT as i32
                 {
                     let i = coord.y as usize * video::WIDTH + coord.x as usize;
-                    let raw = RawU8::from(color);
-                    self.push(i, raw.into_inner());
+                    // let raw = RawU8::from(color);
+                    self.set_pixel(i, color.to_byte());
                 }
             }
         });
-        unsafe { crate::CHARACTER_DRAW_CYCLES += count };
+        // unsafe { crate::CHARACTER_DRAW_CYCLES += count };
+        Ok(())
+    }
+
+    // #[link_section = ".rwtext"]
+    fn fill_contiguous<I>(&mut self, area: &Rectangle, colors: I) -> Result<(), Self::Error>
+    where
+        I: IntoIterator<Item = Self::Color>,
+    {
+        // let mut _count = 0;
+        // crate::measure(&mut count, || {
+        let mut colors = colors.into_iter();
+        let screen_width = self.size().width as usize;
+        let area_width = area.size.width as usize;
+
+        let mut offset = screen_width * area.top_left.y as usize + area.top_left.x as usize;
+        for _ in 0..area.size.height {
+            for col in 0..area_width {
+                let i = offset + col;
+                let c = colors.next().unwrap().to_byte();
+                // print!("{: ^5}", c);
+                unsafe { video::BUFFER[i] = c };
+            }
+            // println!();
+            offset += screen_width;
+        }
+        // });
+        // unsafe { crate::CHARACTER_DRAW_CYCLES += count };
         Ok(())
     }
 }
@@ -312,39 +352,50 @@ pub const ROWS: usize = 33;
 
 #[inline(always)]
 fn index(row: usize, col: usize) -> usize {
-    row * COLUMNS + col
+    (row) * COLUMNS + col
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum Drawn {
+    Dirty,
+    Clean,
 }
 
 pub struct TextDisplay {
-    buffer: [Character; ROWS * COLUMNS],
-    dirty: VecDeque<(usize, usize)>,
+    buffer: [(Character, Drawn); ROWS * COLUMNS],
+    num_dirty: usize,
+    top: usize,
 }
 
 impl TextDisplay {
     pub fn new() -> TextDisplay {
         TextDisplay {
-            buffer: [Character::default(); COLUMNS * ROWS],
-            dirty: VecDeque::new(),
+            buffer: [(Character::default(), Drawn::Clean); COLUMNS * ROWS],
+            num_dirty: 0,
+            top: 0,
         }
+    }
+
+    fn real_index(&self, line: usize, col: usize) -> usize {
+        let real_row = (self.top + line) % ROWS;
+        index(real_row, col)
     }
 
     #[inline(always)]
     pub fn read_char(&self, line: usize, col: usize) -> Character {
-        self.buffer[index(line, col)]
+        self.buffer[self.real_index(line, col)].0
     }
 
     #[inline(always)]
     pub fn write_char(&mut self, line: usize, col: usize, c: Character) {
-        self.buffer[index(line, col)] = c;
-        self.dirty.push_front((line, col))
+        self.buffer[self.real_index(line, col)] = (c, Drawn::Dirty);
+        self.num_dirty += 1;
     }
 
     #[inline(always)]
     pub fn write(&mut self, line: usize, col: usize, c: char) {
         let ch = Character::new(c);
-        let i = line * COLUMNS + col;
-        self.buffer[i] = ch;
-        self.dirty.push_front((line, col));
+        self.write_char(line, col, ch)
     }
 
     pub fn write_text(&mut self, start_line: usize, start_column: usize, text: &str) {
@@ -364,6 +415,22 @@ impl TextDisplay {
                 }
             }
         }
+    }
+
+    ///
+    pub fn scroll_down(&mut self, amount: isize) {
+        // We add a correction if amount and COLUMNS are differ in even/odd parity
+        let amount = amount % ROWS as isize;
+        self.top = ((self.top as isize + amount) % ROWS as isize) as usize;
+
+        self.dirty_all();
+    }
+
+    pub fn dirty_all(&mut self) {
+        for (_, d) in self.buffer.iter_mut() {
+            *d = Drawn::Dirty;
+        }
+        self.num_dirty = ROWS * COLUMNS;
     }
 
     #[inline(always)]
@@ -400,8 +467,51 @@ impl TextDisplay {
     where
         D: DrawTarget<Color = Rgb3>,
     {
-        while let Some((line, col)) = self.dirty.pop_back() {
-            self.draw(line, col, target)
+        if self.num_dirty == 0 {
+            return;
+        }
+        for row in 0..ROWS {
+            for col in 0..COLUMNS {
+                let i = self.real_index(row, col);
+                if self.buffer[i].1 == Drawn::Dirty {
+                    self.buffer[i].1 = Drawn::Clean;
+                    self.draw(row, col, target);
+                    self.num_dirty -= 1;
+                    if self.num_dirty == 0 {
+                        unsafe {
+                            if CHARACTER_DRAW_CYCLES == 0 {
+                                CHARACTER_DRAW_CYCLES = crate::perf::measure_cycle_count() as usize;
+                                println!("Took {} cycles", CHARACTER_DRAW_CYCLES);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[inline(always)]
+    pub fn draw_dirty_up_to<D>(&mut self, up_to: usize, target: &mut D)
+    where
+        D: DrawTarget<Color = Rgb3>,
+    {
+        if self.num_dirty == 0 {
+            return;
+        }
+        let mut drawn = 0;
+        for row in 0..ROWS {
+            for col in 0..COLUMNS {
+                let i = self.real_index(row, col);
+                if self.buffer[i].1 == Drawn::Dirty {
+                    self.buffer[i].1 = Drawn::Clean;
+                    self.draw(row, col, target);
+                    self.num_dirty -= 1;
+                    drawn += 1;
+                    if drawn >= up_to || self.num_dirty == 0 {
+                        return;
+                    }
+                }
+            }
         }
     }
 
@@ -419,6 +529,7 @@ impl TextDisplay {
 
         let text = Text::new(&text, Point::new(x as i32, y as i32), style);
 
+        // print!("d");
         let _ = text.draw(target);
     }
 }

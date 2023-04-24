@@ -1,4 +1,12 @@
-use crate::spi;
+use esp32c3_hal::prelude::*;
+
+use crate::{
+    spi::{
+        self,
+        Instance::{ReadyToSend, TxInProgress},
+    },
+    timer,
+};
 
 pub const WIDTH: usize = 640;
 pub const HEIGHT: usize = 400;
@@ -15,8 +23,19 @@ pub static mut BUFFER: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];
 ///
 #[inline(always)]
 pub fn transmit_frame() {
+    // static mut M1: crate::perf::Measure =
+    //     crate::perf::Measure::new("first_block", fugit::HertzU32::Hz(240));
+    // static mut M2: crate::perf::Measure =
+    //     crate::perf::Measure::new("full_frame", fugit::HertzU32::Hz(240));
+
+    // crate::perf::reset_cycle_count(); // no cycle count for you!
     riscv::interrupt::free(|| unsafe {
+        // let (first_block, full_frame) = { (&mut M1, &mut M2) };
+        // crate::perf::Measure::start([first_block, full_frame]);
+        // crate::perf::pause_event_counter();
+
         spi::transmit(&mut BUFFER[0..32000]);
+        // crate::perf::Measure::stop([first_block]);
         spi::transmit(&mut BUFFER[32000..64000]);
         spi::transmit(&mut BUFFER[64000..96000]);
         spi::transmit(&mut BUFFER[96000..128000]);
@@ -24,11 +43,73 @@ pub fn transmit_frame() {
         spi::transmit(&mut BUFFER[160000..192000]);
         spi::transmit(&mut BUFFER[192000..224000]);
         spi::transmit(&mut BUFFER[224000..256000]);
+        // crate::perf::Measure::stop([full_frame]);
+
+        // crate::perf::Measure::flush([first_block, full_frame]);
+        // crate::perf::configure_counter_for_cpu_cycles();
     });
 }
 
+pub static mut OFFSET: usize = 0;
+const CHUNK_SIZE: usize = 32000;
+const LAST_CHUNK: usize = 224000;
+
+#[link_section = ".rwtext"]
+pub fn transmit_chunk() {
+    static mut M1: crate::perf::Measure =
+        crate::perf::Measure::new("xmit_chunk", fugit::HertzU32::Hz(240 * 8));
+    static mut M2: crate::perf::Measure =
+        crate::perf::Measure::new("start_xmit", fugit::HertzU32::Hz(240 * 8));
+    static mut M3: crate::perf::Measure =
+        crate::perf::Measure::new("tx_wait", fugit::HertzU32::Hz(240 * 8));
+
+    let (xmit_chunk, start_xmit, tx_wait) = unsafe { (&mut M1, &mut M2, &mut M3) };
+    crate::perf::Measure::start([xmit_chunk]);
+
+    unsafe { &mut spi::QSPI }.replace_with(|i| match i {
+        TxInProgress(tx) => {
+            crate::perf::Measure::start([tx_wait]);
+            let (_, spi) = tx.wait();
+            crate::perf::Measure::stop([tx_wait]);
+            ReadyToSend(spi)
+        }
+        i => i,
+    });
+
+    let data = unsafe { &mut BUFFER[OFFSET..OFFSET + CHUNK_SIZE] };
+    crate::perf::Measure::start([start_xmit]);
+    spi::start_transmit(data);
+    crate::perf::Measure::stop([start_xmit]);
+
+    timer::start_timer0_callback(1565, timer_callback);
+    crate::perf::Measure::stop([xmit_chunk]);
+    crate::perf::Measure::flush([start_xmit, tx_wait, xmit_chunk]);
+}
+
+#[link_section = ".rwtext"]
+fn timer_callback() {
+    let offset = unsafe { &mut OFFSET };
+    if *offset < LAST_CHUNK {
+        *offset += CHUNK_SIZE;
+        transmit_chunk();
+    }
+}
+
+// #[interrupt]
+// fn SYSTIMER_TARGET0() {
+//     riscv::interrupt::free(|| unsafe {
+//         timer::clear_alarm0();
+//         if let Some(tx) = spi::SPI_DMA_TRANSFER.take() {
+//             print!(".");
+//             let (_, spi) = tx.wait();
+//             spi::QSPI.replace(spi);
+//         }
+//         transmit_chunk();
+//     });
+// }
+
 ///
-/// Split the frame buffer into 4 equallay sized columns (160 pixels wide) each
+/// Split the frame buffer into 4 equally sized columns (160 pixels wide) each
 /// of the color given in the arguments. Color a corresponds to the first column,
 /// b to the second, etc.
 ///

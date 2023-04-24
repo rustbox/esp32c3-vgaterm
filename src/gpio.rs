@@ -24,7 +24,7 @@ where
 {
     pub pin: T,
     pub event: Event,
-    pub callback: Box<Callback<T>>,
+    pub callback: Callback<T>,
 }
 
 // NB: all Irqs must be PinInterrupts
@@ -82,10 +82,12 @@ mod example {
         let peripherals = Peripherals::take();
         let io = IO::new(peripherals.GPIO, peripherals.IO_MUX);
 
+        fn callback<T>(_: &mut T) {}
+
         let pin = super::pin_interrupt(
             io.pins.gpio6.into_pull_up_input(),
             Event::FallingEdge,
-            |_| {},
+            callback,
         );
 
         let (clk, event, callback) = super::interrupt_disable(pin);
@@ -143,7 +145,7 @@ pub fn interrupt_enable(priority: interrupt::Priority) {
 pub fn pin_interrupt<T: Pin + 'static>(
     mut input: T,
     event: Event,
-    callback: impl FnMut(&mut T) + 'static,
+    callback: Callback<T>,
 ) -> PinRef<T> {
     let n = input.number() as usize;
 
@@ -153,17 +155,17 @@ pub fn pin_interrupt<T: Pin + 'static>(
         unsafe { &mut INTERRUPTS[n] }.replace(Box::new(PinInterrupt {
             pin: input,
             event,
-            callback: Box::new(callback),
+            callback,
         }))
     });
     PinRef(n, PhantomData)
 }
 
-type Callback<T> = dyn FnMut(&mut T);
+type Callback<T> = fn(&mut T);
 
 /// Stops the pin from listening for interrupt signals
 /// removes and returns the callback
-pub fn interrupt_disable<T>(pin: PinRef<T>) -> (T, Event, Box<Callback<T>>)
+pub fn interrupt_disable<T>(pin: PinRef<T>) -> (T, Event, Callback<T>)
 where
     T: Pin + 'static,
 {

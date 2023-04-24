@@ -11,6 +11,8 @@
 //! ESC [ <n> E         => Cursor to beginning of next line, n lines down
 //! ESC [ <n> F         => Cursor to beginning of prev line, n lines up
 //! ESC [ <n> G         => Cursor to column n
+//! ESC [ <n> S         => Scroll up n lines
+//! ESC [ <n> T         => SCroll down n lines
 //! ESC [ 6 n           => Request cursor postion, as `ESC [ <r> ; <c> R` at row r and column c
 //! ESC 7               => Save cursor position
 //! ESC 8               => Restore cursor position
@@ -56,6 +58,7 @@ use alloc::{
     vec::Vec,
 };
 use core::{fmt::Debug, str::FromStr};
+use esp_println::println;
 use nom::{IResult, Parser};
 
 const ESC: char = '\u{1B}';
@@ -66,6 +69,7 @@ pub enum Op {
     MoveCursorAbs { x: usize, y: usize },
     MoveCursorAbsCol { x: usize },
     MoveCursorBeginningAndLine { dy: isize },
+    Scroll { delta: isize },
     RequstCursorPos,
     SaveCursorPos,
     RestoreCursorPos,
@@ -75,6 +79,7 @@ pub enum Op {
     InPlaceDelete,
     DecPrivateSet(String),
     DecPrivateReset(String),
+    Vgaterm(Vgaterm),
 }
 
 #[derive(Debug)]
@@ -109,6 +114,11 @@ pub enum EraseMode {
     FromCursor,
     ToCursor,
     All,
+}
+
+#[derive(Debug)]
+pub enum Vgaterm {
+    Redraw,
 }
 
 trait StrParser<'a, O> = nom::Parser<&'a str, O, nom::error::Error<&'a str>>;
@@ -277,6 +287,18 @@ fn cursor_to_column(input: &str) -> OpResult {
     })
 }
 
+/// ESC [ n S
+fn scroll_up(input: &str) -> OpResult {
+    optional_int_param_sequence::<isize>('S', 1)(input)
+        .map(|(rest, n)| (rest, Op::Scroll { delta: -n }))
+}
+
+/// ESC [ n T
+fn scroll_down(input: &str) -> OpResult {
+    optional_int_param_sequence::<isize>('T', 1)(input)
+        .map(|(rest, n)| (rest, Op::Scroll { delta: n }))
+}
+
 // Request Cursor Position
 // ESC [ 6 n
 fn request_cursor_postion(input: &str) -> OpResult {
@@ -431,6 +453,11 @@ fn reset_private_sequence(input: &str) -> OpResult {
     .map(|(rest, (_, b, _))| (rest, Op::DecPrivateReset(b.to_owned())))
 }
 
+/// ESC [ V x D
+fn vgaterm_sequence(input: &str) -> OpResult {
+    nom::bytes::streaming::tag("VxD")(input).map(|(rest, _)| (rest, Op::Vgaterm(Vgaterm::Redraw)))
+}
+
 /// <text> m
 fn any_text_mode(input: &str) -> TextOpResult {
     nom::branch::alt((
@@ -456,6 +483,7 @@ fn parse(input: &str) -> OpResult {
         start_with_char(
             '[',
             nom::branch::alt((
+                vgaterm_sequence,
                 cursor_to_0,
                 cursor_to_line_col,
                 cursor_up_lines,
@@ -465,6 +493,8 @@ fn parse(input: &str) -> OpResult {
                 cursor_to_column,
                 cursor_beginning_down,
                 cursor_beginning_up,
+                scroll_up,
+                scroll_down,
                 delete,
                 erase_screen,
                 erase_line,
@@ -550,6 +580,7 @@ pub fn parse_esc_str_tail(s: &str, mut current: Vec<OpStr>) -> ParseRes {
 
             // If failure, then we were in a sequence but bombed out, and consume all the chars
             // ESC [ XYZ
+            println!("Unknown {}", s.escape_debug());
             let skip_index = e.input.ceil_char_boundary(1);
             parse_esc_str_tail(&e.input[skip_index..], current)
         }

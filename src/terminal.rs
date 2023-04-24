@@ -1,7 +1,8 @@
 use crate::{
     ansi::{self, EraseMode, Op, OpStr},
     color::Rgb3,
-    display::{self, TextDisplay},
+    display::{self, TextDisplay, ROWS},
+    CHARACTER_DRAW_CYCLES,
 };
 use alloc::string::String;
 use embedded_graphics::prelude::DrawTarget;
@@ -41,6 +42,7 @@ impl CursorPos {
     ///
     /// (see also: https://play.rust-lang.org/?version=stable&mode=debug&edition=2021&gist=3aacdae98b11d36599604d6300f1c71f
     ///  whoever said there's no testing in no_std?)
+    #[inline]
     pub fn offset(&self, r: isize, c: isize) -> CursorPos {
         let cols = self.1 as isize + c;
         let (p, cols) = (cols.div_euclid(ICOLS), cols.rem_euclid(ICOLS));
@@ -50,10 +52,12 @@ impl CursorPos {
         CursorPos(rows as usize, cols as usize)
     }
 
+    #[inline]
     pub fn row(&self) -> Row {
         self.0
     }
 
+    #[inline]
     pub fn col(&self) -> Col {
         self.1
     }
@@ -87,6 +91,10 @@ impl Cursor {
         *self
     }
 
+    fn is_at_bottom(&self) -> bool {
+        self.pos.row() == ROWS - 1
+    }
+
     fn set_highlight(&self, text: &mut TextDisplay) {
         let mut c = text.read_char(self.pos.row(), self.pos.col());
         c.color.set_inverted();
@@ -103,6 +111,16 @@ impl Cursor {
         let mut c = text.read_char(self.pos.row(), self.pos.col());
         c.color.invert_colors();
         text.write_char(self.pos.row(), self.pos.col(), c);
+    }
+
+    fn reset_highlight_timer(&self, text: &mut TextDisplay) -> Cursor {
+        self.set_highlight(text);
+        let time_to_next_blink = SystemTimer::now().wrapping_add(self.blink_length);
+        Cursor {
+            pos: self.pos,
+            time_to_next_blink,
+            blink_length: self.blink_length,
+        }
     }
 
     fn update(&self, text: &mut TextDisplay) -> Cursor {
@@ -131,7 +149,7 @@ impl Default for Cursor {
 }
 
 pub struct TextField {
-    text: TextDisplay,
+    pub text: TextDisplay,
     cursor: Cursor,
     input_buffer: String,
 }
@@ -173,6 +191,9 @@ impl TextField {
     }
 
     fn handle_char_in(&mut self, t: char) {
+        if t.is_ascii_control() {
+            // println!("ascii {}", t.escape_debug());
+        }
         match t {
             '\u{08}' => {
                 // backspace
@@ -195,7 +216,15 @@ impl TextField {
                     .write(self.cursor.pos.row(), self.cursor.pos.col(), t);
                 self.move_cursor(0, 1);
             }
-            '\n' => self.move_cursor(1, -(self.cursor.pos.col() as isize)),
+            '\n' => {
+                if self.cursor.is_at_bottom() {
+                    self.cursor.unset_highlight(&mut self.text);
+                    self.text.scroll_down(1);
+                    self.move_cursor(0, -(self.cursor.pos.col() as isize))
+                } else {
+                    self.move_cursor(1, -(self.cursor.pos.col() as isize))
+                }
+            }
             '\r' => self.move_cursor(0, -(self.cursor.pos.col() as isize)),
             _ => {
                 for c in t.escape_default() {
@@ -261,25 +290,41 @@ impl TextField {
             }
             EraseLine(erase) => match erase {
                 EraseMode::All => {
+                    self.cursor = self.cursor.reset_highlight_timer(&mut self.text);
                     for c in 0..display::COLUMNS {
                         self.text.write(self.cursor.pos.row(), c, ' ');
                     }
                 }
                 EraseMode::FromCursor => {
+                    self.cursor = self.cursor.reset_highlight_timer(&mut self.text);
                     for c in self.cursor.pos.col()..display::COLUMNS {
                         self.text.write(self.cursor.pos.row(), c, ' ');
+                        self.cursor.update(&mut self.text);
                     }
                 }
                 EraseMode::ToCursor => {
+                    self.cursor = self.cursor.reset_highlight_timer(&mut self.text);
                     for c in 0..self.cursor.pos.col() {
                         self.text.write(self.cursor.pos.row(), c, ' ');
+                        self.cursor.update(&mut self.text);
                     }
                 }
             },
+            Scroll { delta } => {
+                self.cursor.unset_highlight(&mut self.text);
+                self.text.scroll_down(delta);
+            }
             TextOp(_ops) => {}
             InPlaceDelete => self.text.write(self.cursor.pos.0, self.cursor.pos.1, ' '),
             DecPrivateSet(_) => {}
             DecPrivateReset(_) => {}
+            Vgaterm(ansi::Vgaterm::Redraw) => {
+                self.text.dirty_all();
+                unsafe {
+                    CHARACTER_DRAW_CYCLES = 0;
+                    crate::perf::reset_cycle_count();
+                }
+            }
         }
     }
 
@@ -288,7 +333,15 @@ impl TextField {
         D: DrawTarget<Color = Rgb3>,
     {
         self.text.draw_dirty(target);
-        self.cursor.update(&mut self.text);
+        self.cursor = self.cursor.update(&mut self.text);
+    }
+
+    pub fn draw_up_to<D>(&mut self, up_to: usize, target: &mut D)
+    where
+        D: DrawTarget<Color = Rgb3>,
+    {
+        self.text.draw_dirty_up_to(up_to, target);
+        self.cursor = self.cursor.update(&mut self.text);
     }
 }
 
