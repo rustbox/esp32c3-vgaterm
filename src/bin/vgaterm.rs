@@ -9,7 +9,6 @@ use esp32c3_hal::prelude::*;
 use esp32c3_hal::timer::TimerGroup;
 use esp32c3_hal::{
     clock::{ClockControl, CpuClock},
-    peripherals::UART0,
 };
 use esp32c3_hal::{gpio::IO, peripherals::Peripherals, Rtc};
 use esp_backtrace as _;

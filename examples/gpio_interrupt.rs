@@ -7,15 +7,15 @@ extern crate alloc;
 use esp32c3_hal::prelude::*;
 use esp32c3_hal::{
     clock::ClockControl,
-    gpio::{Event, IO},
+    gpio::{IO},
     interrupt,
     peripherals::{self, Peripherals},
     timer::TimerGroup,
     Rtc,
 };
 use esp_backtrace as _;
-use esp_println::println;
-use vgaterm::gpio::{interrupt_disable, pin_interrupt};
+
+
 
 core::arch::global_asm!(".global _heap_size; _heap_size = 0x8000");
 
@@ -66,7 +66,7 @@ fn main() -> ! {
 
     let io = IO::new(peripherals.GPIO, peripherals.IO_MUX);
 
-    let mut led = io.pins.gpio5.into_push_pull_output();
+    let _led = io.pins.gpio5.into_push_pull_output();
 
     // fn callback<T>(_: T) {
     //     esp_println::println!("GPIO interrupt");
