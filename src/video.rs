@@ -52,36 +52,35 @@ const LAST_CHUNK: usize = 224000;
 #[link_section = ".rwtext"]
 pub fn transmit_chunk() {
     static mut M1: crate::perf::Measure =
-        crate::perf::Measure::new("xmit_chunk", fugit::HertzU32::Hz(240 * 8));
+        crate::perf::Measure::new("start_xmit", fugit::HertzU32::Hz(240 * 8));
+    static mut M2: crate::perf::Measure =
+        crate::perf::Measure::new("tx_wait", fugit::HertzU32::Hz(240 * 8));
 
-    let xmit_chunk = unsafe { &mut M1 };
+    let (xmit_chunk, tx_wait) = unsafe { (&mut M1, &mut M2) };
+
+    if let Some(tx) = unsafe { &mut spi::SPI_DMA_TRANSFER }.take() {
+        crate::perf::Measure::start([tx_wait]);
+        let (_, spi) = tx.wait();
+        crate::perf::Measure::stop([tx_wait]);
+        unsafe { &mut spi::QSPI }.replace(spi);
+    }
+
+    let data = unsafe { &mut BUFFER[OFFSET..OFFSET + CHUNK_SIZE] };
     crate::perf::Measure::start([xmit_chunk]);
-    spi::start_transmit(unsafe { &mut BUFFER[OFFSET..OFFSET + CHUNK_SIZE] });
+    spi::start_transmit(data);
     crate::perf::Measure::stop([xmit_chunk]);
 
-    timer::start_timer0_callback(1475, timer_callback);
-    crate::perf::Measure::flush([xmit_chunk]);
+    timer::start_timer0_callback(1565, timer_callback);
+    crate::perf::Measure::flush([xmit_chunk, tx_wait]);
 }
 
 #[link_section = ".rwtext"]
 fn timer_callback() {
-    static mut M1: crate::perf::Measure =
-        crate::perf::Measure::new("tx_wait", fugit::HertzU32::Hz(240 * 8));
-    let tx_wait = unsafe { &mut M1 };
-
-    unsafe {
-        if let Some(tx) = spi::SPI_DMA_TRANSFER.take() {
-            crate::perf::Measure::start([tx_wait]);
-            let (_, spi) = tx.wait();
-            crate::perf::Measure::stop([tx_wait]);
-            spi::QSPI.replace(spi);
-        }
-        if OFFSET < LAST_CHUNK {
-            OFFSET += CHUNK_SIZE;
-            transmit_chunk();
-        }
+    let offset = unsafe { &mut OFFSET };
+    if *offset < LAST_CHUNK {
+        *offset += CHUNK_SIZE;
+        transmit_chunk();
     }
-    // crate::perf::Measure::flush([tx_wait]);
 }
 
 // #[interrupt]

@@ -98,25 +98,18 @@ pub fn configure(
 /// Transmit data, a slice of u8, if the qspi instance has been configured.
 /// The buffer should be a length divisible by 4, and no longer than 32,768.
 ///
-// #[ram]
 #[link_section = ".rwtext"] // #[ram] without #[inline(never)]
 pub fn transmit(data: &'static mut [u8]) {
-    // static mut RECV: [u8; 0] = [];
-    unsafe {
-        if let Some(qspi) = QSPI.take() {
-            let transfer = qspi.dma_write(data).unwrap();
-            // here we could do something else while DMA transfer is in progress
-            // the buffers and spi is moved into the transfer and we can get it back via
-            // `wait`
-            let (_, q) = transfer.wait();
+    static mut RECV: [u8; 0] = [];
 
-            QSPI.replace(q);
+    let qspi = unsafe { &mut QSPI }.take().unwrap();
+    let transfer = qspi.dma_transfer(data, unsafe { &mut RECV }).unwrap();
+    // here we could do something else while DMA transfer is in progress
+    // the buffers and spi is moved into the transfer and we can get it back via
+    // `wait`
+    let (_, _, q) = transfer.wait();
 
-            // qspi.transfer(data);
-            // qspi.with_dma(..).transfer(...)
-            // unimplemented!()
-        }
-    }
+    unsafe { &mut QSPI }.replace(q);
 }
 
 #[allow(clippy::type_complexity)]
@@ -127,17 +120,16 @@ pub static mut SPI_DMA_TRANSFER: Option<
         ChannelRx<Channel0RxImpl, Channel0>,
         SuitablePeripheral0,
         &mut [u8],
+        FullDuplexMode,
     >,
 > = None;
 
 #[inline(always)]
 pub fn start_transmit(data: &'static mut [u8]) {
-    unsafe {
-        if let Some(qspi) = QSPI.take() {
-            let transfer = qspi.dma_write(data).unwrap();
-            SPI_DMA_TRANSFER.replace(transfer);
-        }
-    }
+    let qspi = unsafe { &mut QSPI }.take().unwrap();
+
+    let transfer = qspi.dma_write(data).unwrap();
+    unsafe { &mut SPI_DMA_TRANSFER }.replace(transfer);
 }
 
 ///

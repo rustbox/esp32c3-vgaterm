@@ -152,14 +152,15 @@ impl Measure {
             let base_diff = avg - baseline;
             let last_diff = avg - last;
 
-            // silence unused warnings when the println is commented out
+            // silence unused warnings when the println is disabled
             let _ = base_diff;
             let _ = last_diff;
             let _ = name;
 
-            // esp_println::println!(
-            //     "perf: {name:>12}: {accum:>15} / {ticks} ≈ {avg:15.4} (vs. baseline: {base_diff:+12.3} last: {last_diff:+12.3})"
-            // );
+            #[cfg(feature = "perf_log")] // oh no it's starting
+            esp_println::println!(
+                "perf: {name:>12}: {accum:>15} / {ticks} ≈ {avg:15.4} (vs. baseline: {base_diff:+12.3} last: {last_diff:+12.3})"
+            );
         }
     }
 }
