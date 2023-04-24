@@ -7,15 +7,13 @@ extern crate alloc;
 use esp32c3_hal::prelude::*;
 use esp32c3_hal::{
     clock::ClockControl,
-    gpio::{IO},
+    gpio::IO,
     interrupt,
     peripherals::{self, Peripherals},
     timer::TimerGroup,
     Rtc,
 };
 use esp_backtrace as _;
-
-
 
 core::arch::global_asm!(".global _heap_size; _heap_size = 0x8000");
 
