@@ -161,7 +161,7 @@ dependencies = [
 [[package]]
 name = "esp-hal-common"
 version = "0.8.0"
-source = "git+https://github.com/rustbox/esp-hal?rev=f49dc55#f49dc555ee9a049aa8e606a4c001e78298e19978"
+source = "git+https://github.com/rustbox/esp-hal?rev=82000cd#82000cd9936550433a239c3d8af356b80165ad48"
 dependencies = [
  "basic-toml",
  "bitflags",
@@ -184,7 +184,7 @@ dependencies = [
 [[package]]
 name = "esp-hal-procmacros"
 version = "0.5.0"
-source = "git+https://github.com/rustbox/esp-hal?rev=f49dc55#f49dc555ee9a049aa8e606a4c001e78298e19978"
+source = "git+https://github.com/rustbox/esp-hal?rev=82000cd#82000cd9936550433a239c3d8af356b80165ad48"
 dependencies = [
  "darling",
  "proc-macro-crate",
@@ -212,9 +212,8 @@ dependencies = [
 
 [[package]]
 name = "esp32c3"
-version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e27af709b69fba964429db0c34ea28d6aeb74202ab88d9edbe7bdd4a4ce29fd5"
+version = "0.14.0"
+source = "git+https://github.com/rustbox/esp-pacs?rev=c8e7cbb1#c8e7cbb1cef4f6b3fd565c8fbb30e37674657877"
 dependencies = [
  "critical-section",
  "vcell",
@@ -223,7 +222,7 @@ dependencies = [
 [[package]]
 name = "esp32c3-hal"
 version = "0.8.0"
-source = "git+https://github.com/rustbox/esp-hal?rev=f49dc55#f49dc555ee9a049aa8e606a4c001e78298e19978"
+source = "git+https://github.com/rustbox/esp-hal?rev=82000cd#82000cd9936550433a239c3d8af356b80165ad48"
 dependencies = [
  "cfg-if",
  "embedded-hal",
