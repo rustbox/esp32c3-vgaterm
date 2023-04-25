@@ -70,5 +70,6 @@ perf_log = []
 
 [patch.crates-io]
 # TODO: automate these updates
-esp32c3-hal    = { git = "https://github.com/rustbox/esp-hal", rev = "f49dc55" }
-esp-hal-common = { git = "https://github.com/rustbox/esp-hal", rev = "f49dc55" }
+esp32c3-hal    = { git = "https://github.com/rustbox/esp-hal", rev = "82000cd" }
+esp-hal-common = { git = "https://github.com/rustbox/esp-hal", rev = "82000cd" }
+esp32c3        = { git = "https://github.com/rustbox/esp-pacs", rev = "c8e7cbb1" }
