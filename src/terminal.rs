@@ -1,7 +1,7 @@
 use crate::{
     ansi::{self, EraseMode, Op, OpStr},
     color::Rgb3,
-    display::{self, TextDisplay, ROWS, COLUMNS},
+    display::{self, TextDisplay, COLUMNS, ROWS},
     CHARACTER_DRAW_CYCLES,
 };
 use alloc::string::String;
@@ -65,13 +65,13 @@ impl CursorPos {
 enum VerticalLocation {
     Middle,
     Top,
-    Bottom
+    Bottom,
 }
 
 enum HorizontalLocation {
     Middle,
     Left,
-    Right
+    Right,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -239,18 +239,14 @@ impl TextField {
                     .write(self.cursor.pos.row(), self.cursor.pos.col(), t);
                 self.move_cursor(0, 1);
             }
-            '\n' => {
-                match self.cursor.location() {
-                    (VerticalLocation::Bottom, _) => {
-                        self.cursor.unset_highlight(&mut self.text);
-                        self.text.scroll_down(1);
-                        self.move_cursor(0, -(self.cursor.pos.col() as isize))
-                    },
-                    _ => {
-                        self.move_cursor(1, -(self.cursor.pos.col() as isize))
-                    }
+            '\n' => match self.cursor.location() {
+                (VerticalLocation::Bottom, _) => {
+                    self.cursor.unset_highlight(&mut self.text);
+                    self.text.scroll_down(1);
+                    self.move_cursor(0, -(self.cursor.pos.col() as isize))
                 }
-            }
+                _ => self.move_cursor(1, -(self.cursor.pos.col() as isize)),
+            },
             '\r' => self.move_cursor(0, -(self.cursor.pos.col() as isize)),
             _ => {
                 for c in t.escape_default() {
@@ -258,10 +254,11 @@ impl TextField {
                     match self.cursor.location() {
                         (_, HorizontalLocation::Left | HorizontalLocation::Middle) => {
                             self.move_cursor(0, 1);
-                        },
-                        (VerticalLocation::Top | VerticalLocation::Middle, HorizontalLocation::Right) => {
-                            self.move_cursor(1, -(self.cursor.pos.col() as isize))
-                        },
+                        }
+                        (
+                            VerticalLocation::Top | VerticalLocation::Middle,
+                            HorizontalLocation::Right,
+                        ) => self.move_cursor(1, -(self.cursor.pos.col() as isize)),
                         (VerticalLocation::Bottom, HorizontalLocation::Right) => {
                             self.cursor.unset_highlight(&mut self.text);
                             self.text.scroll_down(1);
@@ -290,8 +287,10 @@ impl TextField {
             MoveCursorDelta { dx, dy } => {
                 // Constrain dx and dy so that the result added to the current position
                 // stays within the window
-                let x = (self.cursor.pos.col() as isize + dx).clamp(0, COLUMNS as isize - 1) - self.cursor.pos.col() as isize;
-                let y = (self.cursor.pos.row() as isize + dy).clamp(0, ROWS as isize - 1) - self.cursor.pos.row() as isize;
+                let x = (self.cursor.pos.col() as isize + dx).clamp(0, COLUMNS as isize - 1)
+                    - self.cursor.pos.col() as isize;
+                let y = (self.cursor.pos.row() as isize + dy).clamp(0, ROWS as isize - 1)
+                    - self.cursor.pos.row() as isize;
                 self.move_cursor(y, x);
             }
             MoveCursorBeginningAndLine { dy } => {
