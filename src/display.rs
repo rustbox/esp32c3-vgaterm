@@ -1,4 +1,4 @@
-use core::convert::Infallible;
+use core::{convert::Infallible, cmp::Ordering};
 
 use alloc::{
     collections::VecDeque,
@@ -422,7 +422,24 @@ impl TextDisplay {
         // We add a correction if amount and COLUMNS are differ in even/odd parity
         let amount = amount % ROWS as isize;
         self.top = ((self.top as isize + amount) % ROWS as isize) as usize;
+        
+        let b = [' '; COLUMNS];
+        let s = String::from_iter(b);
 
+        match amount.cmp(&0) {
+            Ordering::Greater => {
+                for i in ROWS-amount as usize..ROWS {
+                    self.write_text(i, 0, &s);
+                }
+            },
+            Ordering::Less => {
+                let amt = amount.unsigned_abs();
+                for i in 0..amt {
+                    self.write_text(i, 0, &s);
+                }
+            },
+            _ => {}
+        }
         self.dirty_all();
     }
 

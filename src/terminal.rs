@@ -1,13 +1,12 @@
 use crate::{
     ansi::{self, EraseMode, Op, OpStr},
     color::Rgb3,
-    display::{self, TextDisplay, ROWS},
+    display::{self, TextDisplay, ROWS, COLUMNS},
     CHARACTER_DRAW_CYCLES,
 };
 use alloc::string::String;
 use embedded_graphics::prelude::DrawTarget;
 use esp32c3_hal::systimer::SystemTimer;
-use esp_println::println;
 
 pub const IROWS: isize = display::ROWS as isize;
 pub const ICOLS: isize = display::COLUMNS as isize;
@@ -63,6 +62,18 @@ impl CursorPos {
     }
 }
 
+enum VerticalLocation {
+    Middle,
+    Top,
+    Bottom
+}
+
+enum HorizontalLocation {
+    Middle,
+    Left,
+    Right
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct Cursor {
     pub pos: CursorPos,
@@ -91,8 +102,20 @@ impl Cursor {
         *self
     }
 
-    fn is_at_bottom(&self) -> bool {
-        self.pos.row() == ROWS - 1
+    fn location(&self) -> (VerticalLocation, HorizontalLocation) {
+        const BOT: usize = ROWS - 1;
+        const RIGHT: usize = COLUMNS - 1;
+        let vert = match self.pos.row() {
+            BOT => VerticalLocation::Bottom,
+            0 => VerticalLocation::Top,
+            _ => VerticalLocation::Middle,
+        };
+        let horz = match self.pos.col() {
+            RIGHT => HorizontalLocation::Right,
+            0 => HorizontalLocation::Left,
+            _ => HorizontalLocation::Middle,
+        };
+        (vert, horz)
     }
 
     fn set_highlight(&self, text: &mut TextDisplay) {
@@ -217,19 +240,35 @@ impl TextField {
                 self.move_cursor(0, 1);
             }
             '\n' => {
-                if self.cursor.is_at_bottom() {
-                    self.cursor.unset_highlight(&mut self.text);
-                    self.text.scroll_down(1);
-                    self.move_cursor(0, -(self.cursor.pos.col() as isize))
-                } else {
-                    self.move_cursor(1, -(self.cursor.pos.col() as isize))
+                match self.cursor.location() {
+                    (VerticalLocation::Bottom, _) => {
+                        self.cursor.unset_highlight(&mut self.text);
+                        self.text.scroll_down(1);
+                        self.move_cursor(0, -(self.cursor.pos.col() as isize))
+                    },
+                    _ => {
+                        self.move_cursor(1, -(self.cursor.pos.col() as isize))
+                    }
                 }
             }
             '\r' => self.move_cursor(0, -(self.cursor.pos.col() as isize)),
             _ => {
                 for c in t.escape_default() {
                     self.text.write(self.cursor.pos.0, self.cursor.pos.1, c);
-                    self.move_cursor(0, 1);
+                    match self.cursor.location() {
+                        (_, HorizontalLocation::Left | HorizontalLocation::Middle) => {
+                            self.move_cursor(0, 1);
+                        },
+                        (VerticalLocation::Top | VerticalLocation::Middle, HorizontalLocation::Right) => {
+                            self.move_cursor(1, -(self.cursor.pos.col() as isize))
+                        },
+                        (VerticalLocation::Bottom, HorizontalLocation::Right) => {
+                            self.cursor.unset_highlight(&mut self.text);
+                            self.text.scroll_down(1);
+                            self.cursor.set_highlight(&mut self.text);
+                            self.move_cursor(0, -(self.cursor.pos.col() as isize));
+                        }
+                    }
                 }
             }
         }
@@ -237,7 +276,7 @@ impl TextField {
 
     fn handle_op(&mut self, op: Op) {
         use Op::*;
-        println!("{:?}", op);
+        // println!("{:?}", op);
         match op {
             MoveCursorAbs { x, y } => {
                 self.move_cursor(
@@ -249,7 +288,11 @@ impl TextField {
                 self.move_cursor(0, x as isize - self.cursor.pos.col() as isize);
             }
             MoveCursorDelta { dx, dy } => {
-                self.move_cursor(dy, dx);
+                // Constrain dx and dy so that the result added to the current position
+                // stays within the window
+                let x = (self.cursor.pos.col() as isize + dx).clamp(0, COLUMNS as isize - 1) - self.cursor.pos.col() as isize;
+                let y = (self.cursor.pos.row() as isize + dy).clamp(0, ROWS as isize - 1) - self.cursor.pos.row() as isize;
+                self.move_cursor(y, x);
             }
             MoveCursorBeginningAndLine { dy } => {
                 self.move_cursor(dy, -(self.cursor.pos.col() as isize));

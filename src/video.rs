@@ -81,7 +81,7 @@ pub fn transmit_chunk() {
     spi::start_transmit(data);
     crate::perf::Measure::stop([start_xmit]);
 
-    timer::start_timer0_callback(1565, timer_callback);
+    timer::start_timer0_callback(1500, timer_callback);
     crate::perf::Measure::stop([xmit_chunk]);
     crate::perf::Measure::flush([start_xmit, tx_wait, xmit_chunk]);
 }
