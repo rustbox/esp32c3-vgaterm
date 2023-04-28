@@ -11,7 +11,9 @@ use esp32c3_hal::{
     timer::TimerGroup,
     Rtc, IO,
 };
-use esp_println::{print, println};
+use esp_backtrace as _;
+use esp_println::println;
+use nom::Parser;
 use riscv::asm::wfi;
 use vgaterm::ansi;
 
@@ -31,22 +33,6 @@ fn init_heap() {
         let heap_size = &_heap_size as *const _ as usize;
         ALLOCATOR.init(heap_start as *mut u8, heap_size);
     }
-}
-
-#[panic_handler]
-fn panic(info: &core::panic::PanicInfo) -> ! {
-    print!("Aborting: ");
-    if let Some(p) = info.location() {
-        println!(
-            "line {}, file {}: {}",
-            p.line(),
-            p.file(),
-            info.message().unwrap()
-        );
-    } else {
-        println!("no information available.");
-    }
-    stop();
 }
 
 #[no_mangle]
@@ -96,8 +82,20 @@ fn main() -> ! {
         riscv::interrupt::enable();
     }
 
-    let r = ansi::parse_esc_str("abcd\u{1B}[XYZ\u{1B}[");
-    println!("{:?}", r);
+    // let r = ansi::parse_esc_str("abcd\u{1B}[XYZ\u{1B}[");
+    // println!("{:?}\n", r);
+    // let r = ansi::parse_esc_str("\u{1B}[");
+    // println!("{:?}\n", r);
+    // let r = ansi::parse_esc_str("\u{1B}8");
+    // println!("{:?}\n", r);
+
+    println!("{:?}", ansi::parse("\u{1B}[;"));
+    println!("{:?}", ansi::parse("\u{1B}[1;;"));
+    println!("{:?}", ansi::parse("\u{1B}[m"));
+    println!("{:?}", ansi::parse("\u{1B}[1;2m"));
+    println!("{:?}", ansi::parse("\u{1b}[?m"));
+
+    println!("{:?}", ansi::parse("\u{1B}[1;"));
 
     // match escape.push_str("abcd\u{1B}[5") {
     //     ParseRes::InSequence(s) => {

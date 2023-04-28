@@ -273,7 +273,36 @@ impl TextField {
 
     fn handle_op(&mut self, op: Op) {
         use Op::*;
-        // println!("{:?}", op);
+        #[cfg(feature = "op_log")]
+        {
+            use core::cmp::min;
+            use esp_println::println;
+            match &op {
+                TextOp(v) => println!(
+                    "TextOp({:?}{}) [{}]",
+                    &v[..min(v.len(), 5)],
+                    if v.len() > 5 { "..." } else { "" },
+                    v.len()
+                ),
+                DecPrivateSet(v) => {
+                    println!(
+                        "DecPrivateSet({:?}{}) [{}]",
+                        &v[..min(v.len(), 5)],
+                        if v.len() > 5 { "..." } else { "" },
+                        v.len()
+                    )
+                }
+                DecPrivateReset(v) => {
+                    println!(
+                        "DecPrivateReset({:?}{}) [{}]",
+                        &v[..min(v.len(), 5)],
+                        if v.len() > 5 { "..." } else { "" },
+                        v.len()
+                    )
+                }
+                _ => println!("{:?}", op),
+            }
+        }
         match op {
             MoveCursorAbs { x, y } => {
                 self.move_cursor(
@@ -296,7 +325,7 @@ impl TextField {
             MoveCursorBeginningAndLine { dy } => {
                 self.move_cursor(dy, -(self.cursor.pos.col() as isize));
             }
-            RequstCursorPos => {}
+            RequestCursorPos => {}
             SaveCursorPos => {}
             RestoreCursorPos => {}
             EraseScreen(erase) => {

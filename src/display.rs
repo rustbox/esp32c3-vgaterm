@@ -112,7 +112,6 @@ impl DrawTarget for Display {
                 // print!("{: ^5}", c);
                 unsafe { video::BUFFER[i] = c };
             }
-            // println!();
             offset += screen_width;
         }
         // });
