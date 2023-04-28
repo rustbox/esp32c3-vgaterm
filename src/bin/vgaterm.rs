@@ -10,7 +10,7 @@ use esp32c3_hal::prelude::*;
 use esp32c3_hal::timer::TimerGroup;
 use esp32c3_hal::{gpio::IO, peripherals::Peripherals, Rtc};
 use esp_backtrace as _;
-use vgaterm::{self, perf, video};
+use vgaterm::{self, perf};
 use vgaterm::{interrupt::Priority, usb_keyboard::US_ENGLISH, Work};
 
 use core::fmt::Write;
@@ -132,8 +132,11 @@ fn main() -> ! {
         40_000_000,
     );
 
-    let image = include_bytes!("../../image.bin");
-    video::load_from_slice(image);
+    #[cfg(feature = "background")]
+    {
+        let image = include_bytes!("../../image.bin");
+        vgaterm::video::load_from_slice(image);
+    }
 
     let mut display = vgaterm::display::Display::new();
 
