@@ -1,11 +1,12 @@
 use esp32c3_hal::prelude::*;
+use esp_println::println;
 
 use crate::{
     spi::{
         self,
         Instance::{ReadyToSend, TxInProgress},
     },
-    timer,
+    timer, color::{Rgb3, byte_to_rgb3, rgb3_to_byte, color3_to_byte, rgb_from_byte},
 };
 
 pub const WIDTH: usize = 640;
@@ -56,34 +57,34 @@ const LAST_CHUNK: usize = 224000;
 
 #[link_section = ".rwtext"]
 pub fn transmit_chunk() {
-    static mut M1: crate::perf::Measure =
-        crate::perf::Measure::new("xmit_chunk", fugit::HertzU32::Hz(240 * 8));
-    static mut M2: crate::perf::Measure =
-        crate::perf::Measure::new("start_xmit", fugit::HertzU32::Hz(240 * 8));
-    static mut M3: crate::perf::Measure =
-        crate::perf::Measure::new("tx_wait", fugit::HertzU32::Hz(240 * 8));
+    // static mut M1: crate::perf::Measure =
+    //     crate::perf::Measure::new("xmit_chunk", fugit::HertzU32::Hz(240 * 8));
+    // static mut M2: crate::perf::Measure =
+    //     crate::perf::Measure::new("start_xmit", fugit::HertzU32::Hz(240 * 8));
+    // static mut M3: crate::perf::Measure =
+    //     crate::perf::Measure::new("tx_wait", fugit::HertzU32::Hz(240 * 8));
 
-    let (xmit_chunk, start_xmit, tx_wait) = unsafe { (&mut M1, &mut M2, &mut M3) };
-    crate::perf::Measure::start([xmit_chunk]);
+    // let (xmit_chunk, start_xmit, tx_wait) = unsafe { (&mut M1, &mut M2, &mut M3) };
+    // crate::perf::Measure::start([xmit_chunk]);
 
     unsafe { &mut spi::QSPI }.replace_with(|i| match i {
         TxInProgress(tx) => {
-            crate::perf::Measure::start([tx_wait]);
+            // crate::perf::Measure::start([tx_wait]);
             let (_, spi) = tx.wait();
-            crate::perf::Measure::stop([tx_wait]);
+            // crate::perf::Measure::stop([tx_wait]);
             ReadyToSend(spi)
         }
         i => i,
     });
 
     let data = unsafe { &mut BUFFER[OFFSET..OFFSET + CHUNK_SIZE] };
-    crate::perf::Measure::start([start_xmit]);
+    // crate::perf::Measure::start([start_xmit]);
     spi::start_transmit(data);
-    crate::perf::Measure::stop([start_xmit]);
+    // crate::perf::Measure::stop([start_xmit]);
 
-    timer::start_timer0_callback(1500, timer_callback);
-    crate::perf::Measure::stop([xmit_chunk]);
-    crate::perf::Measure::flush([start_xmit, tx_wait, xmit_chunk]);
+    timer::start_timer0_callback(1200, timer_callback);
+    // crate::perf::Measure::stop([xmit_chunk]);
+    // crate::perf::Measure::flush([start_xmit, tx_wait, xmit_chunk]);
 }
 
 #[link_section = ".rwtext"]
@@ -139,6 +140,50 @@ pub fn four_vertical_columns(a: u8, b: u8, c: u8, d: u8) {
     });
 }
 
+pub fn vertical_columns(colors: &[u8]) {
+    for c in colors {
+        let (r, g, b) = rgb_from_byte(*c);
+        println!("Color byte {c} => ({}, {}, {})", r/36, g/36, b/36);
+    }
+    let width = WIDTH / colors.len();
+    riscv::interrupt::free(|| unsafe {
+        for line in 0..HEIGHT {
+            for p in 0..WIDTH {
+                let i = line * WIDTH + p;
+
+                let c = (p / width).clamp(0, colors.len() - 1);
+                BUFFER[i] = colors[c];
+
+            }
+        }
+    });
+}
+
+pub fn vertical_columns_rgb(colors: &[(u8, u8, u8)]) {
+    for (r, g, b) in colors {
+        let rgb = Rgb3::from_rgb(*r, *g, *b);
+        let b = rgb.to_byte();
+        let (er, eg, eb) = {
+            let (rr, gg, bb) = byte_to_rgb3(b);
+            (color3_to_byte(rr), color3_to_byte(gg), color3_to_byte(bb))
+        };
+        println!("({}, {}, {}): {} goes to byte {}, to RGB => ({}, {}, {})", r, g, b, rgb, b, er, eg, eb);
+    }
+    let width = WIDTH / colors.len();
+    riscv::interrupt::free(|| unsafe {
+        for line in 0..HEIGHT {
+            for p in 0..WIDTH {
+                let i = line * WIDTH + p;
+
+                let c = (p / width).clamp(0, colors.len() - 1);
+                let (r, g, b) = colors[c];
+                BUFFER[i] = Rgb3::from_rgb(r, g, b).to_byte();
+
+            }
+        }
+    });
+}
+
 ///
 /// Sets the frame buffer to a 16x16 set of rectangles of all 256 displayable
 /// colors. Offset refers to what color we start with when making each rectangle.
@@ -173,6 +218,50 @@ pub fn test_pattern() -> [u8; 128] {
         }
     }
     pattern
+}
+
+pub fn color_fade_gradient() {
+    let mut colors = [Rgb3::new(0, 0, 0); 60];
+    for i in 0..8 {
+        colors[i] = Rgb3::new(7, i as u8, 0);
+    }
+    for i in 0..8 {
+        colors[i + 8] = Rgb3::new(7 - i as u8, 7, 0);
+    }
+    for i in 0..8 {
+        colors[i + 16] = Rgb3::new(0, 7, i as u8);
+    }
+    for i in 0..8 {
+        colors[i + 24] = Rgb3::new(0, 7 - i as u8, 7);
+    }
+    for i in 0..8 {
+        colors[i + 32] = Rgb3::new(i as u8, 0, 7);
+    }
+    for i in 0..8 {
+        colors[i + 40] = Rgb3::new(7, 0, 7 - i as u8);
+    }
+    for i in 0..8 {
+        colors[i + 48] = Rgb3::new(7 - i as u8/2, i as u8 / 2, i as u8 / 2);
+    }
+    for i in 0..4 {
+        colors[i + 56] = Rgb3::new(3, 3, 3);
+    }
+
+    for x in 0..WIDTH {
+        let color_band = x / (WIDTH / 58);
+        let c: Rgb3 = colors[color_band];
+        // println!("hello");
+        for l in (0..HEIGHT).rev() {
+            let line = HEIGHT - l; // Reverse so that the bottom line is considered 0
+            let chunk = (line / (HEIGHT / 16)) as u8;
+
+            let i = l * WIDTH + x;
+    
+            riscv::interrupt::free(|| unsafe {
+                BUFFER[i] = c.brightness(chunk).to_byte();
+            })
+        }
+    }
 }
 
 pub fn load_from_slice(s: &[u8]) {

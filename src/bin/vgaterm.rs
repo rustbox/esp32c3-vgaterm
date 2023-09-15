@@ -10,7 +10,9 @@ use esp32c3_hal::prelude::*;
 use esp32c3_hal::timer::TimerGroup;
 use esp32c3_hal::{gpio::IO, peripherals::Peripherals, Rtc};
 use esp_backtrace as _;
-use vgaterm::{self, perf, video};
+use esp_println::println;
+use riscv::interrupt::free;
+use vgaterm::{self, perf, video::{self, BUFFER_SIZE}, color::Rgb3};
 use vgaterm::{interrupt::Priority, usb_keyboard::US_ENGLISH, Work};
 
 use core::fmt::Write;
@@ -134,6 +136,38 @@ fn main() -> ! {
 
     let image = include_bytes!("../../image.bin");
     video::load_from_slice(image);
+    // let pattern = video::test_pattern();
+    // for l in 0..video::HEIGHT {
+    //     for h in 0..5 {
+    //         for p in 0..pattern.len() {
+    //             video::set_pixel(128 * h + p, l, pattern[p])
+    //         }
+    //     }
+    // }
+    // let c: Vec<_> = (128..=143).collect(); 
+    // video::color_fade_gradient();
+    // video::load_test_pattern(0b00011100, 0b00011100);
+    // video::vertical_columns_rgb(&[(0xff, 0xdb, 0xb6), (0xfe, 0xb7, 0x93), (0xf2, 0x9c, 0x7a), (0xe7, 0x80, 0x61), (0xa2, 0x58, 0x2c)]);
+    // video::vertical_columns(&[0b01110011, 0b01101111]);
+    // video::vertical_columns(&[Rgb3::new(6, 4, 3).to_byte(), Rgb3::new(6, 3, 3).to_byte()]);
+    // video::vertical_columns(&[0b00000000, 0b00000001, 0b00000010, 0b00000011, 0b00000100]);
+    // RGB(6, 2|1|0, 3) => 0b01101011 (107) | 0b01100111 (103) | 0b01100011 (99)
+
+    let mut hist = [0; 256];
+    free(|| unsafe {
+        for b in video::BUFFER.iter() {
+            let x = *b as usize;
+            // println!("{x}");
+            hist[x] += 1;
+        }
+    });
+    println!("Video Buffer histogram:");
+    for (h, count) in hist.iter().enumerate() {
+        if *count == 0 {
+            continue;
+        }
+        println!("{h} ==> {count}");
+    }
 
     let mut display = vgaterm::display::Display::new();
 
@@ -143,6 +177,7 @@ fn main() -> ! {
 
     // let mut text_display = vgaterm::display::TextDisplay::new();
     let mut terminal = vgaterm::terminal::TextField::new();
+    // terminal.type_str("Hello World!");
     // text_display.write_text(0, vgaterm::display::COLUMNS / 2 - 4, " WELCOME!");
     // text_display.write_text(1, 0, " Welcome, Aly and Ilana, to Chez Douglass, where we will enjoy food, company, drink, and new friendships!");
     // text_display.draw_dirty(&mut display);
@@ -170,7 +205,7 @@ fn main() -> ! {
         None,
     }
 
-    let mode = ConnectMode::ConnectHost;
+    let mode = ConnectMode::LocalEcho;
 
     loop {
         key_events.extend(keyboard.flush_and_parse());

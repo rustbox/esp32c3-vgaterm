@@ -1,8 +1,8 @@
-use core::{convert::Infallible, cmp::Ordering};
+use core::{cmp::Ordering, convert::Infallible};
 
 use alloc::{
     collections::VecDeque,
-    string::{String, ToString},
+    string::{String, ToString}, vec::Vec,
 };
 use embedded_graphics::{
     mono_font::{MonoTextStyle, MonoTextStyleBuilder},
@@ -139,6 +139,24 @@ impl Character {
         Character {
             character: chrs,
             color: CharColor::default(),
+        }
+    }
+
+    pub fn new_with_color(
+        ch: char,
+        fore: Rgb3,
+        back: Rgb3,
+        decorations: &[Decoration],
+    ) -> Character {
+        let mut chrs: [u8; 2] = [0; 2];
+        let ch = (ch as u32).to_ne_bytes();
+        chrs[0] = ch[0];
+        chrs[1] = ch[1];
+
+        let charcolor = CharColor::new(fore, back).with_decorations(decorations);
+        Character {
+            character: chrs,
+            color: charcolor,
         }
     }
 
@@ -361,18 +379,31 @@ enum Drawn {
     Clean,
 }
 
+pub struct ColorDecs {
+    pub fore: Rgb3,
+    pub back: Rgb3,
+    pub decs: Vec<Decoration>,
+}
+
 pub struct TextDisplay {
     buffer: [(Character, Drawn); ROWS * COLUMNS],
     num_dirty: usize,
     top: usize,
+    pub current_color: ColorDecs,
 }
 
 impl TextDisplay {
     pub fn new() -> TextDisplay {
+        let (fore, back) = color::ansi_base_color(color::WHITE_FG, color::BLACK_BG);
         TextDisplay {
             buffer: [(Character::default(), Drawn::Clean); COLUMNS * ROWS],
             num_dirty: 0,
             top: 0,
+            current_color: ColorDecs {
+                fore,
+                back,
+                decs: Vec::new(),
+            },
         }
     }
 
@@ -394,7 +425,12 @@ impl TextDisplay {
 
     #[inline(always)]
     pub fn write(&mut self, line: usize, col: usize, c: char) {
-        let ch = Character::new(c);
+        let ch = Character::new_with_color(
+            c,
+            self.current_color.fore,
+            self.current_color.back,
+            &self.current_color.decs,
+        );
         self.write_char(line, col, ch)
     }
 
@@ -422,22 +458,22 @@ impl TextDisplay {
         // We add a correction if amount and COLUMNS are differ in even/odd parity
         let amount = amount % ROWS as isize;
         self.top = ((self.top as isize + amount) % ROWS as isize) as usize;
-        
+
         let b = [' '; COLUMNS];
         let s = String::from_iter(b);
 
         match amount.cmp(&0) {
             Ordering::Greater => {
-                for i in ROWS-amount as usize..ROWS {
+                for i in ROWS - amount as usize..ROWS {
                     self.write_text(i, 0, &s);
                 }
-            },
+            }
             Ordering::Less => {
                 let amt = amount.unsigned_abs();
                 for i in 0..amt {
                     self.write_text(i, 0, &s);
                 }
-            },
+            }
             _ => {}
         }
         self.dirty_all();
