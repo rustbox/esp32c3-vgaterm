@@ -135,15 +135,30 @@ impl Rgb3 {
     }
 
     pub fn brightness(&self, b: u8) -> Rgb3 {
-        Rgb3 { red: self.red, green: self.green, blue: self.blue, brightness: b }
+        Rgb3 {
+            red: self.red,
+            green: self.green,
+            blue: self.blue,
+            brightness: b,
+        }
     }
 
     pub const fn render(&self) -> Rgb3 {
         if self.brightness <= 8 {
-            Rgb3 { red: self.red * self.brightness / 8, green: self.green * self.brightness / 8, blue: self.blue * self.brightness / 8, brightness: 8 }
+            Rgb3 {
+                red: self.red * self.brightness / 8,
+                green: self.green * self.brightness / 8,
+                blue: self.blue * self.brightness / 8,
+                brightness: 8,
+            }
         } else {
             let bright = self.brightness - 8;
-            Rgb3 { red: ((8 - self.red) * bright) / 8 + self.red, green: ((8 - self.green) * bright) / 8 + self.green, blue: ((8 - self.blue) * bright) / 8 + self.blue, brightness: 8 }
+            Rgb3 {
+                red: ((8 - self.red) * bright) / 8 + self.red,
+                green: ((8 - self.green) * bright) / 8 + self.green,
+                blue: ((8 - self.blue) * bright) / 8 + self.blue,
+                brightness: 8,
+            }
         }
     }
 

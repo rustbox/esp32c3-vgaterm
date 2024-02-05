@@ -2,11 +2,12 @@ use esp32c3_hal::prelude::*;
 use esp_println::println;
 
 use crate::{
+    color::{byte_to_rgb3, color3_to_byte, rgb3_to_byte, rgb_from_byte, Rgb3},
     spi::{
         self,
         Instance::{ReadyToSend, TxInProgress},
     },
-    timer, color::{Rgb3, byte_to_rgb3, rgb3_to_byte, color3_to_byte, rgb_from_byte},
+    timer,
 };
 
 pub const WIDTH: usize = 640;
@@ -143,7 +144,7 @@ pub fn four_vertical_columns(a: u8, b: u8, c: u8, d: u8) {
 pub fn vertical_columns(colors: &[u8]) {
     for c in colors {
         let (r, g, b) = rgb_from_byte(*c);
-        println!("Color byte {c} => ({}, {}, {})", r/36, g/36, b/36);
+        println!("Color byte {c} => ({}, {}, {})", r / 36, g / 36, b / 36);
     }
     let width = WIDTH / colors.len();
     riscv::interrupt::free(|| unsafe {
@@ -153,7 +154,6 @@ pub fn vertical_columns(colors: &[u8]) {
 
                 let c = (p / width).clamp(0, colors.len() - 1);
                 BUFFER[i] = colors[c];
-
             }
         }
     });
@@ -175,7 +175,10 @@ pub fn vertical_columns_rgb(colors: &[(u8, u8, u8)]) {
             let (rr, gg, bb) = byte_to_rgb3(b);
             (color3_to_byte(rr), color3_to_byte(gg), color3_to_byte(bb))
         };
-        println!("({}, {}, {}): {} goes to byte {}, to RGB => ({}, {}, {})", r, g, b, rgb, b, er, eg, eb);
+        println!(
+            "({}, {}, {}): {} goes to byte {}, to RGB => ({}, {}, {})",
+            r, g, b, rgb, b, er, eg, eb
+        );
     }
     let width = WIDTH / colors.len();
     riscv::interrupt::free(|| unsafe {
@@ -186,7 +189,6 @@ pub fn vertical_columns_rgb(colors: &[(u8, u8, u8)]) {
                 let c = (p / width).clamp(0, colors.len() - 1);
                 let (r, g, b) = colors[c];
                 BUFFER[i] = Rgb3::from_rgb(r, g, b).to_byte();
-
             }
         }
     });
@@ -249,7 +251,7 @@ pub fn color_fade_gradient() {
         colors[i + 40] = Rgb3::new(7, 0, 7 - i as u8);
     }
     for i in 0..8 {
-        colors[i + 48] = Rgb3::new(7 - i as u8/2, i as u8 / 2, i as u8 / 2);
+        colors[i + 48] = Rgb3::new(7 - i as u8 / 2, i as u8 / 2, i as u8 / 2);
     }
     for i in 0..4 {
         colors[i + 56] = Rgb3::new(3, 3, 3);
@@ -264,7 +266,7 @@ pub fn color_fade_gradient() {
             let chunk = (line / (HEIGHT / 16)) as u8;
 
             let i = l * WIDTH + x;
-    
+
             riscv::interrupt::free(|| unsafe {
                 BUFFER[i] = c.brightness(chunk).to_byte();
             })

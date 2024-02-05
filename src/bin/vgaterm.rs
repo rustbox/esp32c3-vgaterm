@@ -5,15 +5,22 @@
 extern crate alloc;
 
 use alloc::{boxed::Box, collections::VecDeque, string::String, vec::Vec};
-use esp32c3_hal::{clock::{ClockControl, CpuClock}, peripherals::RNG, Rng};
 use esp32c3_hal::prelude::*;
 use esp32c3_hal::timer::TimerGroup;
+use esp32c3_hal::{
+    clock::{ClockControl, CpuClock},
+    peripherals::RNG,
+    Rng,
+};
 use esp32c3_hal::{gpio::IO, peripherals::Peripherals, Rtc};
 use esp_backtrace as _;
 use esp_println::println;
 use riscv::interrupt::free;
 use vgaterm::{
-    self, album::Album, perf, video::{self}
+    self,
+    album::Album,
+    perf,
+    video::{self},
 };
 use vgaterm::{interrupt::Priority, usb_keyboard::US_ENGLISH, Work};
 
@@ -147,7 +154,6 @@ fn main() -> ! {
     let image3 = include_bytes!("../../image3.bin");
     let images = [image3, image2, image1];
 
-
     video::load_from_slice(image3);
     // video::color_fade_gradient();
     // let pattern = video::test_pattern();
@@ -251,7 +257,7 @@ fn main() -> ! {
     let mut next: u64 = 19;
     enum Displaying {
         Image(usize),
-        Waiting(usize)
+        Waiting(usize),
     }
     let mut displaying = Displaying::Waiting(video::BUFFER_SIZE);
     loop {
@@ -301,14 +307,13 @@ fn main() -> ! {
 
         terminal.draw(&mut display);
 
-
         unsafe {
             // this will fire no less often than once per frame
             // if frames == 30 {
             //     frames = 0;
             //     let heap_size = &_heap_size as *const _ as usize;
             //     let used = ALLOCATOR.used() * 100 / heap_size;
-                
+
             //     for y in 0..100 {
             //         println!("{}%", used);
             //         if y == used {
@@ -335,7 +340,6 @@ fn main() -> ! {
                 video::BUFFER[i] = img[i];
             }
 
-
             // if frames < video::BUFFER_SIZE {
             //     video::BUFFER[i] = image2[i];
             // } else if ((2 * video::BUFFER_SIZE)..(3 * video::BUFFER_SIZE)).contains(&frames) {
@@ -347,7 +351,6 @@ fn main() -> ! {
             // }
             riscv::asm::wfi();
             frames = frames.wrapping_add(1);
-
         }
     }
 }

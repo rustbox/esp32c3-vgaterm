@@ -4,12 +4,11 @@ use alloc::vec::Vec;
 
 use crate::video;
 
-
 pub struct Image<'a> {
     data: &'a [u8],
     height: usize,
     width: usize,
-    name: &'a str
+    name: &'a str,
 }
 
 pub struct Album<'a> {
@@ -26,7 +25,7 @@ impl<'a> Album<'a> {
                 data: img,
                 height: 400,
                 width: 640,
-                name: "raw"
+                name: "raw",
             };
             images.push(image);
         }
@@ -36,18 +35,16 @@ impl<'a> Album<'a> {
             frame: 0,
         }
     }
-    
+
     ///
-    /// Basically we want to 
+    /// Basically we want to
     /// 1) Display an image
     /// 2) Wait some amount of time
     /// 3) Begin transition to the next photo with an effect
     /// 4) Display the next image
     /// 5) Wait
-    /// 
-    fn update(&mut self) {
-        
-    }
+    ///
+    fn update(&mut self) {}
 
     pub fn next(&mut self) {
         self.current = self.current.wrapping_add(1) % self.images.len();
@@ -66,6 +63,5 @@ impl<'a> Album<'a> {
 
 enum AlbumState {
     TransitionTo,
-    Displaying
+    Displaying,
 }
-

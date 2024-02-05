@@ -9,11 +9,11 @@
 
 extern crate alloc;
 
+pub mod album;
 pub mod ansi;
 pub mod channel;
 pub mod color;
 pub mod display;
-pub mod album;
 pub mod gpio;
 pub mod interrupt;
 pub mod kernel;

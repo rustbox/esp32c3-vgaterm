@@ -102,7 +102,6 @@ pub fn configure(
     let dma = Gdma::new(dma, peripheral_clock);
     let dma_channel = dma.channel0;
 
-
     let qspi = Spi::new_quad_send_only(
         spi2,
         clk,

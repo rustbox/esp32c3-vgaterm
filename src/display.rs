@@ -2,7 +2,8 @@ use core::{cmp::Ordering, convert::Infallible};
 
 use alloc::{
     collections::VecDeque,
-    string::{String, ToString}, vec::Vec,
+    string::{String, ToString},
+    vec::Vec,
 };
 use embedded_graphics::{
     mono_font::{MonoTextStyle, MonoTextStyleBuilder},

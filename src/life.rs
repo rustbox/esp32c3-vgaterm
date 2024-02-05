@@ -65,9 +65,7 @@ pub struct GridLoc {
 
 impl GridLoc {
     pub fn new(x: i16, y: i16) -> GridLoc {
-        GridLoc {
-            x, y
-        }
+        GridLoc { x, y }
     }
     /// Calculate a value between 0 and SIZE-1 for GridLoc
     fn bucket(&self) -> usize {
@@ -342,8 +340,8 @@ impl Life {
 
     pub fn update_and_render<D>(&mut self, display: &mut D)
     where
-        D: DrawTarget<Color = Rgb3>, {
-
+        D: DrawTarget<Color = Rgb3>,
+    {
         self.frame = self.frame.wrapping_add(1);
         if self.frame > self.frames_per_generation {
             self.frame = 0;
