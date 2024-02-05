@@ -143,12 +143,10 @@ fn main() -> ! {
         40_000_000,
     );
 
-    let image1 = include_bytes!("../../image1.bin");
-    let image2 = include_bytes!("../../image2.bin");
-    let image3 = include_bytes!("../../image3.bin");
-    let images = [image3, image2, image1];
+    let image = include_bytes!("../../image.bin");
+    let images = [image];
 
-    video::load_from_slice(image3);
+    video::load_from_slice(image);
     // video::color_fade_gradient();
     // let pattern = video::test_pattern();
     // for l in 0..video::HEIGHT {
