@@ -14,8 +14,8 @@
 //! software should reset all frame logic back to the beginning of the frame.
 //!
 
-use esp32c3_hal::gpio::{Event, Unknown};
 use esp32c3_hal::gpio::Input;
+use esp32c3_hal::gpio::{Event, Unknown};
 use esp32c3_hal::gpio::{Gpio3, PullDown};
 use esp32c3_hal::macros::ram;
 use esp_println::println;

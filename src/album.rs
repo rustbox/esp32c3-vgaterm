@@ -1,4 +1,3 @@
-
 use alloc::vec::Vec;
 
 use crate::video;
@@ -25,10 +24,7 @@ impl<'a> Album<'a> {
             };
             images.push(image);
         }
-        Album {
-            images,
-            current: 0,
-        }
+        Album { images, current: 0 }
     }
 
     ///
@@ -56,4 +52,3 @@ impl<'a> Album<'a> {
         }
     }
 }
-

@@ -5,21 +5,20 @@
 extern crate alloc;
 
 use alloc::vec::Vec;
+use esp32c3_hal::clock::{ClockControl, CpuClock};
 use esp32c3_hal::prelude::*;
 use esp32c3_hal::timer::TimerGroup;
-use esp32c3_hal::
-    clock::{ClockControl, CpuClock};
 use esp32c3_hal::{gpio::IO, peripherals::Peripherals, Rtc};
 use esp_backtrace as _;
 use esp_println::println;
 use riscv::interrupt::free;
+use vgaterm::interrupt::Priority;
 use vgaterm::{
     self,
     life::{CellState, Field, GridLoc, Life},
     perf,
     video::{self},
 };
-use vgaterm::interrupt::Priority;
 
 core::arch::global_asm!(".global _heap_size; _heap_size = 0xC000");
 
@@ -51,7 +50,6 @@ extern "C" fn stop() -> ! {
         }
     }
 }
-
 
 #[entry]
 fn main() -> ! {
