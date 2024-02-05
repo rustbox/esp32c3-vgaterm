@@ -125,19 +125,16 @@ mod mem {
         // If src is less than dst, just copy from the end.
         // If src is greater than dst, just copy from the beginning."
         // — https://stackoverflow.com/a/3572519/151464
-        let last;
         for i in if src < dest as *const u8 {
-            last = 0;
             Idx::Backward(m)
         } else {
-            last = m;
             Idx::Forward(0, m)
         } {
             *dest.add(i) = *src.add(i);
         }
 
-        let dest = dest.add(last).cast::<usize>();
-        let src = src.add(last).cast::<usize>();
+        let dest = dest.add(m).cast::<usize>();
+        let src = src.add(m).cast::<usize>();
 
         for i in if src < dest as *const usize {
             Idx::Backward(n)

@@ -1,7 +1,7 @@
 use crate::{
-    ansi::{self, EraseMode, Op, OpStr, Style, SetUnset},
-    color::{Rgb3, self},
-    display::{self, TextDisplay, ROWS, COLUMNS, Decoration},
+    ansi::{self, EraseMode, Op, OpStr, SetUnset, Style},
+    color::{self, Rgb3},
+    display::{self, Decoration, TextDisplay, COLUMNS, ROWS},
     CHARACTER_DRAW_CYCLES,
 };
 use alloc::string::String;
@@ -65,13 +65,13 @@ impl CursorPos {
 enum VerticalLocation {
     Middle,
     Top,
-    Bottom
+    Bottom,
 }
 
 enum HorizontalLocation {
     Middle,
     Left,
-    Right
+    Right,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -96,7 +96,7 @@ impl Cursor {
                 pos,
                 time_to_next_blink: SystemTimer::now().wrapping_add(self.blink_length),
                 blink_length: self.blink_length,
-                visible: self.visible
+                visible: self.visible,
             };
             cursor.set_highlight(text);
             return cursor;
@@ -147,7 +147,7 @@ impl Cursor {
             pos: self.pos,
             time_to_next_blink,
             blink_length: self.blink_length,
-            visible: self.visible
+            visible: self.visible,
         }
     }
 
@@ -162,7 +162,7 @@ impl Cursor {
                 pos: self.pos,
                 blink_length: self.blink_length,
                 time_to_next_blink,
-                visible: self.visible
+                visible: self.visible,
             };
         }
         *self
@@ -175,7 +175,7 @@ impl Default for Cursor {
             pos: Default::default(),
             time_to_next_blink: SystemTimer::now(),
             blink_length: 12_000_000,
-            visible: true
+            visible: true,
         }
     }
 }
@@ -248,18 +248,14 @@ impl TextField {
                     .write(self.cursor.pos.row(), self.cursor.pos.col(), t);
                 self.move_cursor(0, 1);
             }
-            '\n' => {
-                match self.cursor.location() {
-                    (VerticalLocation::Bottom, _) => {
-                        self.cursor.unset_highlight(&mut self.text);
-                        self.text.scroll_down(1);
-                        self.move_cursor(0, -(self.cursor.pos.col() as isize))
-                    },
-                    _ => {
-                        self.move_cursor(1, -(self.cursor.pos.col() as isize))
-                    }
+            '\n' => match self.cursor.location() {
+                (VerticalLocation::Bottom, _) => {
+                    self.cursor.unset_highlight(&mut self.text);
+                    self.text.scroll_down(1);
+                    self.move_cursor(0, -(self.cursor.pos.col() as isize))
                 }
-            }
+                _ => self.move_cursor(1, -(self.cursor.pos.col() as isize)),
+            },
             '\r' => self.move_cursor(0, -(self.cursor.pos.col() as isize)),
             _ => {
                 for c in t.escape_default() {
@@ -267,10 +263,11 @@ impl TextField {
                     match self.cursor.location() {
                         (_, HorizontalLocation::Left | HorizontalLocation::Middle) => {
                             self.move_cursor(0, 1);
-                        },
-                        (VerticalLocation::Top | VerticalLocation::Middle, HorizontalLocation::Right) => {
-                            self.move_cursor(1, -(self.cursor.pos.col() as isize))
-                        },
+                        }
+                        (
+                            VerticalLocation::Top | VerticalLocation::Middle,
+                            HorizontalLocation::Right,
+                        ) => self.move_cursor(1, -(self.cursor.pos.col() as isize)),
                         (VerticalLocation::Bottom, HorizontalLocation::Right) => {
                             self.cursor.unset_highlight(&mut self.text);
                             self.text.scroll_down(1);
@@ -299,8 +296,10 @@ impl TextField {
             MoveCursorDelta { dx, dy } => {
                 // Constrain dx and dy so that the result added to the current position
                 // stays within the window
-                let x = (self.cursor.pos.col() as isize + dx).clamp(0, COLUMNS as isize - 1) - self.cursor.pos.col() as isize;
-                let y = (self.cursor.pos.row() as isize + dy).clamp(0, ROWS as isize - 1) - self.cursor.pos.row() as isize;
+                let x = (self.cursor.pos.col() as isize + dx).clamp(0, COLUMNS as isize - 1)
+                    - self.cursor.pos.col() as isize;
+                let y = (self.cursor.pos.row() as isize + dy).clamp(0, ROWS as isize - 1)
+                    - self.cursor.pos.row() as isize;
                 self.move_cursor(y, x);
             }
             MoveCursorBeginningAndLine { dy } => {
@@ -372,66 +371,108 @@ impl TextField {
                         ansi::TextOp::SetFGBasic { fg } => {
                             let (f, _) = color::ansi_base_color(fg, 0);
                             self.text.current_color.fore = f;
-                        },
+                        }
                         ansi::TextOp::SetBGBasic { bg } => {
                             let (_, b) = color::ansi_base_color(0, bg);
                             self.text.current_color.back = b;
-                        },
+                        }
                         ansi::TextOp::SetTextMode(s, style) => {
                             match (s, style) {
                                 (SetUnset::Set, Style::Inverse) => {
-                                    if !self.text.current_color.decs.contains(&Decoration::Inverse) {
+                                    if !self.text.current_color.decs.contains(&Decoration::Inverse)
+                                    {
                                         self.text.current_color.decs.push(Decoration::Inverse);
                                     }
-                                },
+                                }
                                 (SetUnset::Unset, Style::Inverse) => {
-                                    if let Some((i, _)) = self.text.current_color.decs.iter().enumerate().find(|(_, d)| *d == &Decoration::Inverse) {
+                                    if let Some((i, _)) = self
+                                        .text
+                                        .current_color
+                                        .decs
+                                        .iter()
+                                        .enumerate()
+                                        .find(|(_, d)| *d == &Decoration::Inverse)
+                                    {
                                         self.text.current_color.decs.remove(i);
                                     }
                                 }
                                 (SetUnset::Set, Style::Strike) => {
-                                    if !self.text.current_color.decs.contains(&Decoration::Strikethrough) {
-                                        self.text.current_color.decs.push(Decoration::Strikethrough);
+                                    if !self
+                                        .text
+                                        .current_color
+                                        .decs
+                                        .contains(&Decoration::Strikethrough)
+                                    {
+                                        self.text
+                                            .current_color
+                                            .decs
+                                            .push(Decoration::Strikethrough);
                                     }
-                                },
+                                }
                                 (SetUnset::Unset, Style::Strike) => {
-                                    if let Some((i, _)) = self.text.current_color.decs.iter().enumerate().find(|(_, d)| *d == &Decoration::Strikethrough) {
+                                    if let Some((i, _)) = self
+                                        .text
+                                        .current_color
+                                        .decs
+                                        .iter()
+                                        .enumerate()
+                                        .find(|(_, d)| *d == &Decoration::Strikethrough)
+                                    {
                                         self.text.current_color.decs.remove(i);
                                     }
-                                },
+                                }
                                 (SetUnset::Set, Style::Blinking) => {
                                     if !self.text.current_color.decs.contains(&Decoration::Blink) {
                                         self.text.current_color.decs.push(Decoration::Blink);
                                     }
-                                },
+                                }
                                 (SetUnset::Unset, Style::Blinking) => {
-                                    if let Some((i, _)) = self.text.current_color.decs.iter().enumerate().find(|(_, d)| *d == &Decoration::Blink) {
+                                    if let Some((i, _)) = self
+                                        .text
+                                        .current_color
+                                        .decs
+                                        .iter()
+                                        .enumerate()
+                                        .find(|(_, d)| *d == &Decoration::Blink)
+                                    {
                                         self.text.current_color.decs.remove(i);
                                     }
-                                },
+                                }
                                 (SetUnset::Set, Style::Underline | Style::Italic) => {
-                                    if !self.text.current_color.decs.contains(&Decoration::Underline) {
+                                    if !self
+                                        .text
+                                        .current_color
+                                        .decs
+                                        .contains(&Decoration::Underline)
+                                    {
                                         self.text.current_color.decs.push(Decoration::Underline);
                                     }
-                                },
+                                }
                                 (SetUnset::Unset, Style::Underline | Style::Italic) => {
-                                    if let Some((i, _)) = self.text.current_color.decs.iter().enumerate().find(|(_, d)| *d == &Decoration::Underline) {
+                                    if let Some((i, _)) = self
+                                        .text
+                                        .current_color
+                                        .decs
+                                        .iter()
+                                        .enumerate()
+                                        .find(|(_, d)| *d == &Decoration::Underline)
+                                    {
                                         self.text.current_color.decs.remove(i);
                                     }
-                                },
+                                }
                                 (SetUnset::Set | SetUnset::Unset, Style::Bold | Style::Dim) => {
                                     // Not implemented yet, do nothing
-                                },
+                                }
                             }
-                        },
+                        }
                         ansi::TextOp::SetFGColor256 { fg } => {
                             let f = color::ansi_256_color(fg);
                             self.text.current_color.fore = f;
-                        },
+                        }
                         ansi::TextOp::SetBGColor256 { bg } => {
                             let b = color::ansi_256_color(bg);
                             self.text.current_color.fore = b;
-                        },
+                        }
                         ansi::TextOp::ResetColors => {
                             // Turn off attributes
                             self.text.current_color.decs.clear();
