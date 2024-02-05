@@ -159,6 +159,14 @@ pub fn vertical_columns(colors: &[u8]) {
     });
 }
 
+pub fn clear(color: Rgb3) {
+    for p in 0..BUFFER_SIZE {
+        riscv::interrupt::free(|| unsafe {
+            BUFFER[p] = color.to_byte();
+        });
+    }
+}
+
 pub fn vertical_columns_rgb(colors: &[(u8, u8, u8)]) {
     for (r, g, b) in colors {
         let rgb = Rgb3::from_rgb(*r, *g, *b);

@@ -11,6 +11,7 @@ use esp32c3_hal::{
 use esp32c3_hal::{interrupt, peripherals};
 use esp32c3_hal::{peripherals::UART0, Uart};
 use esp32c3_hal::{peripherals::UART1, prelude::*};
+use esp_println::print;
 
 use crate::channel::{self, Receiver, Sender};
 use crate::interrupt::which_priority;
@@ -194,7 +195,7 @@ fn UART0() {
         // (this code is not re-entrant), assuming nothing reconfigures the priority lol
         if let Some(uart_transmitter) = unsafe { &mut SENDER0 } {
             while let nb::Result::Ok(c) = uart_transmitter.serial.read() {
-                // print!("{}", c as char);
+                print!("{}", c as char);
                 uart_transmitter.tx.send(c as char);
             }
         }

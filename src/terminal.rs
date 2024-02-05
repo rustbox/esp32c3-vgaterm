@@ -175,7 +175,7 @@ impl Default for Cursor {
             pos: Default::default(),
             time_to_next_blink: SystemTimer::now(),
             blink_length: 12_000_000,
-            visible: false
+            visible: true
         }
     }
 }

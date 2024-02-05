@@ -15,7 +15,7 @@
 extern crate alloc;
 
 use critical_section::Mutex;
-use esp32c3_hal::systimer::SystemTimer;
+use esp32c3_hal::{peripherals::TIMG1, systimer::SystemTimer};
 use esp32c3_hal::timer::{Timer0, TimerGroup};
 use esp32c3_hal::{clock::Clocks, peripherals::SYSTIMER};
 use esp32c3_hal::{interrupt, interrupt::Priority};
@@ -32,6 +32,10 @@ use core::cell::RefCell;
 
 static TIMER0: Mutex<RefCell<Option<Timer<Timer0<TIMG0>>>>> = Mutex::new(RefCell::new(None));
 static mut TIMER0_CALLBACK: Option<Box<dyn FnMut()>> = None;
+
+static TIMER1: Mutex<RefCell<Option<Timer<Timer0<TIMG1>>>>> = Mutex::new(RefCell::new(None));
+static mut TIMER1_CALLBACK: Option<Box<dyn FnMut()>> = None;
+
 static mut DELAY: Option<Delay> = None;
 
 static mut SYSTIMER: Option<SystemTimer> = None;
@@ -238,6 +242,76 @@ pub fn clear_timer0() {
     }) // println!("+")
 }
 
+/// Initialize and disable Timer Group 0
+pub fn configure_timer1(timg1: TIMG1, clocks: &Clocks, clock_ctl: &mut PeripheralClockControl) {
+    let mut group0 = TimerGroup::new(timg1, clocks, clock_ctl);
+    let timer1 = group0.timer0;
+
+    group0.wdt.disable();
+
+    critical_section::with(|cs| unsafe {
+        TIMER1.borrow(cs).replace(Some(timer1));
+        DELAY.replace(Delay::new(clocks));
+    });
+}
+
+pub fn enable_timer1_interrupt(priority: Priority) {
+    interrupt::enable(peripherals::Interrupt::TG1_T0_LEVEL, priority).unwrap();
+
+    critical_section::with(|cs| {
+        if let Some(timer) = TIMER1.borrow(cs).borrow_mut().as_mut() {
+            timer.listen();
+        }
+    });
+}
+
+/// Start timer zero set for t microseconds
+pub fn start_timer1_callback<T>(t: u64, callback: impl FnMut() + 'static) {
+    critical_section::with(|cs| {
+        if let Some(timer) = TIMER1.borrow(cs).borrow_mut().as_mut() {
+            timer.start(t.micros())
+        }
+
+        unsafe {
+            TIMER1_CALLBACK = Some(Box::new(callback));
+        }
+    })
+}
+
+#[allow(dead_code)]
+pub fn start_repeat_timer1_callback(t_us: u64, mut callback: impl FnMut() + 'static) {
+    critical_section::with(|cs| {
+        if let Some(timer) = TIMER0.borrow(cs).borrow_mut().as_mut() {
+            timer.start(t_us.micros())
+        }
+
+        let f = move || {
+            callback();
+            start_timer0(t_us);
+        };
+
+        unsafe {
+            TIMER0_CALLBACK = Some(Box::new(f));
+        }
+    })
+}
+
+pub fn start_timer1(t: u64) {
+    critical_section::with(|cs| {
+        if let Some(timer) = TIMER1.borrow(cs).borrow_mut().as_mut() {
+            timer.start(t.micros())
+        }
+    })
+}
+
+pub fn clear_timer1() {
+    critical_section::with(|cs| {
+        if let Some(timer) = TIMER1.borrow(cs).borrow_mut().as_mut() {
+            timer.clear_interrupt();
+        }
+    }) // println!("+")
+}
+
 #[link_section = ".rwtext"]
 #[interrupt]
 fn TG0_T0_LEVEL() {
@@ -246,6 +320,20 @@ fn TG0_T0_LEVEL() {
 
     riscv::interrupt::free(|| unsafe {
         if let Some(callback) = &mut TIMER0_CALLBACK {
+            callback();
+        }
+
+        // TIMER0_CALLBACK = None;
+    });
+}
+
+#[interrupt]
+fn TG1_T0_LEVEL() {
+    // println!("timer 0 interrupt!");
+    clear_timer1();
+
+    riscv::interrupt::free(|| unsafe {
+        if let Some(callback) = &mut TIMER1_CALLBACK {
             callback();
         }
 

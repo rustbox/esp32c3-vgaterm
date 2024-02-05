@@ -96,6 +96,7 @@ pub fn channel<T>() -> (Sender<T>, Receiver<T>) {
     let inner = Inner {
         queue: Mutex::new(RefCell::new(VecDeque::new())),
     };
+    #[allow(clippy::arc_with_non_send_sync)]
     let inner = Arc::new(inner);
     (
         Sender {

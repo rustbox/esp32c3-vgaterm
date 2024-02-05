@@ -4,20 +4,25 @@
 
 extern crate alloc;
 
-use alloc::{boxed::Box, collections::VecDeque, string::String, vec::Vec};
-use esp32c3_hal::{clock::{ClockControl, CpuClock}, peripherals::RNG, Rng};
+use alloc::vec::Vec;
 use esp32c3_hal::prelude::*;
 use esp32c3_hal::timer::TimerGroup;
+use esp32c3_hal::{
+    clock::{ClockControl, CpuClock},
+    Rng,
+};
 use esp32c3_hal::{gpio::IO, peripherals::Peripherals, Rtc};
 use esp_backtrace as _;
 use esp_println::println;
 use riscv::interrupt::free;
 use vgaterm::{
-    self, album::Album, perf, video::{self}
+    self,
+    color::Rgb3,
+    life::{CellState, Field, GridLoc, Life},
+    perf,
+    video::{self, BUFFER_SIZE},
 };
 use vgaterm::{interrupt::Priority, usb_keyboard::US_ENGLISH, Work};
-
-use core::fmt::Write;
 
 core::arch::global_asm!(".global _heap_size; _heap_size = 0xC000");
 
@@ -83,7 +88,6 @@ fn main() -> ! {
         &clocks,
         &mut system.peripheral_clock_control,
     );
-    // vgaterm::timer::configure_timer1(peripherals.TIMG1, &clocks, &mut system.peripheral_clock_control,);
     vgaterm::timer::configure_systimer(peripherals.SYSTIMER);
     // let mut host_recv = vgaterm::uart::configure0(peripherals.UART0);
     let mut serial0 =
@@ -91,7 +95,6 @@ fn main() -> ! {
     serial0.set_rx_fifo_full_threshold(1);
     serial0.listen_rx_fifo_full();
     vgaterm::enable_timer0_interrupt(Priority::Priority14);
-    // vgaterm::timer::enable_timer1_interrupt(Priority::Priority14);
     vgaterm::uart::interrupt_enable0(Priority::Priority6);
     // vgaterm::timer::enable_alarm_interrupts(Priority::Priority14);
     vgaterm::gpio::interrupt_enable(Priority::max());
@@ -142,13 +145,8 @@ fn main() -> ! {
         40_000_000,
     );
 
-    let image1 = include_bytes!("../../image1.bin");
-    let image2 = include_bytes!("../../image2.bin");
-    let image3 = include_bytes!("../../image3.bin");
-    let images = [image3, image2, image1];
-
-
-    video::load_from_slice(image3);
+    // let image = include_bytes!("../../image.bin");
+    // video::load_from_slice(image);
     // video::color_fade_gradient();
     // let pattern = video::test_pattern();
     // for l in 0..video::HEIGHT {
@@ -205,149 +203,84 @@ fn main() -> ! {
 
     let mut display = vgaterm::display::Display::new();
 
-    // let s = PrimitiveStyleBuilder::new().stroke_color();
-    // r.draw_styled(, target)
+    let mut field = Field::new();
+    // let mut rng = Rng::new(peripherals.RNG);
 
-    // println!("Done");
-    // println!("Clock speed: {} Hz", measure_clock(delay));
-    vgaterm::kernel::start(io.pins.gpio3);
-
-    // let mut text_display = vgaterm::display::TextDisplay::new();
-    let mut terminal = vgaterm::terminal::TextField::new();
-    // terminal.type_str("Hello World!");
-    // text_display.write_text(0, vgaterm::display::COLUMNS / 2 - 4, " WELCOME!");
-    // text_display.write_text(1, 0, " Welcome, Aly and Ilana, to Chez Douglass, where we will enjoy food, company, drink, and new friendships!");
-    // text_display.draw_dirty(&mut display);
-    // display.flush();
-
-    // let mut cursor = (0, 0);
-    // terminal
-    let mut keyboard = vgaterm::keyboard::Keyboard::from_peripherals(
-        US_ENGLISH,
-        io.pins.gpio1,
-        io.pins.gpio0,
-        peripherals.UART1,
-        &clocks,
-        &mut system.peripheral_clock_control,
-    );
-
-    let mut key_events = VecDeque::new();
-    let mut key_state = vgaterm::keyboard::PressedSet::new();
-    let mut input = vgaterm::terminal_input::TerminalInput::new(300, 40);
-
-    #[allow(unused)]
-    enum ConnectMode {
-        LocalEcho,
-        ConnectHost,
-        None,
+    let mut coords = Vec::new();
+    for i in 0..35 {
+        let x = i + 42;
+        let y = 40;
+        println!("({}, {})", x, y);
+        coords.push((GridLoc::new(x, y), CellState::Live))
     }
+    // for i in 0..10 {
+    //     let x = i + 53;
+    //     let y = 40;
+    //     println!("({}, {})", x, y);
+    //     coords.push((GridLoc::new(x, y), CellState::Live))
+    // }
+    let x_offset = 40;
+    let y_offset = 35;
+    let blah = &[
+        (11, 2),
+        (9, 3),
+        (11, 3),
+        (2, 4),
+        (3, 4),
+        (8, 4),
+        (10, 4),
+        (22, 4),
+        (23, 4),
+        (2, 5),
+        (3, 5),
+        (7, 5),
+        (10, 5),
+        (22, 5),
+        (23, 5),
+        (8, 6),
+        (10, 6),
+        (9, 7),
+        (11, 7),
+        (11, 8),
+    ];
+    let blahblah = blah
+        .map(|(x, y)| (GridLoc::new(x + x_offset, y + y_offset), CellState::Live))
+        .into_iter();
+    field.set(coords.into_iter());
+    let mut life = Life::new(field);
 
-    let mode = ConnectMode::LocalEcho;
+    vgaterm::kernel::start(io.pins.gpio3);
 
     let mut frames = 0;
     let mut x: i32 = 0;
-    let mut epoch: u32 = 0;
-    let mut rng = Rng::new(peripherals.RNG);
-    let mut next: u64 = 19;
-    enum Displaying {
-        Image(usize),
-        Waiting(usize)
-    }
-    let mut displaying = Displaying::Waiting(video::BUFFER_SIZE);
+    let mut epoch: u8 = 0;
+
     loop {
-        key_events.extend(keyboard.flush_and_parse());
-        if let Some(kevent) = key_events.pop_front() {
-            key_state.push(kevent);
-        }
+        life.update_and_render(&mut display);
 
-        let h = {
-            let mut b = Vec::new();
-            while let Ok(r) = serial0.read() {
-                b.push(r);
+        if frames == 30 {
+            frames = 0;
+            let heap_size = unsafe { &_heap_size as *const _ as usize };
+            let used = ALLOCATOR.used() * 100 / heap_size;
+
+            println!("{}%", used);
+            for y in 0..100 {
+                if y == used {
+                    video::set_pixel(x as usize, video::HEIGHT - y - 1, 192 + (epoch % 64));
+                } else {
+                    video::set_pixel(x as usize, video::HEIGHT - y - 1, 0x00);
+                }
             }
-            unsafe {
-                NUM_BYTES += b.len();
+            x = x.wrapping_add(1) % 640;
+            if x == 0 {
+                epoch = epoch.wrapping_add(1);
             }
-            b
-        };
-
-        terminal.type_str(String::from_utf8_lossy(&h).as_ref());
-
-        let last_char = input.key_char(&key_state);
-        match last_char {
-            Work::Item(ref c) => {
-                match mode {
-                    ConnectMode::ConnectHost => {
-                        let _ = serial0.write_str(c);
-                    }
-                    ConnectMode::LocalEcho => {
-                        terminal.type_str(c);
-                    }
-                    ConnectMode::None => {}
-                };
-            }
-            Work::WouldBlock => {}
-            Work::WouldBlockUntil(_) => {}
         }
-
-        // Draw the characters on the frame
-        // Flush the Display to the BUFFER
-        // display.flush();
-        terminal.draw_up_to(315, &mut display);
-
-        if !key_events.is_empty() {
-            continue;
-        }
-
-        terminal.draw(&mut display);
-
 
         unsafe {
             // this will fire no less often than once per frame
-            // if frames == 30 {
-            //     frames = 0;
-            //     let heap_size = &_heap_size as *const _ as usize;
-            //     let used = ALLOCATOR.used() * 100 / heap_size;
-                
-            //     for y in 0..100 {
-            //         println!("{}%", used);
-            //         if y == used {
-            //             video::set_pixel(x as usize, video::HEIGHT - y - 1, 128 + (epoch % 128));
-            //         } else {
-            //             video::set_pixel(x as usize, video::HEIGHT - y - 1, 0x00);
-            //         }
-            //     }
-            //     x = x.wrapping_add(1) % 640;
-            //     if x == 0 {
-            //         epoch = epoch.wrapping_add(1);
-            //     }
-            // }
-            if frames == 20 {
-                println!("done");
-            }
-            let img = images[(frames / 512000 + 1) % images.len()];
-            //201731
-            next = (frames as u64 * 257069 + 201731) % video::BUFFER_SIZE as u64;
-            let i = next as usize;
-
-            if frames % 512000 < 256000 {
-                // We're fading
-                video::BUFFER[i] = img[i];
-            }
-
-
-            // if frames < video::BUFFER_SIZE {
-            //     video::BUFFER[i] = image2[i];
-            // } else if ((2 * video::BUFFER_SIZE)..(3 * video::BUFFER_SIZE)).contains(&frames) {
-            //     video::BUFFER[i] = image[i];
-            // } else if ((2 * video::BUFFER_SIZE)..(3 * video::BUFFER_SIZE)).contains(&frames) {
-            //     video::BUFFER[i] = image[i];
-            // } else if frames > 4*video::BUFFER_SIZE {
-            //     frames = 0;
-            // }
             riscv::asm::wfi();
-            frames = frames.wrapping_add(1);
-
         }
+        frames += 1;
     }
 }

@@ -1,5 +1,7 @@
 {
   "rust-analyzer.imports.granularity.enforce": true,
+  "rust-analyzer.check.command": "clippy",
+  "rust-analyzer.check.allTargets": false,
   "editor.formatOnSave": true,
   "editor.defaultFormatter": null,
   "[toml]": {
@@ -8,5 +10,4 @@
   "[rust]": {
     "editor.defaultFormatter": "rust-lang.rust-analyzer"
   },
-  "rust-analyzer.check.command": "clippy"
 }
