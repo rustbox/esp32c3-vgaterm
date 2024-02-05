@@ -14,9 +14,9 @@
 //! software should reset all frame logic back to the beginning of the frame.
 //!
 
-use esp32c3_hal::gpio::Gpio3;
+use esp32c3_hal::gpio::Input;
 use esp32c3_hal::gpio::{Event, Unknown};
-use esp32c3_hal::gpio::{Floating, Input};
+use esp32c3_hal::gpio::{Gpio3, PullDown};
 use esp32c3_hal::macros::ram;
 use esp_println::println;
 
@@ -29,8 +29,8 @@ pub fn start(start: Gpio3<Unknown>) {
     // let mut terminal = TextField::new();
     // let mut display = Display::new();
     let _ = crate::gpio::pin_interrupt(
-        start.into_floating_input(),
-        Event::RisingEdge,
+        start.into_pull_down_input(),
+        Event::FallingEdge,
         frame,
         // move |_| {
         // frame();
@@ -50,7 +50,7 @@ pub fn start(start: Gpio3<Unknown>) {
 /// Transmit the contents of the frame buffer out to the monitor via SPI.
 ///
 #[ram]
-pub fn frame(_: &mut Gpio3<Input<Floating>>) {
+pub fn frame(_: &mut Gpio3<Input<PullDown>>) {
     // Beginning of frame, so let's guarantee we start at 0
     // print!("*");
     unsafe {

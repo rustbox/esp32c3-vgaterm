@@ -9,6 +9,7 @@
 
 extern crate alloc;
 
+pub mod album;
 pub mod ansi;
 pub mod channel;
 pub mod color;
@@ -17,6 +18,7 @@ pub mod gpio;
 pub mod interrupt;
 pub mod kernel;
 pub mod keyboard;
+pub mod life;
 pub mod perf;
 pub mod spi;
 pub mod terminal;

@@ -1,3 +1,5 @@
+use core::fmt::Display;
+
 use embedded_graphics::{
     pixelcolor::raw::RawU8,
     prelude::{PixelColor, RawData, RgbColor},
@@ -33,6 +35,7 @@ pub fn byte_from_rgb(red: u8, green: u8, blue: u8) -> u8 {
     (rgb3 >> 1) as u8
 }
 
+#[inline(always)]
 pub fn rgb3_from_rgb(red: u8, green: u8, blue: u8) -> u16 {
     let r3 = red / 36;
     let g3 = green / 36;
@@ -110,6 +113,7 @@ pub struct Rgb3 {
     red: u8,
     green: u8,
     blue: u8,
+    brightness: u8,
 }
 
 impl Rgb3 {
@@ -118,6 +122,42 @@ impl Rgb3 {
             red: r % 8,
             green: g % 8,
             blue: b % 8,
+            brightness: 8,
+        }
+    }
+
+    pub const fn from_rgb(r: u8, g: u8, b: u8) -> Rgb3 {
+        let r3 = r / 36;
+        let g3 = g / 36;
+        let b3 = b / 36;
+        Rgb3::new(r3, g3, b3)
+    }
+
+    pub fn brightness(&self, b: u8) -> Rgb3 {
+        Rgb3 {
+            red: self.red,
+            green: self.green,
+            blue: self.blue,
+            brightness: b,
+        }
+    }
+
+    pub const fn render(&self) -> Rgb3 {
+        if self.brightness <= 8 {
+            Rgb3 {
+                red: self.red * self.brightness / 8,
+                green: self.green * self.brightness / 8,
+                blue: self.blue * self.brightness / 8,
+                brightness: 8,
+            }
+        } else {
+            let bright = self.brightness - 8;
+            Rgb3 {
+                red: ((8 - self.red) * bright) / 8 + self.red,
+                green: ((8 - self.green) * bright) / 8 + self.green,
+                blue: ((8 - self.blue) * bright) / 8 + self.blue,
+                brightness: 8,
+            }
         }
     }
 
@@ -139,11 +179,22 @@ impl Rgb3 {
 
     #[inline(always)]
     pub const fn to_byte(&self) -> u8 {
-        let mut v = self.red as u16;
-        v += (self.green as u16) << 3;
-        v += (self.green as u16) << 6;
+        // RGB3 to byte goes like:
+        //     2  1  0
+        // R: b1 b0 b7
+        // G: b4 b3 b2
+        // B: b7 b6 b5
+        // 7-2 6-1 5-0 4-2 3-1 2-0 1-0 0-1
+        // B2, B1, B0, G2, G1, G0, R2, R1
+        // Each color channel goes from 0-7, bits 0-2
+        let rendered = self.render();
+        rendered.blue << 5 | rendered.green << 2 | rendered.red >> 1
+    }
+}
 
-        rgb3_to_byte(v)
+impl Display for Rgb3 {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "Rgb3({}, {}, {})", self.red, self.green, self.blue)
     }
 }
 
@@ -212,7 +263,7 @@ pub static ANSI_BASE_LOW_COLORS: [Rgb3; 8] = [
     Rgb3::new(0, 0, 5),
     Rgb3::new(5, 0, 5),
     Rgb3::new(0, 5, 5),
-    Rgb3::new(6, 6, 6),
+    Rgb3::new(4, 4, 4),
 ];
 pub static ANSI_BASE_HIGH_COLORS: [Rgb3; 8] = [
     Rgb3::new(2, 2, 2),
@@ -224,6 +275,42 @@ pub static ANSI_BASE_HIGH_COLORS: [Rgb3; 8] = [
     Rgb3::new(2, 7, 7),
     Rgb3::WHITE,
 ];
+
+pub const BLACK_FG: u8 = 30;
+pub const RED_FG: u8 = 31;
+pub const GREEN_FG: u8 = 32;
+pub const YELLOW_FG: u8 = 33;
+pub const BLUE_FG: u8 = 34;
+pub const MAGENTA_FG: u8 = 35;
+pub const CYAN_FG: u8 = 36;
+pub const WHITE_FG: u8 = 37;
+
+pub const BRIGHT_BLACK_FG: u8 = 90;
+pub const BRIGHT_RED_FG: u8 = 91;
+pub const BRIGHT_GREEN_FG: u8 = 92;
+pub const BRIGHT_YELLOW_FG: u8 = 93;
+pub const BRIGHT_BLUE_FG: u8 = 94;
+pub const BRIGHT_MAGENTA_FG: u8 = 95;
+pub const BRIGHT_CYAN_FG: u8 = 96;
+pub const BRIGHT_WHITE_FG: u8 = 97;
+
+pub const BLACK_BG: u8 = 40;
+pub const RED_BG: u8 = 41;
+pub const GREEN_BG: u8 = 42;
+pub const YELLOW_BG: u8 = 43;
+pub const BLUE_BG: u8 = 44;
+pub const MAGENTA_BG: u8 = 45;
+pub const CYAN_BG: u8 = 46;
+pub const WHITE_BG: u8 = 47;
+
+pub const BRIGHT_BLACK_BG: u8 = 100;
+pub const BRIGHT_RED_BG: u8 = 101;
+pub const BRIGHT_GREEN_BG: u8 = 102;
+pub const BRIGHT_YELLOW_BG: u8 = 103;
+pub const BRIGHT_BLUE_BG: u8 = 104;
+pub const BRIGHT_MAGENTA_BG: u8 = 105;
+pub const BRIGHT_CYAN_BG: u8 = 106;
+pub const BRIGHT_WHITE_BG: u8 = 107;
 
 pub fn ansi_base_color(fore: u8, back: u8) -> (Rgb3, Rgb3) {
     let fg = match fore {

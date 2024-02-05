@@ -111,7 +111,7 @@ pub fn configure(
         sio3,
         cs,
         freq.Hz(),
-        SpiMode::Mode1,
+        SpiMode::Mode0,
         peripheral_clock,
         clocks,
     )
@@ -121,6 +121,10 @@ pub fn configure(
         unsafe { &mut RX_DESCRIPTORS },
         DmaPriority::Priority0,
     ));
+
+    unsafe {
+        (*SPI2::PTR).ctrl.write(|w| w.wr_bit_order().set_bit());
+    }
 
     interrupt::free(|| unsafe {
         QSPI.replace(ReadyToSend(qspi));
