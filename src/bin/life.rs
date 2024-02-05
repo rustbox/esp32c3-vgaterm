@@ -7,22 +7,19 @@ extern crate alloc;
 use alloc::vec::Vec;
 use esp32c3_hal::prelude::*;
 use esp32c3_hal::timer::TimerGroup;
-use esp32c3_hal::{
-    clock::{ClockControl, CpuClock},
-    Rng,
-};
+use esp32c3_hal::
+    clock::{ClockControl, CpuClock};
 use esp32c3_hal::{gpio::IO, peripherals::Peripherals, Rtc};
 use esp_backtrace as _;
 use esp_println::println;
 use riscv::interrupt::free;
 use vgaterm::{
     self,
-    color::Rgb3,
     life::{CellState, Field, GridLoc, Life},
     perf,
-    video::{self, BUFFER_SIZE},
+    video::{self},
 };
-use vgaterm::{interrupt::Priority, usb_keyboard::US_ENGLISH, Work};
+use vgaterm::interrupt::Priority;
 
 core::arch::global_asm!(".global _heap_size; _heap_size = 0xC000");
 
@@ -55,7 +52,6 @@ extern "C" fn stop() -> ! {
     }
 }
 
-static mut NUM_BYTES: usize = 0;
 
 #[entry]
 fn main() -> ! {
@@ -219,33 +215,33 @@ fn main() -> ! {
     //     println!("({}, {})", x, y);
     //     coords.push((GridLoc::new(x, y), CellState::Live))
     // }
-    let x_offset = 40;
-    let y_offset = 35;
-    let blah = &[
-        (11, 2),
-        (9, 3),
-        (11, 3),
-        (2, 4),
-        (3, 4),
-        (8, 4),
-        (10, 4),
-        (22, 4),
-        (23, 4),
-        (2, 5),
-        (3, 5),
-        (7, 5),
-        (10, 5),
-        (22, 5),
-        (23, 5),
-        (8, 6),
-        (10, 6),
-        (9, 7),
-        (11, 7),
-        (11, 8),
-    ];
-    let blahblah = blah
-        .map(|(x, y)| (GridLoc::new(x + x_offset, y + y_offset), CellState::Live))
-        .into_iter();
+    // let x_offset = 40;
+    // let y_offset = 35;
+    // let blah = &[
+    //     (11, 2),
+    //     (9, 3),
+    //     (11, 3),
+    //     (2, 4),
+    //     (3, 4),
+    //     (8, 4),
+    //     (10, 4),
+    //     (22, 4),
+    //     (23, 4),
+    //     (2, 5),
+    //     (3, 5),
+    //     (7, 5),
+    //     (10, 5),
+    //     (22, 5),
+    //     (23, 5),
+    //     (8, 6),
+    //     (10, 6),
+    //     (9, 7),
+    //     (11, 7),
+    //     (11, 8),
+    // ];
+    // let blahblah = blah
+    //     .map(|(x, y)| (GridLoc::new(x + x_offset, y + y_offset), CellState::Live))
+    //     .into_iter();
     field.set(coords.into_iter());
     let mut life = Life::new(field);
 

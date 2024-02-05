@@ -4,22 +4,16 @@
 
 extern crate alloc;
 
-use alloc::{boxed::Box, collections::VecDeque, string::String, vec::Vec};
+use alloc::{collections::VecDeque, string::String, vec::Vec};
+use esp32c3_hal::clock::{ClockControl, CpuClock};
 use esp32c3_hal::prelude::*;
 use esp32c3_hal::timer::TimerGroup;
-use esp32c3_hal::{
-    clock::{ClockControl, CpuClock},
-    peripherals::RNG,
-    Rng,
-};
 use esp32c3_hal::{gpio::IO, peripherals::Peripherals, Rtc};
 use esp_backtrace as _;
 use esp_println::println;
 use riscv::interrupt::free;
 use vgaterm::{
-    self,
-    album::Album,
-    perf,
+    self, perf,
     video::{self},
 };
 use vgaterm::{interrupt::Priority, usb_keyboard::US_ENGLISH, Work};
@@ -251,15 +245,7 @@ fn main() -> ! {
     let mode = ConnectMode::LocalEcho;
 
     let mut frames = 0;
-    let mut x: i32 = 0;
-    let mut epoch: u32 = 0;
-    let mut rng = Rng::new(peripherals.RNG);
-    let mut next: u64 = 19;
-    enum Displaying {
-        Image(usize),
-        Waiting(usize),
-    }
-    let mut displaying = Displaying::Waiting(video::BUFFER_SIZE);
+    // let mut displaying = Displaying::Waiting(video::BUFFER_SIZE);
     loop {
         key_events.extend(keyboard.flush_and_parse());
         if let Some(kevent) = key_events.pop_front() {
@@ -332,8 +318,7 @@ fn main() -> ! {
             }
             let img = images[(frames / 512000 + 1) % images.len()];
             //201731
-            next = (frames as u64 * 257069 + 201731) % video::BUFFER_SIZE as u64;
-            let i = next as usize;
+            let i = ((frames as u64 * 257069 + 201731) % video::BUFFER_SIZE as u64) as usize;
 
             if frames % 512000 < 256000 {
                 // We're fading

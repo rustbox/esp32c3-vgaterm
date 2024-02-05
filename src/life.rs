@@ -26,6 +26,7 @@ impl CellState {
         }
     }
 
+    #[allow(dead_code)]
     fn is_dead(&self) -> bool {
         match self {
             CellState::Live => false,
@@ -109,7 +110,7 @@ impl Field {
     pub fn remove(&mut self, x: &GridLoc) -> Option<CellState> {
         let b = x.bucket();
         let bucket = &mut self.field[b];
-        for (i, (loc, s)) in bucket.iter().enumerate() {
+        for (i, (loc, _)) in bucket.iter().enumerate() {
             if loc == x {
                 self.size -= 1;
                 return Some(bucket.swap_remove(i).1);
@@ -188,7 +189,7 @@ impl Field {
         let mut new_live = Vec::new();
         let mut new_dead = Vec::new();
         for (c, current) in self.cell_states(to_process.iter()) {
-            let next = current.next(&self.neighbors(c), &self);
+            let next = current.next(&self.neighbors(c), self);
             match (current, next) {
                 (CellState::Dead, CellState::Live) => new_live.push(c),
                 (CellState::Live, CellState::Dead) => new_dead.push(c),
@@ -234,6 +235,7 @@ pub struct FieldIterator<'a> {
 }
 
 impl<'a> FieldIterator<'a> {
+    #[allow(dead_code)]
     fn new(field: &'a Field) -> FieldIterator {
         FieldIterator {
             bucket_idx: 0,

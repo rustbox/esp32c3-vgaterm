@@ -1,6 +1,5 @@
 use core::fmt::Display;
 
-use alloc::format;
 use embedded_graphics::{
     pixelcolor::raw::RawU8,
     prelude::{PixelColor, RawData, RgbColor},

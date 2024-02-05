@@ -1,4 +1,3 @@
-use core::ops::Deref;
 
 use alloc::vec::Vec;
 
@@ -8,11 +7,9 @@ pub struct Image<'a> {
     data: &'a [u8],
     height: usize,
     width: usize,
-    name: &'a str,
 }
 
 pub struct Album<'a> {
-    frame: usize,
     images: Vec<Image<'a>>,
     current: usize,
 }
@@ -25,14 +22,12 @@ impl<'a> Album<'a> {
                 data: img,
                 height: 400,
                 width: 640,
-                name: "raw",
             };
             images.push(image);
         }
         Album {
             images,
             current: 0,
-            frame: 0,
         }
     }
 
@@ -44,6 +39,7 @@ impl<'a> Album<'a> {
     /// 4) Display the next image
     /// 5) Wait
     ///
+    #[allow(dead_code)]
     fn update(&mut self) {}
 
     pub fn next(&mut self) {
@@ -61,7 +57,3 @@ impl<'a> Album<'a> {
     }
 }
 
-enum AlbumState {
-    TransitionTo,
-    Displaying,
-}

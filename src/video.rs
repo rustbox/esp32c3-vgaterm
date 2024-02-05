@@ -2,7 +2,7 @@ use esp32c3_hal::prelude::*;
 use esp_println::println;
 
 use crate::{
-    color::{byte_to_rgb3, color3_to_byte, rgb3_to_byte, rgb_from_byte, Rgb3},
+    color::{byte_to_rgb3, color3_to_byte, rgb_from_byte, Rgb3},
     spi::{
         self,
         Instance::{ReadyToSend, TxInProgress},
@@ -159,6 +159,7 @@ pub fn vertical_columns(colors: &[u8]) {
     });
 }
 
+#[allow(clippy::needless_range_loop)]
 pub fn clear(color: Rgb3) {
     for p in 0..BUFFER_SIZE {
         riscv::interrupt::free(|| unsafe {
@@ -232,6 +233,7 @@ pub fn test_pattern() -> [u8; 128] {
 
 pub fn color_fade_gradient() {
     let mut colors = [Rgb3::new(0, 0, 0); 60];
+    #[allow(clippy::needless_range_loop)]
     for i in 0..8 {
         colors[i] = Rgb3::new(7, i as u8, 0);
     }
