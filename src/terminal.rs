@@ -4,9 +4,10 @@ use crate::{
     display::{self, Decoration, TextDisplay, COLUMNS, ROWS},
     CHARACTER_DRAW_CYCLES,
 };
-use alloc::string::String;
-use embedded_graphics::prelude::DrawTarget;
+use alloc::{format, string::{String, ToString}, vec::Vec};
+use embedded_graphics::prelude::{DrawTarget, RgbColor};
 use esp32c3_hal::systimer::SystemTimer;
+use esp_println::println;
 
 pub const IROWS: isize = display::ROWS as isize;
 pub const ICOLS: isize = display::COLUMNS as isize;
@@ -28,25 +29,23 @@ impl CursorPos {
     /// assert_eq!(Cursor(0, 0).offset(0, 1), Cursor(0, 1));
     /// assert_eq!(Cursor(0, 1).offset(0, -1), Cursor(0, 0));
     ///
-    /// // columns wrap
-    /// assert_eq!(Cursor(0, 0).offset(0, ICOLS + 2), Cursor(1, 2));
-    /// assert_eq!(Cursor(1, 0).offset(0, -ICOLS), Cursor(0, 0));
-    /// assert_eq!(Cursor(2, 0).offset(0, -ICOLS - 1), Cursor(0, COLUMNS - 1));
+    /// // columns saturate
+    /// assert_eq!(Cursor(0, 0).offset(0, ICOLS + 2), Cursor(0, ICOLS - 1));
+    /// assert_eq!(Cursor(1, 0).offset(0, -ICOLS), Cursor(1, 0));
+    /// assert_eq!(Cursor(2, 0).offset(0, -ICOLS - 1), Cursor(2, 0));
     ///
     /// // as do rows
-    /// assert_eq!(Cursor(0, 0).offset(IROWS + 1, 0), Cursor(1, 0));
-    /// assert_eq!(Cursor(1, 0).offset(-2, 0), Cursor(ROWS - 1, 0));
-    /// assert_eq!(Cursor(0, 0).offset(-1, -1), Cursor(ROWS - 2, COLUMNS - 1));
+    /// assert_eq!(Cursor(0, 0).offset(IROWS + 1, 0), Cursor(IROWS - 1, 0));
+    /// assert_eq!(Cursor(1, 0).offset(-2, 0), Cursor(0, 0));
+    /// assert_eq!(Cursor(0, 0).offset(-1, -1), Cursor(0, 0));
     /// ```
     ///
     /// (see also: https://play.rust-lang.org/?version=stable&mode=debug&edition=2021&gist=3aacdae98b11d36599604d6300f1c71f
     ///  whoever said there's no testing in no_std?)
     #[inline]
     pub fn offset(&self, r: isize, c: isize) -> CursorPos {
-        let cols = self.1 as isize + c;
-        let (p, cols) = (cols.div_euclid(ICOLS), cols.rem_euclid(ICOLS));
-        let rows = (self.0 as isize + r + p) % IROWS;
-        let rows = (rows + IROWS) % IROWS; // (-IROWS, IROWS) -> [0, IROWS)
+        let cols = (self.col() as isize + c).clamp(0, ICOLS - 1);
+        let rows = (self.row() as isize + r).clamp(0, IROWS - 1);
 
         CursorPos(rows as usize, cols as usize)
     }
@@ -77,7 +76,7 @@ enum HorizontalLocation {
 #[derive(Debug, Clone, Copy)]
 pub struct Cursor {
     pub pos: CursorPos,
-    time_to_next_blink: u64,
+    time_to_next_blink: Option<u64>,
     blink_length: u64,
     visible: bool,
 }
@@ -94,7 +93,7 @@ impl Cursor {
             self.unset_highlight(text);
             let cursor = Cursor {
                 pos,
-                time_to_next_blink: SystemTimer::now().wrapping_add(self.blink_length),
+                time_to_next_blink: Some(SystemTimer::now().wrapping_add(self.blink_length)),
                 blink_length: self.blink_length,
                 visible: self.visible,
             };
@@ -142,7 +141,7 @@ impl Cursor {
 
     fn reset_highlight_timer(&self, text: &mut TextDisplay) -> Cursor {
         self.set_highlight(text);
-        let time_to_next_blink = SystemTimer::now().wrapping_add(self.blink_length);
+        let time_to_next_blink = Some(SystemTimer::now().wrapping_add(self.blink_length));
         Cursor {
             pos: self.pos,
             time_to_next_blink,
@@ -153,17 +152,19 @@ impl Cursor {
 
     fn update(&self, text: &mut TextDisplay) -> Cursor {
         let now = SystemTimer::now();
-        if now >= self.time_to_next_blink {
-            if self.visible {
-                self.swap_highlight(text);
+        if let Some(time_to_next_blink) = self.time_to_next_blink {
+            if now >= time_to_next_blink {
+                if self.visible {
+                    self.swap_highlight(text);
+                }
+                let time_to_next_blink = Some(now.wrapping_add(self.blink_length));
+                return Cursor {
+                    pos: self.pos,
+                    blink_length: self.blink_length,
+                    time_to_next_blink,
+                    visible: self.visible,
+                };
             }
-            let time_to_next_blink = now.wrapping_add(self.blink_length);
-            return Cursor {
-                pos: self.pos,
-                blink_length: self.blink_length,
-                time_to_next_blink,
-                visible: self.visible,
-            };
         }
         *self
     }
@@ -173,7 +174,7 @@ impl Default for Cursor {
     fn default() -> Self {
         Cursor {
             pos: Default::default(),
-            time_to_next_blink: SystemTimer::now(),
+            time_to_next_blink: Some(SystemTimer::now()),
             blink_length: 12_000_000,
             visible: true,
         }
@@ -183,6 +184,7 @@ impl Default for Cursor {
 pub struct TextField {
     pub text: TextDisplay,
     cursor: Cursor,
+    saved_cursor: Option<CursorPos>,
     input_buffer: String,
 }
 
@@ -191,6 +193,7 @@ impl TextField {
         TextField {
             text: TextDisplay::new(),
             cursor: Cursor::default(),
+            saved_cursor: None,
             input_buffer: String::default(),
         }
     }
@@ -201,11 +204,12 @@ impl TextField {
         self.cursor = self.cursor.offset(r, c, &mut self.text);
     }
 
-    pub fn type_str(&mut self, s: &str) {
+    pub fn type_str(&mut self, s: &str) -> Vec<u8> {
         self.input_buffer.push_str(s);
         let res = ansi::parse_esc_str(self.input_buffer.as_str());
         let len = res.rest.len();
 
+        let mut outs = Vec::new();
         // At the end buffer should have only the contents of res.rest
         for op in res.opstr {
             match op {
@@ -215,11 +219,12 @@ impl TextField {
                     }
                 }
                 OpStr::Op(op) => {
-                    self.handle_op(op);
+                    outs = self.handle_op(op);
                 }
             }
         }
         let _ = self.input_buffer.drain(..(self.input_buffer.len() - len));
+        outs
     }
 
     fn handle_char_in(&mut self, t: char) {
@@ -259,7 +264,7 @@ impl TextField {
             '\r' => self.move_cursor(0, -(self.cursor.pos.col() as isize)),
             _ => {
                 for c in t.escape_default() {
-                    self.text.write(self.cursor.pos.0, self.cursor.pos.1, c);
+                    self.text.write(self.cursor.pos.row(), self.cursor.pos.col(), c);
                     match self.cursor.location() {
                         (_, HorizontalLocation::Left | HorizontalLocation::Middle) => {
                             self.move_cursor(0, 1);
@@ -280,9 +285,10 @@ impl TextField {
         }
     }
 
-    fn handle_op(&mut self, op: Op) {
+    fn handle_op(&mut self, op: Op) -> Vec<u8> {
         use Op::*;
         // println!("{:?}", op);
+        let mut out = Vec::new();
         match op {
             MoveCursorAbs { x, y } => {
                 self.move_cursor(
@@ -305,9 +311,27 @@ impl TextField {
             MoveCursorBeginningAndLine { dy } => {
                 self.move_cursor(dy, -(self.cursor.pos.col() as isize));
             }
-            RequstCursorPos => {}
-            SaveCursorPos => {}
-            RestoreCursorPos => {}
+            RequstCursorPos => {
+                // ESC [ <r> ; <c> R
+                let row = (self.cursor.pos.row() + 1).to_string();
+                let col = (self.cursor.pos.col() + 1).to_string();
+                out.extend_from_slice(&[27, b'[']);
+                out.extend_from_slice(row.as_str().as_bytes());
+                out.push(b';');
+                out.extend_from_slice(col.as_str().as_bytes());
+                out.push(b'R');
+            }
+            SaveCursorPos => {
+                self.saved_cursor.replace(self.cursor.pos);
+            }
+            RestoreCursorPos => {
+                if let Some(pos) = self.saved_cursor {
+                    self.move_cursor(
+                        pos.row() as isize - self.cursor.pos.row() as isize,
+                        pos.col() as isize - self.cursor.pos.col() as isize,
+                    );
+                }
+            }
             EraseScreen(erase) => {
                 match erase {
                     EraseMode::All => {
@@ -467,22 +491,46 @@ impl TextField {
                         }
                         ansi::TextOp::SetFGColor256 { fg } => {
                             let f = color::ansi_256_color(fg);
+                            println!("BG: {} => {:?}", fg, f.to_byte());
                             self.text.current_color.fore = f;
                         }
                         ansi::TextOp::SetBGColor256 { bg } => {
                             let b = color::ansi_256_color(bg);
-                            self.text.current_color.fore = b;
+                            println!("BG: {} => {:?}", bg, b.to_byte());
+                            self.text.current_color.back = b;
                         }
                         ansi::TextOp::ResetColors => {
                             // Turn off attributes
+                            println!("Reset Colors");
                             self.text.current_color.decs.clear();
+                            self.text.current_color.fore = color::Rgb3::WHITE;
+                            self.text.current_color.back = color::Rgb3::BLACK;
                         }
                     }
                 }
             }
             InPlaceDelete => self.text.write(self.cursor.pos.0, self.cursor.pos.1, ' '),
-            DecPrivateSet(_) => {}
-            DecPrivateReset(_) => {}
+            DecPrivateSet(op) => {
+                #[allow(clippy::single_match)]
+                match op.as_str() {
+                    "25" => {
+                        println!("Cursor Visible");
+                        self.cursor.visible = true;
+                    },
+                    _ => {}
+                }
+            }
+            DecPrivateReset(op) => {
+                #[allow(clippy::single_match)]
+                match op.as_str() {
+                    "25" => {
+                        println!("Cursor Invisible");
+                        self.cursor.unset_highlight(&mut self.text);
+                        self.cursor.visible = false;
+                    },
+                    _ => {}
+                }
+            }
             Vgaterm(ansi::Vgaterm::Redraw) => {
                 self.text.dirty_all();
                 unsafe {
@@ -491,6 +539,7 @@ impl TextField {
                 }
             }
         }
+        out
     }
 
     pub fn draw<D>(&mut self, target: &mut D)

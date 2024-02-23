@@ -6,7 +6,7 @@ This is the software that interacts with the VGA timing circuitry and VGA hardwa
 
 The video memory is transmitted to the VGA Driver circuitry once a frame via the Quad SPI module on the esp32c3 and the VGA Driver converts the incoming data into Red, Green, and Blue analog voltage signals according to the VGA spec. A new frame is initiated by the Timing Circuit.
 
-![Vgaterm](images/vgaterm-esp32c3.drawio.png)
+![Vgaterm](images/vgaterm-esp32c3.drawio.png "Vgaterm")
 
 # Installation and Prerquisites
 

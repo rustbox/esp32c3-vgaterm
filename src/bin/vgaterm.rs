@@ -240,7 +240,7 @@ fn main() -> ! {
         None,
     }
 
-    let mode = ConnectMode::LocalEcho;
+    let mode = ConnectMode::ConnectHost;
 
     let mut frames = 0;
     // let mut displaying = Displaying::Waiting(video::BUFFER_SIZE);
@@ -261,7 +261,11 @@ fn main() -> ! {
             b
         };
 
-        terminal.type_str(String::from_utf8_lossy(&h).as_ref());
+        let outs = terminal.type_str(String::from_utf8_lossy(&h).as_ref());
+        if !outs.is_empty() {
+            println!("op response {:?}", outs);
+        }
+        let _ = serial0.write_bytes(&outs);
 
         let last_char = input.key_char(&key_state);
         match last_char {
@@ -320,7 +324,7 @@ fn main() -> ! {
 
             if frames % 512000 < 256000 {
                 // We're fading
-                video::BUFFER[i] = img[i];
+                // video::BUFFER[i] = img[i];
             }
 
             // if frames < video::BUFFER_SIZE {
