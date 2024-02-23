@@ -341,7 +341,7 @@ pub fn ansi_256_color(color: u8) -> Rgb3 {
     // Last is greyscale from 232-255
     match color {
         0..=7 => ANSI_BASE_LOW_COLORS[color as usize],
-        8..=15 => ANSI_BASE_HIGH_COLORS[color as usize],
+        8..=15 => ANSI_BASE_HIGH_COLORS[color as usize - 8],
         16..=231 => {
             // c = red * 36 + green * 6 + blue
             let mut cube_color = color - 16;

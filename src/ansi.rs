@@ -16,6 +16,8 @@
 //! ESC [ 6 n           => Request cursor postion, as `ESC [ <r> ; <c> R` at row r and column c
 //! ESC 7               => Save cursor position
 //! ESC 8               => Restore cursor position
+//! ESC [ s             => Save cursor position
+//! ESC [ u             => Restore cursor position
 //! ESC [ 3 > ~         => Delete
 //! ESC [ J             => Erase from cursor until end of screen
 //! ESC [ 0 J           => Erase from cursor until end of screen
@@ -25,6 +27,8 @@
 //! ESC [ 0 K           => Erase start of line to cursor
 //! ESC [ 1 K           => Erase start of line to the cursor
 //! ESC [ 2 K           => Erase entire line
+//! ESC [ ? 25 l        => Hide Cursor
+//! ESC [ ? 25 H        => Show Cursor
 //!
 //! Graphics/Colors
 //! ===============
@@ -191,7 +195,9 @@ where
                 rest,
                 match n {
                     None => default,
-                    Some(n) => N::from_str(n).unwrap(),
+                    Some(n) => N::from_str(n).unwrap_or_else(|_| {
+                        N::from_str("999").unwrap()
+                    }),
                 },
             )
         })
@@ -228,12 +234,13 @@ fn cursor_to_line_col(input: &str) -> OpResult {
         dual_int_parameter_sequence::<usize>('H'),
         dual_int_parameter_sequence::<usize>('f'),
     ))(input)
-    .map(|(rest, (a, b))| {
+    .map(|(rest, (row, col))| {
         (
             rest,
+            // Incoming sequence will be 1 index, so subtract 1 to get to 0 index representation
             Op::MoveCursorAbs {
-                x: b.saturating_sub(1),
-                y: a.saturating_sub(1),
+                x: col.saturating_sub(1),
+                y: row.saturating_sub(1),
             },
         )
     })
@@ -315,6 +322,35 @@ fn save_cursor_position(input: &str) -> OpResult {
 fn restore_cursor_position(input: &str) -> OpResult {
     nom::bytes::streaming::tag("\u{1B}8")(input).map(|(rest, _)| (rest, Op::RestoreCursorPos))
 }
+
+/// `ESC [ s`
+fn save_cursor_position2(input: &str) -> OpResult {
+    nom::character::streaming::char('s')(input).map(|(rest, _)| (rest, Op::SaveCursorPos))
+}
+
+/// `ESC [ u`
+fn restore_cursor_position2(input: &str) -> OpResult {
+    nom::character::streaming::char('u')(input).map(|(rest, _)| (rest, Op::RestoreCursorPos))
+}
+
+/// `ESC [ ? 25 l`        => Hide Cursor
+/// `ESC [ ? 25 h`        => Show Cursor
+// fn cursor_visible(input: &str) -> OpResult {
+//     nom::sequence::preceded(
+//         nom::bytes::streaming::tag("?25"),
+//         nom::character::streaming::one_of("lh"),
+//     )(input)
+//     .map(|(rest, arg)| {
+//         (
+//             rest,
+//             match arg {
+//                 'l' => Op::CursorVisible(SetUnset::Unset),
+//                 'h' => Op::CursorVisible(SetUnset::Set),
+//                 _ => unreachable!(),
+//             },
+//         )
+//     })
+// }
 
 /// ESC [ 3 > ~         => Delete
 fn delete(input: &str) -> OpResult {
@@ -483,25 +519,29 @@ fn parse(input: &str) -> OpResult {
         start_with_char(
             '[',
             nom::branch::alt((
-                vgaterm_sequence,
-                cursor_to_0,
-                cursor_to_line_col,
-                cursor_up_lines,
-                cursor_down_lines,
-                cursor_left_col,
-                cursor_right_col,
-                cursor_to_column,
-                cursor_beginning_down,
-                cursor_beginning_up,
-                scroll_up,
-                scroll_down,
-                delete,
-                erase_screen,
-                erase_line,
+                nom::branch::alt((
+                    vgaterm_sequence,
+                    cursor_to_0,
+                    cursor_to_line_col,
+                    cursor_up_lines,
+                    cursor_down_lines,
+                    cursor_left_col,
+                    cursor_right_col,
+                    cursor_to_column,
+                    cursor_beginning_down,
+                    cursor_beginning_up,
+                    scroll_up,
+                    scroll_down,
+                    delete,
+                    erase_screen,
+                    erase_line,
+                )),
                 request_cursor_postion,
                 set_text_mode,
                 set_private_sequence,
                 reset_private_sequence,
+                save_cursor_position2,
+                restore_cursor_position2,
             )),
         ),
     )))(input)
