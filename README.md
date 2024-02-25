@@ -1,11 +1,17 @@
 # esp32c3-vgaterm
 
-Vgaterm is a bare metal VGA driver and serial terminal written for RISC-V (`rv32imc`) on the esp32-c3 from Espressif.
+Vgaterm is a bare metal VGA driver and serial terminal written for RISC-V (`rv32imc`) on the esp32-c3 from Espressif. It supports 256 Colors (4 red, 8 green, 8 blue) with a resolution of 640x400 pixels (using the 640x480 standard: http://tinyvga.com/vga-timing/640x480@60Hz)
+
+![Vgaterm In Action](images/vgaterm-vga-demo.jpg)
 
 This is the software that interacts with the VGA timing circuitry and VGA hardware to display pixel data stored in the video buffer in the CPU memory.
 
 The video memory is transmitted to the VGA Driver circuitry once a frame via the Quad SPI module on the esp32c3 and the VGA Driver converts the incoming data into Red, Green, and Blue analog voltage signals according to the VGA spec. A new frame is initiated by the Timing Circuit.
 
+### Vgaterm Terminal Communication
+![Vgaterm](images/vgaterm-terminal-sequence.drawio.png "Terminal Communication with a Host")
+
+### Vgaterm Connections to External Circuitry
 ![Vgaterm](images/vgaterm-esp32c3.drawio.png "Vgaterm")
 
 # Installation and Prerquisites

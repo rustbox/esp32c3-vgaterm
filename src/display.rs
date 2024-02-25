@@ -188,6 +188,10 @@ impl Character {
         }
     }
 
+    pub fn dirty(&self) -> bool {
+        self.color.dirty()
+    }
+
     pub fn char(&self) -> char {
         let c: u32 = ((self.character[0] as u32) + (self.character[1] as u32)) << 8;
         char::from_u32(c).unwrap_or(' ')
@@ -236,67 +240,77 @@ impl Default for Character {
 /// Inverse: 15, Underline: 14, Strike: 13, Blink: 12, Back: 6-11 bits, Fore: 0-5 bits
 /// IUSB|bbgg.rr|bbggrr
 #[derive(Debug, Clone, Copy)]
-pub struct CharColor(u16);
+pub struct CharColor {
+    fore: u8,
+    back: u8,
+    decoration: u8,
+}
 
 impl CharColor {
     pub fn new(foreground: Rgb3, background: Rgb3) -> CharColor {
-        let fore2 = foreground.rgb2();
-        let back2 = background.rgb2();
-        let c = ((fore2.0 as u16) >> 1)
-            | ((fore2.1 as u16) << 1)
-            | ((fore2.2 as u16) << 3)
-            | ((back2.0 as u16) << 5)
-            | ((back2.1 as u16) << 7)
-            | ((back2.2 as u16) << 9);
-
-        // IUSB|bbgg.rr|bbggrr
-        // bb0.gg0.rr
-        CharColor(c)
+        CharColor {
+            fore: foreground.to_byte(),
+            back: background.to_byte(),
+            decoration: 0,
+        }
     }
 
     pub fn foreground(&self) -> Rgb3 {
-        let r = ((self.0 & 0b00000011) << 1) as u8;
-        let g = ((self.0 & 0b00001100) >> 1) as u8;
-        let b = ((self.0 & 0b00110000) >> 3) as u8;
-        Rgb3::from_rgb2(r, g, b)
+        // let r = ((self.0 & 0b00000011) << 1) as u8;
+        // let g = ((self.0 & 0b00001100) >> 1) as u8;
+        // let b = ((self.0 & 0b00110000) >> 3) as u8;
+        let (r, g, b) = color::byte_to_rgb3(self.fore);
+        Rgb3::new(r, g, b)
     }
 
     pub fn background(&self) -> Rgb3 {
-        let r = ((self.0 & 0b11000000) >> 5) as u8;
-        let g = ((self.0 & 0b0000_0011_0000_0000) >> 7) as u8;
-        let b = ((self.0 & 0b0000_1100_0000_0000) >> 9) as u8;
-        Rgb3::from_rgb2(r, g, b)
+        // let r = ((self.0 & 0b11000000) >> 5) as u8;
+        // let g = ((self.0 & 0b0000_0011_0000_0000) >> 7) as u8;
+        // let b = ((self.0 & 0b0000_1100_0000_0000) >> 9) as u8;
+        let (r, g, b) = color::byte_to_rgb3(self.back);
+        Rgb3::new(r, g, b)
     }
 
     pub fn inverse(&self) -> bool {
-        self.0 & Decoration::Inverse.bit() != 0
+        self.decoration & Decoration::Inverse.bit() != 0
     }
 
     pub fn underline(&self) -> bool {
-        self.0 & Decoration::Underline.bit() != 0
+        self.decoration & Decoration::Underline.bit() != 0
     }
 
     pub fn strikethrough(&self) -> bool {
-        self.0 & Decoration::Strikethrough.bit() != 0
+        self.decoration & Decoration::Strikethrough.bit() != 0
     }
 
     pub fn blink(&self) -> bool {
-        self.0 & Decoration::Blink.bit() != 0
+        self.decoration & Decoration::Blink.bit() != 0
+    }
+
+    pub fn dirty(&self) -> bool {
+        self.decoration & Decoration::Dirty.bit() != 0
     }
 
     pub fn with_foreground(self, color: Rgb3) -> CharColor {
-        let (r2, g2, b2) = color.rgb2();
-        let c = ((r2 + g2) << (2 + b2) << 4) as u16;
-
-        CharColor((self.0 & 0b1111_1111_1100_0000) | c)
+        // let (r2, g2, b2) = color.rgb2();
+        // let c = ((r2 + g2) << (2 + b2) << 4) as u16;
+        CharColor {
+            fore: color.to_byte(),
+            back: self.back,
+            decoration: self.decoration
+        }
     }
 
     pub fn with_background(self, color: Rgb3) -> CharColor {
-        let (r2, g2, b2) = color.rgb2();
-        // Background starts at bit 6
-        let c = (((r2 + g2) << (2 + b2) << 4) as u16) << 6;
+        // let (r2, g2, b2) = color.rgb2();
+        // // Background starts at bit 6
+        // let c = (((r2 + g2) << (2 + b2) << 4) as u16) << 6;
 
-        CharColor((self.0 & 0b1111_0000_0011_1111) | c)
+        CharColor {
+            fore: self.fore,
+            back: color.to_byte(),
+            decoration: self.decoration,
+        }
     }
 
     pub fn with_decorations(&mut self, decs: &[Decoration]) -> CharColor {
@@ -304,25 +318,39 @@ impl CharColor {
         for d in decs {
             dec_value |= d.bit();
         }
-        self.0 = (self.0 & 0b0000_1111_1111_1111) | dec_value;
+        self.decoration = dec_value;
         *self
     }
 
     pub fn invert_colors(&mut self) -> CharColor {
-        self.0 ^= Decoration::Inverse.bit();
+        self.decoration ^= Decoration::Inverse.bit();
         *self
     }
 
     pub fn set_inverted(&mut self) -> CharColor {
-        if self.0 & Decoration::Inverse.bit() == 0 {
-            self.0 |= Decoration::Inverse.bit();
+        if self.decoration & Decoration::Inverse.bit() == 0 {
+            self.decoration |= Decoration::Inverse.bit();
         }
         *self
     }
 
     pub fn reset_inverted(&mut self) -> CharColor {
-        if self.0 & Decoration::Inverse.bit() != 0 {
-            self.0 &= !Decoration::Inverse.bit();
+        if self.decoration & Decoration::Inverse.bit() != 0 {
+            self.decoration &= !Decoration::Inverse.bit();
+        }
+        *self
+    }
+
+    pub fn set_dirty(&mut self) -> CharColor {
+        if self.decoration & Decoration::Dirty.bit() == 0 {
+            self.decoration |= Decoration::Dirty.bit();
+        }
+        *self
+    }
+
+    pub fn reset_dirty(&mut self) -> CharColor {
+        if self.decoration & Decoration::Dirty.bit() != 0 {
+            self.decoration &= !Decoration::Dirty.bit();
         }
         *self
     }
@@ -340,21 +368,23 @@ pub enum Decoration {
     Strikethrough,
     Underline,
     Inverse,
+    Dirty,
 }
 
 impl Flag for Decoration {
-    fn bit(&self) -> u16 {
+    fn bit(&self) -> u8 {
         match self {
-            Decoration::Blink => 1 << 12,
-            Decoration::Strikethrough => 1 << 13,
-            Decoration::Underline => 1 << 14,
-            Decoration::Inverse => 1 << 15,
+            Decoration::Blink => 1 << 4,
+            Decoration::Strikethrough => 1 << 5,
+            Decoration::Underline => 1 << 6,
+            Decoration::Inverse => 1 << 7,
+            Decoration::Dirty => 1,
         }
     }
 }
 
 impl<T: Flag> Flag for Option<T> {
-    fn bit(&self) -> u16 {
+    fn bit(&self) -> u8 {
         match self {
             Some(f) => f.bit(),
             None => 0,
@@ -363,7 +393,7 @@ impl<T: Flag> Flag for Option<T> {
 }
 
 pub trait Flag {
-    fn bit(&self) -> u16;
+    fn bit(&self) -> u8;
 }
 
 pub const COLUMNS: usize = 105;
@@ -387,7 +417,7 @@ pub struct ColorDecs {
 }
 
 pub struct TextDisplay {
-    buffer: [(Character, Drawn); ROWS * COLUMNS],
+    buffer: [Character; ROWS * COLUMNS],
     num_dirty: usize,
     top: usize,
     pub current_color: ColorDecs,
@@ -397,7 +427,7 @@ impl TextDisplay {
     pub fn new() -> TextDisplay {
         let (fore, back) = color::ansi_base_color(color::WHITE_FG, color::BLACK_BG);
         TextDisplay {
-            buffer: [(Character::default(), Drawn::Clean); COLUMNS * ROWS],
+            buffer: [Character::default(); COLUMNS * ROWS],
             num_dirty: 0,
             top: 0,
             current_color: ColorDecs {
@@ -415,12 +445,15 @@ impl TextDisplay {
 
     #[inline(always)]
     pub fn read_char(&self, line: usize, col: usize) -> Character {
-        self.buffer[self.real_index(line, col)].0
+        self.buffer[self.real_index(line, col)]
     }
 
     #[inline(always)]
     pub fn write_char(&mut self, line: usize, col: usize, c: Character) {
-        self.buffer[self.real_index(line, col)] = (c, Drawn::Dirty);
+        let mut d_c = c;
+        d_c.color.set_dirty();
+        self.buffer[self.real_index(line, col)] = d_c;
+        
         self.num_dirty += 1;
     }
 
@@ -481,8 +514,8 @@ impl TextDisplay {
     }
 
     pub fn dirty_all(&mut self) {
-        for (_, d) in self.buffer.iter_mut() {
-            *d = Drawn::Dirty;
+        for c in self.buffer.iter_mut() {
+            c.color.set_dirty();
         }
         self.num_dirty = ROWS * COLUMNS;
     }
@@ -527,8 +560,8 @@ impl TextDisplay {
         for row in 0..ROWS {
             for col in 0..COLUMNS {
                 let i = self.real_index(row, col);
-                if self.buffer[i].1 == Drawn::Dirty {
-                    self.buffer[i].1 = Drawn::Clean;
+                if self.buffer[i].dirty() {
+                    self.buffer[i].color.reset_dirty();
                     self.draw(row, col, target);
                     self.num_dirty -= 1;
                     if self.num_dirty == 0 {
@@ -556,8 +589,8 @@ impl TextDisplay {
         for row in 0..ROWS {
             for col in 0..COLUMNS {
                 let i = self.real_index(row, col);
-                if self.buffer[i].1 == Drawn::Dirty {
-                    self.buffer[i].1 = Drawn::Clean;
+                if self.buffer[i].color.dirty() {
+                    self.buffer[i].color.reset_dirty();
                     self.draw(row, col, target);
                     self.num_dirty -= 1;
                     drawn += 1;

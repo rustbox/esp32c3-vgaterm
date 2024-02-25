@@ -263,7 +263,7 @@ pub static ANSI_BASE_LOW_COLORS: [Rgb3; 8] = [
     Rgb3::new(0, 0, 5),
     Rgb3::new(5, 0, 5),
     Rgb3::new(0, 5, 5),
-    Rgb3::new(4, 4, 4),
+    Rgb3::new(6, 6, 6),
 ];
 pub static ANSI_BASE_HIGH_COLORS: [Rgb3; 8] = [
     Rgb3::new(2, 2, 2),
@@ -355,9 +355,9 @@ pub fn ansi_256_color(color: u8) -> Rgb3 {
                 match v6 {
                     0 => 0,
                     1 => 1,
-                    2 => 2,
+                    2 => 3,
                     3 => 4,
-                    4 => 5,
+                    4 => 6,
                     5 => 7,
                     _ => 0,
                 }
