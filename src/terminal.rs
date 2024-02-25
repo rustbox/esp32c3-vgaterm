@@ -1,5 +1,5 @@
 use crate::{
-    ansi::{self, EraseMode, Op, OpStr, SetUnset, Style},
+    ansi::{self, EraseMode, Op, OpStr, SetUnset, Style, Vgaterm},
     color::{self, Rgb3},
     display::{self, Decoration, TextDisplay, COLUMNS, ROWS},
     CHARACTER_DRAW_CYCLES,
@@ -503,8 +503,8 @@ impl TextField {
                             // Turn off attributes
                             println!("Reset Colors");
                             self.text.current_color.decs.clear();
-                            self.text.current_color.fore = color::Rgb3::WHITE;
-                            self.text.current_color.back = color::Rgb3::BLACK;
+                            self.text.current_color.fore = color::ANSI_BASE_LOW_COLORS[7];
+                            self.text.current_color.back = color::ANSI_BASE_LOW_COLORS[0];
                         }
                     }
                 }
@@ -531,12 +531,20 @@ impl TextField {
                     _ => {}
                 }
             }
-            Vgaterm(ansi::Vgaterm::Redraw) => {
-                self.text.dirty_all();
-                unsafe {
-                    CHARACTER_DRAW_CYCLES = 0;
-                    crate::perf::reset_cycle_count();
+            Vgaterm(v) => {
+                match v {
+                    ansi::Vgaterm::Redraw => {
+                        self.text.dirty_all();
+                        unsafe {
+                            CHARACTER_DRAW_CYCLES = 0;
+                            crate::perf::reset_cycle_count();
+                        }
+                    },
+                    ansi::Vgaterm::DebugDump => {
+                        
+                    }
                 }
+                
             }
         }
         out

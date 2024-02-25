@@ -123,6 +123,7 @@ pub enum EraseMode {
 #[derive(Debug)]
 pub enum Vgaterm {
     Redraw,
+    DebugDump
 }
 
 trait StrParser<'a, O> = nom::Parser<&'a str, O, nom::error::Error<&'a str>>;
@@ -154,7 +155,7 @@ fn start_with_esc<'a, O, P: StrParser<'a, O>>(mut parser: P) -> impl StrParseFnM
     }
 }
 
-// This will parse "...P... <ending>" for some char ending and parsed sequence P
+/// This will parse "...P... <ending>" for some char ending and parsed sequence P
 fn sequence_with_ending<'a, O, P: StrParser<'a, O>>(
     mut parser: P,
     ending: char,
@@ -173,7 +174,9 @@ where
     <N as FromStr>::Err: Debug,
 {
     move |input: &str| {
-        nom::character::streaming::digit1(input).map(|(rest, n)| (rest, N::from_str(n).unwrap()))
+        nom::character::streaming::digit1(input).map(|(rest, n)| (rest, N::from_str(n).unwrap_or_else(|_| {
+            N::from_str("999").unwrap()
+        })))
     }
 }
 
